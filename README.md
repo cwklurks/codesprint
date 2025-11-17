@@ -2,6 +2,21 @@
 <h1 align="center">CodeSprint</h1>
 
 <p align="center">
+  <a href="https://nextjs.org/">
+    <img src="https://img.shields.io/badge/Next.js-15-black?style=flat&logo=nextdotjs&logoColor=white" alt="Next.js 15">
+  </a>
+  <a href="https://react.dev/">
+    <img src="https://img.shields.io/badge/React-19-61dafb?style=flat&logo=react&logoColor=white" alt="React 19">
+  </a>
+  <a href="https://www.typescriptlang.org/">
+    <img src="https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
+  </a>
+  <a href="https://github.com/cwklurks/codesprint/issues">
+    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat" alt="PRs welcome">
+  </a>
+</p>
+
+<p align="center">
   Typing dojo for engineers who want real code, live stats, and zero fluff.
 </p>
 
