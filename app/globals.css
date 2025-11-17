@@ -1,1 +1,218 @@
 @import "tailwindcss";
+
+/* CodeSprint global styles and design tokens */
+
+:root {
+    --bg: #282828;
+    --bg-base: #282828;
+    --bg-muted: #353128;
+    --bg-gradient: linear-gradient(180deg, #282828 0%, #282828 100%);
+    --text: #fbf1c7;
+    --text-subtle: rgba(251, 241, 199, 0.68);
+    --accent: #fbf1c7;
+    --caret: #fbf1c7;
+    --ok: #b8bb26;
+    --err: #fb4934;
+    --panel: rgba(251, 241, 199, 0.12);
+    --panel-glass: rgba(251, 241, 199, 0.18);
+    --panel-soft: rgba(251, 241, 199, 0.24);
+    --btn: rgba(251, 241, 199, 0.12);
+    --btn-active: rgba(251, 241, 199, 0.28);
+    --border: rgba(251, 241, 199, 0.32);
+    --border-strong: rgba(251, 241, 199, 0.5);
+    --surface: rgba(251, 241, 199, 0.14);
+    --surface-hover: rgba(251, 241, 199, 0.2);
+    --surface-active: rgba(251, 241, 199, 0.3);
+    --shadow: 0 24px 48px rgba(20, 20, 20, 0.55);
+    --header-bg: rgba(24, 24, 20, 0.84);
+    --header-border: rgba(251, 241, 199, 0.28);
+    --header-text: #fbf1c7;
+    --header-text-subtle: rgba(251, 241, 199, 0.7);
+    --overlay: rgba(118, 104, 76, 0.2);
+    --focus-ring: rgba(251, 241, 199, 0.9);
+    --terminal-bg: #16130e;
+    --caret-width: 2px;
+    --caret-height: 38px;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    /* Override Chakra's runtime body styles so the gradient stays visible */
+    background-color: var(--bg) !important;
+    background-image: var(--bg-gradient) !important;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-attachment: fixed;
+    color: var(--text) !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace;
+    position: relative;
+    transition: background 0.45s ease, color 0.3s ease;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    display: none;
+}
+
+#__next,
+main {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Caret and error styles used by Monaco decorations */
+.monaco-editor,
+.monaco-editor-background,
+.monaco-editor .margin,
+.monaco-editor .monaco-editor-background {
+    background: transparent !important;
+}
+
+.monaco-editor .line-numbers {
+    color: var(--text-subtle) !important;
+    font-weight: 400 !important;
+}
+
+.monaco-editor,
+.monaco-editor:focus,
+.monaco-editor:focus-within,
+.monaco-editor .overflow-guard:focus,
+.monaco-editor .overflow-guard:focus-visible {
+    outline: none !important;
+    border: none !important;
+}
+
+.monaco-scrollable-element .scrollbar {
+    display: none !important;
+}
+
+.monaco-editor .cursor,
+.monaco-editor .cursor.secondary {
+    opacity: 0 !important;
+}
+
+.cs-caret {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: var(--caret-width);
+    height: var(--caret-height);
+    border-radius: 999px;
+    background: var(--caret);
+    transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
+    transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    animation: cs-caret-blink 1.05s steps(1, end) infinite;
+    will-change: transform, opacity;
+    opacity: 0.92;
+    pointer-events: none;
+}
+
+.cs-caret-hidden {
+    opacity: 0;
+}
+
+.cs-caret-active {
+    animation: none;
+    opacity: 1;
+}
+
+.cs-caret.cs-caret-error {
+    background: #fa7878;
+    box-shadow: 0 0 18px rgba(250, 120, 120, 0.45);
+    animation: cs-caret-error 0.35s ease-out;
+}
+
+@keyframes cs-caret-blink {
+
+    0%,
+    49% {
+        opacity: 1;
+    }
+
+    50%,
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes cs-caret-error {
+    0% {
+        box-shadow: 0 0 0 rgba(250, 120, 120, 0);
+    }
+
+    45% {
+        box-shadow: 0 0 24px rgba(250, 120, 120, 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 0 rgba(250, 120, 120, 0);
+    }
+}
+
+.cs-complete {
+    color: var(--text) !important;
+    background: linear-gradient(180deg, var(--surface-hover), transparent) !important;
+    border-radius: 1px;
+    opacity: 1 !important;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.cs-focus-active .cs-hero {
+    display: none;
+}
+
+.cs-wrong {
+    color: #ff7b7b !important;
+    background: transparent !important;
+    text-decoration: underline !important;
+    text-decoration-color: #ff7b7b;
+    text-decoration-thickness: 2px;
+    text-decoration-skip-ink: auto;
+}
+
+/* Utility: focus ring */
+:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+}
+
+.home-stack {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(32px, 6vw, 72px);
+}
+
+.app-header,
+.hero-panel {
+    transition: opacity 0.35s ease, transform 0.35s ease, filter 0.35s ease;
+}
+
+body.cs-focus-active .app-header {
+    opacity: 0;
+    transform: translateY(-40px);
+    filter: blur(12px);
+    pointer-events: none;
+}
+
+body.cs-focus-active .hero-panel {
+    opacity: 0;
+    transform: translateY(-24px);
+    filter: blur(8px);
+    pointer-events: none;
+}
+
+/* Hide Next.js dev badge */
+nextjs-portal {
+    display: none !important;
+}
