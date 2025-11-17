@@ -1,8 +1,4 @@
 
-<p align="center">
-  <img src="./logogss.png" alt="CodeSprint logo" width="150">
-</p>
-
 <h1 align="center">CodeSprint</h1>
 
 <p align="center">
