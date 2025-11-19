@@ -1,4 +1,3 @@
-
 <h1 align="center">CodeSprint</h1>
 
 <p align="center">
@@ -8,165 +7,83 @@
   <a href="https://react.dev/">
     <img src="https://img.shields.io/badge/React-19-61dafb?style=flat&logo=react&logoColor=white" alt="React 19">
   </a>
-  <a href="https://www.typescriptlang.org/">
-    <img src="https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
-  </a>
-  <a href="https://github.com/cwklurks/codesprint/issues">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat" alt="PRs welcome">
+  <a href="https://microsoft.github.io/monaco-editor/">
+    <img src="https://img.shields.io/badge/Monaco-Editor-blue?style=flat&logo=visualstudiocode&logoColor=white" alt="Monaco">
   </a>
 </p>
 
 <p align="center">
-  Typing dojo for engineers who want real code, live stats, and zero fluff.
+  <strong>A "muscle memory engine" for LeetCode patterns.</strong>
+  <br>
+  It syncs real problem snippets via a custom GraphQL scraper and scores your typing accuracy against the actual syntax trees.
 </p>
 
 <p align="center">
-  ⚡ Real-world LeetCode snippets · 🔢 Live WPM & accuracy · 🎯 Keyboard-first UX
+  <a href="#engineering">Engineering</a> · <a href="#the-data-pipeline">Data Pipeline</a> · <a href="#running-locally">Running Locally</a>
 </p>
 
-<p align="center">
-  <a href="#quickstart">Quickstart</a> · <a href="#why-codesprint">Why CodeSprint</a> · <a href="#architecture-map">Architecture</a> · <a href="#contributing">Contributing</a>
-</p>
+## Why?
 
----
+Most typing tests are just `String.split(' ')`. They measure your ability to type English prose, not code.
 
-## Why CodeSprint
+I built CodeSprint because I realized I was failing technical interviews not on logic, but on syntax fluency. I needed a way to drill "Depth First Search in Python" or "Ring Buffer in C++" until my fingers knew the shape of the code.
 
-Most typing tests throw lorem ipsum at you. CodeSprint serves production-grade LeetCode snippets, keeps the chrome minimal, and scores you in real time so you can build muscle memory for the code you actually write. It’s built for engineers who are:
+## Engineering
 
-- prepping for interviews or code screens and need fluency, not filler
-- keeping their typing sharp on familiar syntax (TypeScript, Python, etc.)
-- eager for a keyboard-first experience that stays out of the way
+This isn't just a text area wrapper. It's an attempt to build a performant typing engine on the web.
 
-### Feature snapshot
+### 1. The Renderer (Monaco + Delta Decorations)
 
-- **Real snippets, no noise:** Monaco-powered editor seeded with curated problem sets.
-- **Live metrics:** WPM, accuracy, and error streaks update as you type.
-- **Focus mode:** Chakra UI shell that keeps attention on the keys and the code.
+Instead of building a custom canvas renderer (yet), CodeSprint runs a heavily customized instance of the Monaco Editor (the core of VS Code).
 
-## Sneak peek
+- **Diffing**: It uses `deltaDecorations` to paint correct/incorrect keystrokes directly onto the editor model without breaking the underlying syntax highlighting.
+- **Layout**: It calculates `getScrolledVisiblePosition` to overlay a custom caret that behaves smoother than the native DOM caret.
 
-[![CodeSprint preview placeholder](https://via.placeholder.com/1200x680?text=CodeSprint+Preview)](https://via.placeholder.com/1200x680?text=CodeSprint+Preview)  
-_Swap in a screenshot or GIF of the typing session once you capture it._
+### 2. The Sync Script (Bun)
 
-## Quickstart
+We don't hardcode snippets. I wrote a custom scraper in Bun (`scripts/sync-leetcode.ts`) that:
 
-### Prerequisites
+- Reverse-engineers the LeetCode GraphQL schema.
+- Fetches problems by difficulty and acceptance rate.
+- Sanitizes the code (strips docstrings and excessive comments).
+- Normalizes indentation to standard 4-space tabs.
 
-- Node.js 20+ (18+ works, but 20 is the target runtime)
-- `npm` or `pnpm` for package management
-- [`bun`](https://bun.sh/) if you plan to sync LeetCode snippets (`npm run sync:leetcode`)
+### 3. The Latency Fight
 
-### Install & run locally
+React's render cycle is often too slow for a 100 WPM feedback loop. The typing engine (`hooks/useTypingEngine.ts`) isolates the keystroke logic from the React render tree where possible, only triggering re-renders for specific UI updates (like the WPM gauge) to avoid garbage collection pauses during typing bursts.
+
+## The Data Pipeline
+
+To keep the snippets fresh, you can run the sync script locally:
+
+```bash
+# Requires Bun (https://bun.sh)
+npm run sync:leetcode -- --limit 50 --difficulties medium,hard
+```
+
+This will:
+
+- Query the LeetCode `questionData` endpoint.
+- Parse `codeSnippets` for C++, Java, Python, and JS.
+- Output a minified JSON catalog to `data/leetcode-snippets.json`.
+
+## Running Locally
 
 ```bash
 # Install dependencies
 npm install
 
-# Start the dev server (http://localhost:3000)
+# Start the Next.js 15 Turbopack server
 npm run dev
 ```
 
-Other useful scripts:
-
-```bash
-# Type-check & bundle for production
-npm run build
-
-# Serve the built app
-npm run start
-
-# Lint with the shared config
-npm run lint
-
-# Refresh the LeetCode snippet catalog (requires bun)
-npm run sync:leetcode
-```
-
-## How it works
-
-1. Land on the single-page experience rendered from `app/page.tsx`.
-2. CodeSprint drops you into a Monaco instance seeded with the current snippet.
-3. Start typing—`TypingSession` tracks keystrokes, diffs against the target, and streams metrics.
-4. `LiveStats` mirrors WPM, accuracy, and streaks in real time.
-5. Finish the snippet (or bail), and `ResultCard` wraps the run with a summary and restart CTA.
-
-## Keyboard shortcuts
-
-These shortcuts work outside of an active run:
-
-| Key | Action |
-| --- | --- |
-| `R` | Reset the session and load a fresh run |
-| `N` | Jump to the next snippet |
-| `L` | Toggle the live stats panel |
-| `P` | Pop open preferences |
-| `Esc` | Abort the current run |
-
-## Architecture map
-
-### Core directories
-
-- `app/` – Next.js App Router entry point, layouts, providers, and the main page shell.
-- `components/` – React 19 function components:
-  - `AppShell`, `ShortcutsDrawer`, `PreferencesDrawer` for chrome & drawers
-  - `TypingSession`, `CodePanel`, `LiveStats`, `ResultCard` for the typing flow
-- `lib/` – Framework-agnostic logic: scoring, snippet loading, motion presets, and preference persistence.
-- `data/leetcode-snippets.json` – Curated LeetCode catalog served into sessions.
-- `scripts/sync-leetcode.ts` – Keeps the snippet catalog up-to-date (invoked via Bun).
-
-### Session lifecycle
-
-1. `TypingSession` requests the next snippet via `@/lib/snippets`.
-2. Keystrokes run through `@/lib/scoring` to compute accuracy, WPM, and error streaks.
-3. Preferences from `@/lib/preferences` shape the experience (theme, font, motion, sound).
-4. `LiveStats` and `ResultCard` subscribe to the session state and render updates with Chakra UI + Framer Motion.
-
-## Snippets & data
-
-- Snippets live in `data/leetcode-snippets.json`, curated to stay interesting and relevant.
-- Run `npm run sync:leetcode` (requires Bun) to hit LeetCode and refresh the catalog.
-- Each snippet includes metadata (problem ID, title, language) so future filters and playlists stay open-ended.
-
-## Preferences & personalization
-
-- `PreferencesDrawer` gives engineers control over themes, font sizes, motion, sound, and difficulty.
-- Preferences are stored client-side via `@/lib/preferences`, so you keep your setup across sessions.
-- Motion presets respect reduced-motion settings via `@/lib/motion`.
-
-## Scripts & tooling
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the Turbopack dev server with hot reload |
-| `npm run build` | Produce a production bundle |
-| `npm run start` | Serve the production build locally |
-| `npm run lint` | Run ESLint with the repo config |
-| `npm run sync:leetcode` | Refresh snippets using the Bun-powered sync script |
-
-## Contributing
-
-We welcome pull requests for fresh snippets, UX polish, and new stat visualizations. A few tips:
-
-- Stick to TypeScript + React function components; add `"use client"` only when you need hooks.
-- Reach for Chakra UI primitives before hand-rolling styles.
-- Keep shared logic in `lib/`; keep components lean and composable.
-- Run `npm run lint` before opening a PR to match the shared style rules.
-- New here? `AGENTS.md` contains a deeper dive on architecture conventions.
+Open http://localhost:3000.
 
 ## Roadmap
 
-- Expanded snippet catalog by language (Go, Rust, SQL).
-- Profiles with historical run tracking and personal bests.
-- Multiplayer ghost runs and team leaderboards.
-- Sound, haptics, and streamer-friendly overlays.
-- Offline mode with cached snippet packs.
+- **Custom Renderer**: Migrating from Monaco to a custom WebGL/Canvas text renderer to support large files with zero DOM overhead (Gap Buffer implementation in progress).
+- **Parser Integration**: Using Tree-sitter to allow "semantic typing" (skipping whitespace/formatting irrelevant to the code logic).
 
 ## License
 
-This repository has not published a license yet. Please reach out to the maintainers before reusing the code.
-
-## Acknowledgements
-
-- Inspired by the documentation patterns in [awesome-readme](https://github.com/matiassingers/awesome-readme).
-- Built with Next.js 15, React 19, Chakra UI 3, Framer Motion, and Monaco Editor.
+MIT.

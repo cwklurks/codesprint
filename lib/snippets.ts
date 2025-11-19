@@ -482,7 +482,7 @@ function normalizeDataset(raw: unknown): Snippet[] {
         const normalizedContent = normalizeContent(sanitizedContent);
         const lines =
             typeof entry.lines === "number" && Number.isFinite(entry.lines) ? entry.lines : countLines(normalizedContent);
-        const lengthCategory = isSnippetLength(entry.lengthCategory) ? entry.lengthCategory : classifyLength(lines);
+        const lengthCategory = classifyLength(lines);
         const difficulty = isDifficulty(entry.difficulty) ? entry.difficulty : "easy";
         const title = typeof entry.title === "string" && entry.title.length > 0 ? entry.title : "LeetCode snippet";
         const sourceSlug = typeof entry.sourceSlug === "string" ? entry.sourceSlug : undefined;
@@ -688,10 +688,6 @@ function computeProblemId(language: SupportedLanguage, slug: string): string {
 
 function isSupportedLanguage(value: unknown): value is SupportedLanguage {
     return value === "javascript" || value === "python" || value === "java" || value === "cpp";
-}
-
-function isSnippetLength(value: unknown): value is SnippetLength {
-    return value === "short" || value === "medium" || value === "long";
 }
 
 function isDifficulty(value: unknown): value is Difficulty {

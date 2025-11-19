@@ -23,7 +23,8 @@ import {
     SwitchRoot,
     Text,
 } from "@chakra-ui/react";
-import { DEFAULT_PREFERENCES, THEME_OPTIONS, type SurfaceStyle, usePreferences } from "@/lib/preferences";
+import { DEFAULT_PREFERENCES, type SurfaceStyle, usePreferences } from "@/lib/preferences";
+import { ThemeSelector } from "@/components/ThemeSelector";
 
 type PreferencesDrawerProps = {
     isOpen: boolean;
@@ -73,7 +74,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         >
             <DrawerBackdrop backdropFilter="blur(6px)" />
             <DrawerPositioner>
-                <DrawerContent bg="var(--panel)" borderLeft="1px solid var(--border)" backdropFilter="blur(18px)">
+                <DrawerContent bg="rgba(15, 15, 15, 0.9)" borderLeft="1px solid var(--border)" backdropFilter="blur(12px)">
                     <CloseButton mt={2} position="absolute" top={2} right={2} onClick={onClose} />
                     <DrawerHeader borderBottomWidth="1px" borderColor="var(--border)">
                         Preferences
@@ -190,28 +191,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                 <Text fontSize="sm" fontWeight={600} mb={3}>
                                     Theme
                                 </Text>
-                                <Flex gap={2} flexWrap="wrap">
-                                    {THEME_OPTIONS.map((option) => {
-                                        const active = preferences.theme === option.value;
-                                        return (
-                                            <Button
-                                                key={option.value}
-                                                size="sm"
-                                                borderRadius="full"
-                                                px={4}
-                                                py={2}
-                                                bg={active ? "var(--surface-active)" : "transparent"}
-                                                color={active ? "var(--text)" : "var(--text-subtle)"}
-                                                border="1px solid"
-                                                borderColor={active ? "var(--border-strong)" : "var(--border)"}
-                                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                                onClick={() => setTheme(option.value)}
-                                            >
-                                                {option.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </Flex>
+                                <ThemeSelector />
                             </Box>
 
                             <Box>
@@ -225,7 +205,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                             <Button
                                                 key={option.value}
                                                 justifyContent="space-between"
-                                                size="sm"
+                                                height="auto"
                                                 borderRadius="md"
                                                 px={4}
                                                 py={3}
@@ -236,9 +216,9 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                                 _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
                                                 onClick={() => setInterfaceMode(option.value)}
                                             >
-                                                <Flex direction="column" align="flex-start" gap={0.5}>
+                                                <Flex direction="column" align="flex-start" gap={1}>
                                                     <Text fontWeight={600}>{option.label}</Text>
-                                                    <Text fontSize="xs" color="var(--text-subtle)">
+                                                    <Text fontSize="xs" color="var(--text-subtle)" textAlign="start">
                                                         {option.helper}
                                                     </Text>
                                                 </Flex>
@@ -278,7 +258,13 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
 
                             <Box borderBottom="1px solid var(--border)" />
 
-                            <Button variant="outline" borderColor="var(--border)" onClick={resetToDefaults}>
+                            <Button
+                                variant="outline"
+                                color="var(--text-subtle)"
+                                borderColor="var(--border)"
+                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
+                                onClick={resetToDefaults}
+                            >
                                 Reset to defaults
                             </Button>
                         </Stack>

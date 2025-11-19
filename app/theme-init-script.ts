@@ -1,14 +1,14 @@
 import {
-    DEFAULT_PREFERENCES,
-    STORAGE_KEY,
-    THEME_PRESETS,
+  DEFAULT_PREFERENCES,
+  STORAGE_KEY,
+  THEME_PRESETS,
 } from "@/lib/preferences-core";
 
 export function createThemeInitScript(): string {
-    const defaults = JSON.stringify(DEFAULT_PREFERENCES);
-    const themes = JSON.stringify(THEME_PRESETS);
-    const storageKey = JSON.stringify(STORAGE_KEY);
-    return `
+  const defaults = JSON.stringify(DEFAULT_PREFERENCES);
+  const themes = JSON.stringify(THEME_PRESETS);
+  const storageKey = JSON.stringify(STORAGE_KEY);
+  return `
 (() => {
   const STORAGE_KEY = ${storageKey};
   const DEFAULTS = ${defaults};
@@ -70,6 +70,8 @@ export function createThemeInitScript(): string {
     root.style.setProperty("--text-subtle", tokens.textSubtle);
     root.style.setProperty("--accent", tokens.accent);
     root.style.setProperty("--caret", tokens.caret);
+    root.style.setProperty("--error", tokens.error);
+    root.style.setProperty("--error-extra", tokens.errorExtra);
     root.style.setProperty("--panel", tokens.panel);
     root.style.setProperty("--panel-glass", tokens.panelGlass);
     root.style.setProperty("--panel-soft", tokens.panelSoft);

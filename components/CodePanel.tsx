@@ -4,9 +4,43 @@ import { Box } from "@chakra-ui/react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
-import type { SurfaceStyle } from "@/lib/preferences";
+import { THEME_PRESETS, usePreferences, type SurfaceStyle } from "@/lib/preferences";
 
 type MonacoModule = typeof import("monaco-editor");
+
+function hexToRgb(hex: string): [number, number, number] {
+    const sanitized = hex.replace("#", "");
+    if (sanitized.length === 3) {
+        const r = parseInt(sanitized[0] + sanitized[0], 16);
+        const g = parseInt(sanitized[1] + sanitized[1], 16);
+        const b = parseInt(sanitized[2] + sanitized[2], 16);
+        return [r, g, b];
+    }
+    if (sanitized.length !== 6) {
+        return [0, 0, 0];
+    }
+    const numeric = parseInt(sanitized, 16);
+    const r = (numeric >> 16) & 255;
+    const g = (numeric >> 8) & 255;
+    const b = numeric & 255;
+    return [r, g, b];
+}
+
+function toMonacoColor(color: string): string {
+    if (color.startsWith("#")) return color;
+    if (color.startsWith("rgba")) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+        if (!match) return color;
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const a = match[4] ? parseFloat(match[4]) : 1;
+        const alphaHex = Math.round(a * 255).toString(16).padStart(2, "0");
+        const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+        return a === 1 ? hex : `${hex}${alphaHex}`;
+    }
+    return color;
+}
 
 type CodePanelProps = {
     content: string;
@@ -35,6 +69,7 @@ export default function CodePanel({
     surfaceStyle,
     syntaxHighlightingEnabled,
 }: CodePanelProps) {
+    const { preferences } = usePreferences();
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
     const monacoRef = useRef<MonacoModule | null>(null);
     const decorationIdsRef = useRef<string[]>([]);
@@ -139,6 +174,43 @@ export default function CodePanel({
             caretNode.style.setProperty("--caret-height", `${Math.round(coords.height)}px`);
         });
     }, [ensureCaretNode]);
+
+    // Theme Management
+    useEffect(() => {
+        const monaco = monacoRef.current;
+        if (!monaco) return;
+
+        const theme = THEME_PRESETS[preferences.theme];
+        const bgRgb = hexToRgb(theme.bg);
+        const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
+        const isLight = luminance > 128;
+
+        const themeName = `codesprint-${preferences.theme}`;
+        monaco.editor.defineTheme(themeName, {
+            base: isLight ? "vs" : "vs-dark",
+            inherit: true,
+            rules: [
+                { token: "", foreground: toMonacoColor(theme.text).replace("#", "") },
+                { token: "comment", foreground: toMonacoColor(theme.textSubtle).replace("#", "") },
+                { token: "keyword", foreground: toMonacoColor(theme.accent).replace("#", "") },
+                // Basic syntax overrides to ensure contrast
+                { token: "identifier", foreground: toMonacoColor(theme.text).replace("#", "") },
+                { token: "type", foreground: toMonacoColor(theme.accent).replace("#", "") },
+                { token: "delimiter", foreground: toMonacoColor(theme.textSubtle).replace("#", "") },
+            ],
+            colors: {
+                "editor.background": "#00000000", // Transparent to allow CSS background
+                "editor.foreground": toMonacoColor(theme.text),
+                "editorCursor.foreground": toMonacoColor(theme.caret),
+                "editor.lineHighlightBackground": toMonacoColor(theme.surface),
+                "editorLineNumber.foreground": toMonacoColor(theme.textSubtle),
+                "editorLineNumber.activeForeground": toMonacoColor(theme.accent),
+                "editor.selectionBackground": toMonacoColor(theme.surfaceActive),
+                "editor.inactiveSelectionBackground": toMonacoColor(theme.surface),
+            },
+        });
+        monaco.editor.setTheme(themeName);
+    }, [preferences.theme]);
 
     const handleMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -325,6 +397,7 @@ export default function CodePanel({
                 key={snippetKey}
                 value={content}
                 language={editorLanguage}
+                // theme is handled by useEffect, but we provide a safe default
                 theme="vs-dark"
                 height={estimatedHeight}
                 options={{

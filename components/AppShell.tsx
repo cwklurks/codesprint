@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         open: isPreferencesOpen,
         onOpen: openPreferences,
         onClose: closePreferences,
+        onToggle: togglePreferences,
     } = useDisclosure();
     const {
         open: isShortcutsOpen,
@@ -45,11 +46,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             if (target?.closest("input, textarea, [contenteditable=true]")) return;
             if (document.body.classList.contains("cs-focus-active")) return;
             event.preventDefault();
-            openPreferences();
+            togglePreferences();
         }
         window.addEventListener("keydown", handleGlobalShortcut);
         return () => window.removeEventListener("keydown", handleGlobalShortcut);
-    }, [openPreferences]);
+    }, [togglePreferences]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;
@@ -63,7 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <>
                 <Flex direction="column" minH="100dvh" background="var(--bg-gradient)" color="var(--text)">
                     <Header onOpenPreferences={openPreferences} onOpenShortcuts={openShortcuts} />
-                    <Container maxW="1280px" flex="1 1 auto" py={8} px={{ base: 4, lg: 10 }}>
+                    <Container maxW="1280px" flex="1 1 auto" pt={8} pb={8} px={{ base: 4, lg: 10 }}>
                         {children}
                     </Container>
                 </Flex>
@@ -93,8 +94,8 @@ function Header({ onOpenPreferences, onOpenShortcuts }: HeaderProps) {
         | { label: string; icon: ReactNode; onClick: () => void }
         | { label: string; icon: ReactNode; href: string; isExternal?: boolean };
     const iconLinks: IconLink[] = [
-        { label: "Shortcuts", icon: <CommandIcon boxSize={5} />, onClick: onOpenShortcuts },
-        { label: "GitHub", href: "https://github.com/", icon: <GitHubIcon boxSize={4} />, isExternal: true },
+        { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
+        { label: "GitHub", href: "https://github.com/", icon: <GitHubIcon boxSize={5} />, isExternal: true },
     ];
 
     return (
@@ -110,21 +111,21 @@ function Header({ onOpenPreferences, onOpenShortcuts }: HeaderProps) {
             borderBottom="1px solid var(--header-border)"
         >
             <motion.div {...headerMotion}>
-                <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 3, md: 4 }}>
+                <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2.5, md: 3 }}>
                     <Flex
                         direction={{ base: "column", md: "row" }}
                         align={{ base: "flex-start", md: "center" }}
                         justify="space-between"
-                        gap={{ base: 3, md: 4 }}
+                        gap={{ base: 4, md: 5 }}
                     >
-                        <Flex align="center" gap={3} flexWrap="wrap">
+                        <Flex align="center" gap={4} flexWrap="wrap">
                             <Link href="/" aria-label="CodeSprint home">
-                                <Text fontWeight={700} fontSize={{ base: "xl", md: "2xl" }} letterSpacing="0.3px">
+                                <Text fontWeight={700} fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="0.3px">
                                     codesprint<span style={{ color: "var(--accent)" }}>.dev</span>
                                 </Text>
                             </Link>
                             <Text
-                                fontSize={{ base: "2xs", md: "xs" }}
+                                fontSize={{ base: "xs", md: "sm" }}
                                 color="var(--header-text-subtle)"
                                 textTransform="uppercase"
                                 letterSpacing="0.28em"
@@ -135,19 +136,19 @@ function Header({ onOpenPreferences, onOpenShortcuts }: HeaderProps) {
                         <Flex
                             align="center"
                             justify={{ base: "flex-start", md: "flex-end" }}
-                            gap={1}
+                            gap={2}
                             flexWrap="wrap"
                             flex="1 1 auto"
                             w={{ base: "100%", md: "auto" }}
                         >
-                            <Flex gap={1} align="center" flexWrap="wrap">
+                            <Flex gap={2} align="center" flexWrap="wrap">
                                 {iconLinks.map((item) => {
                                     const linkStyles = {
                                         display: "inline-flex",
                                         alignItems: "center",
                                         justifyContent: "center",
-                                        w: 9,
-                                        h: 9,
+                                        w: 11,
+                                        h: 11,
                                         borderRadius: "full",
                                         border: "1px solid var(--header-border)",
                                         bg: "rgba(255, 255, 255, 0.06)",
@@ -221,14 +222,15 @@ function Header({ onOpenPreferences, onOpenShortcuts }: HeaderProps) {
                                 })}
                             </Flex>
                             <Button
-                                size="sm"
+                                size="md"
                                 borderRadius="full"
-                                px={4}
-                                py={2}
+                                px={5}
+                                py={3}
                                 variant="outline"
                                 borderColor="var(--border)"
                                 color="var(--header-text)"
                                 bg="transparent"
+                                fontSize="sm"
                                 _hover={{ borderColor: "var(--border-strong)", bg: "var(--surface)" }}
                                 _active={{ borderColor: "var(--border-strong)", bg: "var(--surface-active)" }}
                                 onClick={onOpenPreferences}

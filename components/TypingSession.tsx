@@ -25,7 +25,7 @@ type LengthFilter = SnippetLength | "all";
 export default function TypingSession() {
     const [lang, setLang] = useState<"python" | "javascript" | "java" | "cpp">("javascript");
     const [lengthPref, setLengthPref] = useState<LengthFilter>("all");
-    
+
     // Problem & Snippet Selection
     const problemOptions = useMemo<Problem[]>(() => {
         const filters = lengthPref === "all" ? undefined : { length: lengthPref };
@@ -91,9 +91,9 @@ export default function TypingSession() {
             autoAdvanceTimeoutRef.current = null;
         }
         setAutoAdvanceDeadline(null);
-        
+
         if (problemOptions.length === 0) return;
-        
+
         const currentIndex = problemOptions.findIndex((problem) => problem.id === problemId);
         const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % problemOptions.length : 0;
         const nextProblem = problemOptions[nextIndex];
@@ -169,7 +169,7 @@ export default function TypingSession() {
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
             const keyLower = e.key.toLowerCase();
-            
+
             // Global shortcuts
             if (!e.metaKey && !e.ctrlKey && !e.altKey) {
                 if (e.key === "Escape" && (phase === "running" || phase === "countdown")) {
@@ -206,6 +206,9 @@ export default function TypingSession() {
                         setShowLiveStatsDuringRun(!preferences.showLiveStatsDuringRun);
                         return;
                     }
+                }
+                if (keyLower === "p" && phase !== "running") {
+                    return;
                 }
             }
 
@@ -364,13 +367,13 @@ export default function TypingSession() {
             };
 
     const layoutGap = isTerminalMode ? 4 : isImmersive ? 4 : 6;
-    
+
     // Terminal Progress Bar
     const terminalBarWidth = 24;
     const terminalFilled = Math.min(terminalBarWidth, Math.max(0, Math.round(progress * terminalBarWidth)));
     const terminalBar = "█".repeat(terminalFilled) + "░".repeat(terminalBarWidth - terminalFilled);
     const terminalProgressText = `[${terminalBar}] ${progressPercent.toString().padStart(3, " ")}%`;
-    
+
     const progressIndicator = !showChrome
         ? null
         : isTerminalMode
@@ -413,7 +416,7 @@ export default function TypingSession() {
     const currentProblemIndex = problemOptions.findIndex((problem) => problem.id === problemId);
     const currentProblem: Problem | null = currentProblemIndex >= 0 ? problemOptions[currentProblemIndex] : null;
     const problemCount = problemOptions.length;
-    
+
     const nextProblemButtonStyles: Partial<ButtonProps> = isTerminalMode
         ? {
             size: "sm",
@@ -490,6 +493,8 @@ export default function TypingSession() {
 
     const hasMeta = Boolean(progressIndicator || problemSummary);
     const hasActions = Boolean(nextProblemButton);
+    const showRunningStats = phase === "running" && preferences.showLiveStatsDuringRun;
+
     const sessionTopBar = hasMeta || hasActions
         ? (
             <Flex
@@ -660,6 +665,11 @@ export default function TypingSession() {
                     >
                         <Box display="flex" flexDirection="column" gap={4} maxW={panelMaxWidth} mx="auto" w="100%">
                             {sessionTopBar}
+                            {showRunningStats && (
+                                <Box alignSelf="center" width="100%" maxW="md">
+                                    <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} />
+                                </Box>
+                            )}
                             <CodePanel
                                 content={snippet.content}
                                 cursorChar={cursorIndex}

@@ -48,6 +48,8 @@ function applyTheme(preferences: PreferencesState) {
     root.style.setProperty("--text-subtle", tokens.textSubtle);
     root.style.setProperty("--accent", tokens.accent);
     root.style.setProperty("--caret", tokens.caret);
+    root.style.setProperty("--error", tokens.error);
+    root.style.setProperty("--error-extra", tokens.errorExtra);
     root.style.setProperty("--panel", tokens.panel);
     root.style.setProperty("--panel-glass", tokens.panelGlass);
     root.style.setProperty("--panel-soft", tokens.panelSoft);
@@ -218,6 +220,15 @@ export const THEME_OPTIONS: Array<{ value: ThemePreset; label: string }> = [
     { value: "gruvbox", label: "Gruvbox" },
     { value: "nord", label: "Nord" },
     { value: "oneDark", label: "One Dark" },
+    { value: "8008", label: "8008" },
+    { value: "arch", label: "Arch" },
+    { value: "bento", label: "Bento" },
+    { value: "bliss", label: "Bliss" },
+    { value: "botanical", label: "Botanical" },
+    { value: "carbon", label: "Carbon" },
+    { value: "serika", label: "Serika" },
+    { value: "miamiNights", label: "Miami Nights" },
+    { value: "terra", label: "Terra" },
 ];
 
 export { DEFAULT_PREFERENCES, THEME_PRESETS } from "@/lib/preferences-core";
