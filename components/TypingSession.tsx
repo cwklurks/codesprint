@@ -113,7 +113,6 @@ export default function TypingSession() {
         reset: resetEngine,
         start: startEngine,
         handleKeyDown: engineHandleKeyDown,
-        setPhase,
     } = useTypingEngine({
         snippet,
         onFinish: () => {

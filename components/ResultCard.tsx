@@ -50,7 +50,7 @@ const itemVariants = {
         y: 0, 
         transition: { type: "spring", stiffness: 280, damping: 24 } 
     },
-};
+} as const;
 
 export default function ResultCard({
     wpm,
