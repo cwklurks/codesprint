@@ -2,6 +2,8 @@
 
 import { Box, Button, Flex, Stack, Text } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { usePrefersReducedMotion } from "@/lib/motion";
 
 type ErrorEntry = { expected: string; got: string; index: number };
 
@@ -30,6 +32,26 @@ function formatDuration(ms: number) {
     return `${minutes}m ${remaining}s`;
 }
 
+const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+        opacity: 1,
+        transition: {
+            staggerChildren: 0.08,
+            delayChildren: 0.1,
+        },
+    },
+};
+
+const itemVariants = {
+    hidden: { opacity: 0, y: 12 },
+    visible: { 
+        opacity: 1, 
+        y: 0, 
+        transition: { type: "spring", stiffness: 280, damping: 24 } 
+    },
+};
+
 export default function ResultCard({
     wpm,
     acc,
@@ -46,6 +68,7 @@ export default function ResultCard({
     autoAdvanceDeadline,
 }: ResultCardProps) {
     const [countdown, setCountdown] = useState<number | null>(null);
+    const prefersReducedMotion = usePrefersReducedMotion();
 
     useEffect(() => {
         if (!autoAdvanceDeadline) {
@@ -60,16 +83,31 @@ export default function ResultCard({
         return () => clearInterval(interval);
     }, [autoAdvanceDeadline]);
 
+    const MotionBox = motion(Box);
+    const MotionFlex = motion(Flex);
+    const MotionStack = motion(Stack);
+
+    const animationProps = prefersReducedMotion ? {} : {
+        variants: containerVariants,
+        initial: "hidden",
+        animate: "visible"
+    };
+
+    const itemProps = prefersReducedMotion ? {} : { variants: itemVariants };
+
     return (
-        <Box
+        <MotionBox
             borderRadius="20px"
             border="1px solid var(--border)"
             bg="var(--panel-soft)"
             boxShadow="var(--shadow)"
             p={{ base: 5, md: 6 }}
+            w="100%"
+            maxW="800px"
+            {...animationProps}
         >
             <Stack gap={6}>
-                <Box>
+                <MotionBox {...itemProps}>
                     <Text fontSize="sm" color="var(--text-subtle)">
                         Completed snippet
                     </Text>
@@ -79,17 +117,17 @@ export default function ResultCard({
                     <Text fontSize="sm" color="var(--text-subtle)">
                         {lang.toUpperCase()} • {difficulty} • {lengthCategory}
                     </Text>
-                </Box>
+                </MotionBox>
 
-                <Flex gap={4} flexWrap="wrap">
+                <MotionFlex gap={4} flexWrap="wrap" {...itemProps}>
                     <Stat label="Adjusted WPM" value={`${Math.round(wpm)}`} />
                     <Stat label="Accuracy" value={`${(acc * 100).toFixed(1)}%`} />
                     <Stat label="Duration" value={formatDuration(timeMs)} />
                     <Stat label="Errors" value={errors.toString()} />
-                </Flex>
+                </MotionFlex>
 
                 {errorLog.length > 0 && (
-                    <Stack gap={1}>
+                    <MotionStack gap={1} {...itemProps}>
                         <Text fontSize="sm" fontWeight={600}>
                             Recent mistakes
                         </Text>
@@ -99,10 +137,10 @@ export default function ResultCard({
                                 <strong>{JSON.stringify(entry.got)}</strong>
                             </Text>
                         ))}
-                    </Stack>
+                    </MotionStack>
                 )}
 
-                <Flex gap={3} flexWrap="wrap">
+                <MotionFlex gap={3} flexWrap="wrap" align="center" {...itemProps}>
                     <Button onClick={onReplay} colorScheme="yellow">
                         Replay
                     </Button>
@@ -112,13 +150,13 @@ export default function ResultCard({
                         </Button>
                     )}
                     {countdown !== null && countdown > 0 && (
-                        <Text fontSize="xs" color="var(--text-subtle)" mt={2}>
+                        <Text fontSize="xs" color="var(--text-subtle)" ml={2}>
                             Auto-advancing in {countdown}s…
                         </Text>
                     )}
-                </Flex>
+                </MotionFlex>
             </Stack>
-        </Box>
+        </MotionBox>
     );
 }
 
