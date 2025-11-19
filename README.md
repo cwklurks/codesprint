@@ -28,7 +28,7 @@
 
 ## Why?
 
-Most typing tests are just `String.split(' ')`. They measure your ability to type English prose, not code.
+Most typing tests are just `String.split(' ')`. I felt like they measure your ability to type English, but that doesn't translate as much when you're typing code.
 
 I built CodeSprint because I realized people sometimes fail technical interviews not on logic, but on syntax fluency. I needed a way to drill "Depth First Search in Python" or "Ring Buffer in C++" until my fingers knew the shape of the code.
 
