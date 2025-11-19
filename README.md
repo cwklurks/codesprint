@@ -12,6 +12,8 @@
   </a>
 </p>
 
+![Image](https://github.com/user-attachments/assets/0fa880d2-714c-47cf-9c58-218524943d60)
+
 <p align="center">
   <strong>A "muscle memory engine" for LeetCode patterns.</strong>
   <br>
@@ -26,22 +28,22 @@
 
 Most typing tests are just `String.split(' ')`. They measure your ability to type English prose, not code.
 
-I built CodeSprint because I realized I was failing technical interviews not on logic, but on syntax fluency. I needed a way to drill "Depth First Search in Python" or "Ring Buffer in C++" until my fingers knew the shape of the code.
+I built CodeSprint because I realized people sometimes fail technical interviews not on logic, but on syntax fluency. I needed a way to drill "Depth First Search in Python" or "Ring Buffer in C++" until my fingers knew the shape of the code.
 
 ## Engineering
 
-This isn't just a text area wrapper. It's an attempt to build a performant typing engine on the web.
+I wanted to create more than just a text area wrapper. Here is how I went about making it:
 
 ### 1. The Renderer (Monaco + Delta Decorations)
 
 Instead of building a custom canvas renderer (yet), CodeSprint runs a heavily customized instance of the Monaco Editor (the core of VS Code).
 
 - **Diffing**: It uses `deltaDecorations` to paint correct/incorrect keystrokes directly onto the editor model without breaking the underlying syntax highlighting.
-- **Layout**: It calculates `getScrolledVisiblePosition` to overlay a custom caret that behaves smoother than the native DOM caret.
+- **Layout**: It calculates `getScrolledVisiblePosition` to overlay a really nice custom caret that behaves smoother than the native DOM caret.
 
 ### 2. The Sync Script (Bun)
 
-We don't hardcode snippets. I wrote a custom scraper in Bun (`scripts/sync-leetcode.ts`) that:
+I didn't really want to hardcode snippets. So, I wrote a custom scraper in Bun (`scripts/sync-leetcode.ts`) that:
 
 - Reverse-engineers the LeetCode GraphQL schema.
 - Fetches problems by difficulty and acceptance rate.
@@ -66,6 +68,7 @@ This will:
 - Query the LeetCode `questionData` endpoint.
 - Parse `codeSnippets` for C++, Java, Python, and JS.
 - Output a minified JSON catalog to `data/leetcode-snippets.json`.
+- Autosort them into short, medium, and long problems.
 
 ## Running Locally
 
