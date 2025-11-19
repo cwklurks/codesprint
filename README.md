@@ -12,7 +12,9 @@
   </a>
 </p>
 
-![Image](https://github.com/user-attachments/assets/0fa880d2-714c-47cf-9c58-218524943d60)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/0fa880d2-714c-47cf-9c58-218524943d60" alt="codesprint demo" width="100%">
+</p>
 
 <p align="center">
   <strong>A "muscle memory engine" for LeetCode patterns.</strong>
