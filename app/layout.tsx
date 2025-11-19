@@ -6,8 +6,8 @@ import { AppProviders } from "./providers";
 import { createThemeInitScript } from "./theme-init-script";
 
 export const metadata: Metadata = {
-    title: "CodeSprint | Typing drills for engineers",
-    description: "Deliberate practice for engineers with realistic snippets, live stats, and shortcuts.",
+    title: "codesprint",
+    description: "codesprint",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
