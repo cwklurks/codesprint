@@ -113,22 +113,9 @@ export default function TypingSession() {
         reset: resetEngine,
         start: startEngine,
         handleKeyDown: engineHandleKeyDown,
+        history,
     } = useTypingEngine({
         snippet,
-        onFinish: () => {
-            // Schedule auto-advance
-            const delayMs = 3000;
-            const deadline = Date.now() + delayMs;
-            setAutoAdvanceDeadline(deadline);
-            const timeoutId = window.setTimeout(() => {
-                if (autoAdvanceTimeoutRef.current === timeoutId) {
-                    autoAdvanceTimeoutRef.current = null;
-                }
-                setAutoAdvanceDeadline(null);
-                handleNextProblem();
-            }, delayMs);
-            autoAdvanceTimeoutRef.current = timeoutId;
-        }
     });
 
     // Reset engine when snippet changes
@@ -192,7 +179,7 @@ export default function TypingSession() {
                     focusEditorRef.current?.();
                     return;
                 }
-                if (keyLower === "n" && phase !== "running") {
+                if ((keyLower === "n" || keyLower === "q") && phase !== "running") {
                     e.preventDefault();
                     e.stopPropagation();
                     enableEditorFocus();
@@ -468,7 +455,7 @@ export default function TypingSession() {
                             px={2}
                             py={1}
                         >
-                            Press N
+                            Press N or Q
                         </TooltipContent>
                     </TooltipPositioner>
                 </TooltipRoot>
@@ -565,169 +552,185 @@ export default function TypingSession() {
         };
 
     return (
-        <Box display="flex" flexDirection="column" gap={8}>
-            {!focusActive && (
-                <motion.div
-                    style={{
-                        display: "flex",
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "6px 12px",
-                        borderRadius: "8px",
-                        background: panelGlass,
-                        backdropFilter: "blur(12px)",
-                        border: `1px solid ${border}`,
-                        boxShadow: "var(--shadow)",
-                        flexWrap: "wrap",
-                    }}
-                    {...controlsMotion}
-                    layout
-                >
-                    <Flex gap={2} flexWrap="wrap" align="center">
-                        {languageOptions.map((option) => (
-                            <Button
-                                key={option.value}
-                                {...pillButtonStyles(lang === option.value)}
-                                onClick={() => setLang(option.value)}
-                                disabled={controlsDisabled}
-                            >
-                                {option.label}
-                            </Button>
-                        ))}
-                    </Flex>
-                    <Flex gap={2} flexWrap="wrap" align="center" ml={2}>
-                        {lengthOptions.map((option) => (
-                            <TooltipRoot key={option.value}>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        {...pillButtonStyles(lengthPref === option.value)}
-                                        onClick={() => setLengthPref(option.value)}
-                                        disabled={controlsDisabled}
-                                    >
-                                        {option.label}
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipPositioner>
-                                    <TooltipContent
-                                        bg="var(--surface)"
-                                        color="var(--text)"
-                                        border="1px solid var(--border)"
-                                        fontSize="xs"
-                                        px={2}
-                                        py={1}
-                                    >
-                                        {option.helper}
-                                    </TooltipContent>
-                                </TooltipPositioner>
-                            </TooltipRoot>
-                        ))}
-                    </Flex>
-                    <Flex gap={2} flexWrap="wrap" align="center" ml="auto">
-                        {surfaceOptions.map((option) => (
-                            <Button
-                                key={option.value}
-                                {...pillButtonStyles(storedSurfaceStyle === option.value)}
-                                onClick={() => persistSurfaceStyle(option.value)}
-                                disabled={controlsDisabled}
-                            >
-                                {option.label}
-                            </Button>
-                        ))}
-                    </Flex>
-                    <AnimatePresence>
-                        {phase === "idle" && (
-                            <motion.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
-                                <Button
-                                    onClick={() => {
-                                        enableEditorFocus();
-                                        startEngine();
-                                        focusEditorRef.current?.();
-                                    }}
-                                    {...startButtonStyles}
-                                >
-                                    Start
-                                </Button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </motion.div>
-            )}
-
-            <Stack w="100%" gap={layoutGap} align="center">
-                <Box w="100%" position="relative">
+        <Box position="relative" minH="400px">
+            <AnimatePresence mode="wait">
+                {!finished ? (
                     <motion.div
-                        ref={panelContainerRef}
-                        key={`${snippet.id}-${lang}-${lengthPref}`}
-                        {...panelMotion}
-                        layout
-                        style={{ display: "flex", justifyContent: "center", width: "100%" }}
+                        key="session"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        style={{ width: "100%" }}
                     >
-                        <Box display="flex" flexDirection="column" gap={4} maxW={panelMaxWidth} mx="auto" w="100%">
-                            {sessionTopBar}
-                            {showRunningStats && (
-                                <Box alignSelf="center" width="100%" maxW="md">
-                                    <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} />
-                                </Box>
+                        <Box display="flex" flexDirection="column" gap={8}>
+                            {!focusActive && (
+                                <motion.div
+                                    style={{
+                                        display: "flex",
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        padding: "6px 12px",
+                                        borderRadius: "8px",
+                                        background: panelGlass,
+                                        backdropFilter: "blur(12px)",
+                                        border: `1px solid ${border}`,
+                                        boxShadow: "var(--shadow)",
+                                        flexWrap: "wrap",
+                                    }}
+                                    {...controlsMotion}
+                                    layout
+                                >
+                                    <Flex gap={2} flexWrap="wrap" align="center">
+                                        {languageOptions.map((option) => (
+                                            <Button
+                                                key={option.value}
+                                                {...pillButtonStyles(lang === option.value)}
+                                                onClick={() => setLang(option.value)}
+                                                disabled={controlsDisabled}
+                                            >
+                                                {option.label}
+                                            </Button>
+                                        ))}
+                                    </Flex>
+                                    <Flex gap={2} flexWrap="wrap" align="center" ml={2}>
+                                        {lengthOptions.map((option) => (
+                                            <TooltipRoot key={option.value}>
+                                                <TooltipTrigger asChild>
+                                                    <Button
+                                                        {...pillButtonStyles(lengthPref === option.value)}
+                                                        onClick={() => setLengthPref(option.value)}
+                                                        disabled={controlsDisabled}
+                                                    >
+                                                        {option.label}
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipPositioner>
+                                                    <TooltipContent
+                                                        bg="var(--surface)"
+                                                        color="var(--text)"
+                                                        border="1px solid var(--border)"
+                                                        fontSize="xs"
+                                                        px={2}
+                                                        py={1}
+                                                    >
+                                                        {option.helper}
+                                                    </TooltipContent>
+                                                </TooltipPositioner>
+                                            </TooltipRoot>
+                                        ))}
+                                    </Flex>
+                                    <Flex gap={2} flexWrap="wrap" align="center" ml="auto">
+                                        {surfaceOptions.map((option) => (
+                                            <Button
+                                                key={option.value}
+                                                {...pillButtonStyles(storedSurfaceStyle === option.value)}
+                                                onClick={() => persistSurfaceStyle(option.value)}
+                                                disabled={controlsDisabled}
+                                            >
+                                                {option.label}
+                                            </Button>
+                                        ))}
+                                    </Flex>
+                                    <AnimatePresence>
+                                        {phase === "idle" && (
+                                            <motion.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
+                                                <Button
+                                                    onClick={() => {
+                                                        enableEditorFocus();
+                                                        startEngine();
+                                                        focusEditorRef.current?.();
+                                                    }}
+                                                    {...startButtonStyles}
+                                                >
+                                                    Start
+                                                </Button>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </motion.div>
                             )}
-                            <CodePanel
-                                content={snippet.content}
-                                cursorChar={cursorIndex}
-                                wrongChars={wrongChars}
-                                language={lang === "javascript" ? "javascript" : lang}
-                                caretErrorActive={caretErrorActive}
-                                onReady={handleEditorReady}
-                                fontSize={editorFontSize}
-                                surfaceStyle={effectiveSurfaceStyle}
-                                syntaxHighlightingEnabled={preferences.syntaxHighlightingEnabled}
-                            />
+
+                            <Stack w="100%" gap={layoutGap} align="center">
+                                <Box w="100%" position="relative">
+                                    <motion.div
+                                        ref={panelContainerRef}
+                                        key={`${snippet.id}-${lang}-${lengthPref}`}
+                                        {...panelMotion}
+                                        layout
+                                        style={{ display: "flex", justifyContent: "center", width: "100%" }}
+                                    >
+                                        <Box display="flex" flexDirection="column" gap={4} maxW={panelMaxWidth} mx="auto" w="100%">
+                                            {sessionTopBar}
+                                            {showRunningStats && (
+                                                <Box alignSelf="center" width="100%" maxW="md">
+                                                    <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} />
+                                                </Box>
+                                            )}
+                                            <CodePanel
+                                                content={snippet.content}
+                                                cursorChar={cursorIndex}
+                                                wrongChars={wrongChars}
+                                                language={lang === "javascript" ? "javascript" : lang}
+                                                caretErrorActive={caretErrorActive}
+                                                onReady={handleEditorReady}
+                                                fontSize={editorFontSize}
+                                                surfaceStyle={effectiveSurfaceStyle}
+                                                syntaxHighlightingEnabled={preferences.syntaxHighlightingEnabled}
+                                            />
+                                        </Box>
+                                    </motion.div>
+                                    <AnimatePresence mode="wait">
+                                        {isCountingDown && countdown !== null && (
+                                            <motion.div
+                                                key="countdown-overlay"
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                transition={{ duration: MOTION_DURATION.quick, ease: MOTION_EASE.inOut }}
+                                                style={{
+                                                    position: "absolute",
+                                                    inset: 0,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    background: prefersReducedMotion ? "transparent" : "var(--overlay)",
+                                                    backdropFilter: prefersReducedMotion ? undefined : "blur(10px)",
+                                                }}
+                                            >
+                                                <AnimatePresence mode="wait">
+                                                    <motion.span
+                                                        key={countdown}
+                                                        initial={{ opacity: 0, scale: 0.6 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        exit={{ opacity: 0, scale: 0.85 }}
+                                                        transition={{ duration: MOTION_DURATION.quick, ease: MOTION_EASE.out }}
+                                                        style={{
+                                                            fontSize: "4rem",
+                                                            fontWeight: 700,
+                                                            color: "var(--text)",
+                                                            textShadow: "0 12px 34px color-mix(in srgb, var(--bg) 40%, transparent)",
+                                                        }}
+                                                    >
+                                                        {countdown === 0 ? "Go" : countdown}
+                                                    </motion.span>
+                                                </AnimatePresence>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </Box>
+                            </Stack>
                         </Box>
                     </motion.div>
-                    <AnimatePresence mode="wait">
-                        {isCountingDown && countdown !== null && (
-                            <motion.div
-                                key="countdown-overlay"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: MOTION_DURATION.quick, ease: MOTION_EASE.inOut }}
-                                style={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    background: prefersReducedMotion ? "transparent" : "var(--overlay)",
-                                    backdropFilter: prefersReducedMotion ? undefined : "blur(10px)",
-                                }}
-                            >
-                                <AnimatePresence mode="wait">
-                                    <motion.span
-                                        key={countdown}
-                                        initial={{ opacity: 0, scale: 0.6 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.85 }}
-                                        transition={{ duration: MOTION_DURATION.quick, ease: MOTION_EASE.out }}
-                                        style={{
-                                            fontSize: "4rem",
-                                            fontWeight: 700,
-                                            color: "var(--text)",
-                                            textShadow: "0 12px 34px color-mix(in srgb, var(--bg) 40%, transparent)",
-                                        }}
-                                    >
-                                        {countdown === 0 ? "Go" : countdown}
-                                    </motion.span>
-                                </AnimatePresence>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </Box>
-            </Stack>
-
-            <AnimatePresence mode="wait">
-                {finished && (
-                    <motion.div style={{ marginTop: 16 }} {...resultCardMotion} layout>
-                        <Stack gap={5} align="center">
+                ) : (
+                    <motion.div
+                        key="result"
+                        {...resultCardMotion}
+                        layout
+                        style={{ width: "100%", display: "flex", justifyContent: "center", marginTop: 32 }}
+                    >
+                        <Stack gap={5} align="center" w="100%" maxW="800px">
                             {showLiveStatsPanel ? <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} label="Final WPM" /> : null}
                             <ResultCard
                                 wpm={metrics.adjustedWpm}
@@ -750,6 +753,7 @@ export default function TypingSession() {
                                 difficulty={snippet.difficulty}
                                 lengthCategory={snippet.lengthCategory}
                                 errorLog={errorLog}
+                                history={history}
                             />
                         </Stack>
                     </motion.div>

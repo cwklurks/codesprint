@@ -59,8 +59,8 @@ type SnippetDefinition = {
 };
 
 const LENGTH_THRESHOLDS = {
-    short: 15,
-    medium: 40,
+    short: 10,
+    medium: 30,
 } as const;
 
 const LENGTH_ORDER: Record<SnippetLength, number> = {
@@ -70,6 +70,41 @@ const LENGTH_ORDER: Record<SnippetLength, number> = {
 };
 
 const PYTHON_DOCSTRING_MARKERS = [":type", ":rtype", ":param"];
+
+function isSkeletal(content: string, language: SupportedLanguage): boolean {
+    const lines = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    let substantiveLines = 0;
+
+    if (language === "javascript") {
+        for (const line of lines) {
+            if (
+                !line.match(/^var .* = function\s*\(.*\)\s*{\s*$/) &&
+                !line.match(/.*\.prototype\..* = function\s*\(.*\)\s*{\s*$/) &&
+                !line.match(/^class /) &&
+                !line.match(/^constructor/) &&
+                !line.match(/^[}\]];?$/)
+            ) {
+                substantiveLines++;
+            }
+        }
+    } else if (language === "python") {
+        for (const line of lines) {
+            if (
+                !line.match(/^def .*:$/) &&
+                !line.match(/^class /) &&
+                !line.match(/^@/) &&
+                !line.match(/^pass$/)
+            ) {
+                substantiveLines++;
+            }
+        }
+    } else {
+        // Default to keeping it if we don't know the language well enough
+        return false;
+    }
+
+    return substantiveLines < 1;
+}
 
 const CURATED_SNIPPETS: Snippet[] = [
     defineSnippet({
@@ -480,8 +515,8 @@ function normalizeDataset(raw: unknown): Snippet[] {
 
         const sanitizedContent = sanitizeContentForLanguage(entry.content, entry.lang);
         const normalizedContent = normalizeContent(sanitizedContent);
-        const lines =
-            typeof entry.lines === "number" && Number.isFinite(entry.lines) ? entry.lines : countLines(normalizedContent);
+        // Always measure the normalized content; raw LeetCode stubs often over-report lines.
+        const lines = countLines(normalizedContent);
         const lengthCategory = classifyLength(lines);
         const difficulty = isDifficulty(entry.difficulty) ? entry.difficulty : "easy";
         const title = typeof entry.title === "string" && entry.title.length > 0 ? entry.title : "LeetCode snippet";
@@ -495,6 +530,8 @@ function normalizeDataset(raw: unknown): Snippet[] {
         const id = typeof entry.id === "string" && entry.id.length > 0 ? entry.id : problemId;
         const frontendId =
             typeof entry.frontendId === "number" && Number.isFinite(entry.frontendId) ? entry.frontendId : undefined;
+
+        if (isSkeletal(normalizedContent, entry.lang)) return [];
 
         return [
             {
@@ -593,57 +630,27 @@ function normalizeContent(content: string): string {
 }
 
 function sanitizeContentForLanguage(content: string, language: SupportedLanguage): string {
-    if (language === "python") {
-        return stripPythonDocstrings(content);
-    }
-    return content;
+    return stripComments(content, language);
 }
 
-function stripPythonDocstrings(content: string): string {
-    let index = 0;
-    let result = "";
-    const doubleQuote = '"""';
-    const singleQuote = "'''";
-    while (index < content.length) {
-        const nextDouble = content.indexOf(doubleQuote, index);
-        const nextSingle = content.indexOf(singleQuote, index);
-        if (nextDouble === -1 && nextSingle === -1) {
-            result += content.slice(index);
-            break;
-        }
-        const useDouble = nextSingle === -1 || (nextDouble !== -1 && nextDouble <= nextSingle);
-        const quote = useDouble ? doubleQuote : singleQuote;
-        const start = useDouble ? nextDouble : nextSingle;
-        if (start === -1) {
-            result += content.slice(index);
-            break;
-        }
-        const end = content.indexOf(quote, start + quote.length);
-        if (end === -1) {
-            result += content.slice(index);
-            break;
-        }
-        const blockContent = content.slice(start + quote.length, end).toLowerCase();
-        const shouldStrip = PYTHON_DOCSTRING_MARKERS.some((marker) => blockContent.includes(marker));
-        if (shouldStrip) {
-            const lastLineBreak = content.lastIndexOf("\n", start - 1);
-            const lineStart = lastLineBreak === -1 ? 0 : lastLineBreak + 1;
-            const leading = content.slice(lineStart, start);
-            const keepUntil = /^[\t ]*$/.test(leading) ? lineStart : start;
-            result += content.slice(index, keepUntil);
-            index = end + quote.length;
-            if (content[index] === "\r") {
-                index += 1;
-            }
-            if (content[index] === "\n") {
-                index += 1;
-            }
-            continue;
-        }
-        result += content.slice(index, end + quote.length);
-        index = end + quote.length;
+function stripComments(content: string, language: SupportedLanguage): string {
+    if (language === "python") {
+        // Remove hash comments
+        let cleaned = content.replace(/#.*$/gm, "");
+        // Remove docstrings ("""...""" and '''...''')
+        // Note: This simple regex assumes docstrings are not nested inside other strings in complex ways,
+        // which is generally true for LeetCode snippets.
+        cleaned = cleaned.replace(/"""[\s\S]*?"""/g, "");
+        cleaned = cleaned.replace(/'''[\s\S]*?'''/g, "");
+        return cleaned;
+    } else {
+        // JavaScript, Java, C++
+        // Remove block comments
+        let cleaned = content.replace(/\/\*[\s\S]*?\*\//g, "");
+        // Remove line comments
+        cleaned = cleaned.replace(/\/\/.*$/gm, "");
+        return cleaned;
     }
-    return result;
 }
 
 function condenseBlankRuns(content: string): string {
@@ -693,3 +700,5 @@ function isSupportedLanguage(value: unknown): value is SupportedLanguage {
 function isDifficulty(value: unknown): value is Difficulty {
     return value === "easy" || value === "medium" || value === "hard";
 }
+
+

@@ -1,9 +1,10 @@
 "use client";
 
 import { Box, Button, Flex, Stack, Text } from "@chakra-ui/react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { usePrefersReducedMotion } from "@/lib/motion";
+import ResultGraph from "./ResultGraph";
 
 type ErrorEntry = { expected: string; got: string; index: number };
 
@@ -45,10 +46,10 @@ const containerVariants = {
 
 const itemVariants = {
     hidden: { opacity: 0, y: 12 },
-    visible: { 
-        opacity: 1, 
-        y: 0, 
-        transition: { type: "spring", stiffness: 280, damping: 24 } 
+    visible: {
+        opacity: 1,
+        y: 0,
+        transition: { type: "spring", stiffness: 280, damping: 24 }
     },
 } as const;
 
@@ -63,10 +64,11 @@ export default function ResultCard({
     difficulty,
     lengthCategory,
     errorLog,
+    history,
     onReplay,
     onNext,
     autoAdvanceDeadline,
-}: ResultCardProps) {
+}: ResultCardProps & { history: any[] }) {
     const [countdown, setCountdown] = useState<number | null>(null);
     const prefersReducedMotion = usePrefersReducedMotion();
 
@@ -82,6 +84,17 @@ export default function ResultCard({
         const interval = setInterval(tick, 250);
         return () => clearInterval(interval);
     }, [autoAdvanceDeadline]);
+
+    const mostMistaken = useMemo(() => {
+        const counts: Record<string, number> = {};
+        errorLog.forEach((e) => {
+            const char = e.expected === " " ? "Space" : e.expected === "\n" ? "Enter" : e.expected;
+            counts[char] = (counts[char] || 0) + 1;
+        });
+        return Object.entries(counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+    }, [errorLog]);
 
     const MotionBox = motion(Box);
     const MotionFlex = motion(Flex);
@@ -101,74 +114,112 @@ export default function ResultCard({
             border="1px solid var(--border)"
             bg="var(--panel-soft)"
             boxShadow="var(--shadow)"
-            p={{ base: 5, md: 6 }}
+            p={{ base: 5, md: 8 }}
             w="100%"
-            maxW="800px"
+            maxW="1000px"
             {...animationProps}
         >
-            <Stack gap={6}>
-                <MotionBox {...itemProps}>
-                    <Text fontSize="sm" color="var(--text-subtle)">
-                        Completed snippet
-                    </Text>
-                    <Text fontSize="xl" fontWeight={600}>
-                        {snippetTitle} <Text as="span" color="var(--text-subtle)">#{snippetId}</Text>
-                    </Text>
-                    <Text fontSize="sm" color="var(--text-subtle)">
-                        {lang.toUpperCase()} • {difficulty} • {lengthCategory}
-                    </Text>
-                </MotionBox>
-
-                <MotionFlex gap={4} flexWrap="wrap" {...itemProps}>
-                    <Stat label="Adjusted WPM" value={`${Math.round(wpm)}`} />
-                    <Stat label="Accuracy" value={`${(acc * 100).toFixed(1)}%`} />
-                    <Stat label="Duration" value={formatDuration(timeMs)} />
-                    <Stat label="Errors" value={errors.toString()} />
+            <Stack gap={8}>
+                {/* Header */}
+                <MotionFlex justify="center" gap={16} align="flex-end" {...itemProps}>
+                    <Box textAlign="center">
+                        <Text fontSize="6xl" fontWeight={700} color="var(--accent)" lineHeight={1}>
+                            {Math.round(wpm)}
+                        </Text>
+                        <Text fontSize="xl" color="var(--text-subtle)">wpm</Text>
+                    </Box>
+                    <Box textAlign="center">
+                        <Text fontSize="6xl" fontWeight={700} color="var(--text)" lineHeight={1}>
+                            {(acc * 100).toFixed(0)}%
+                        </Text>
+                        <Text fontSize="xl" color="var(--text-subtle)">acc</Text>
+                    </Box>
                 </MotionFlex>
 
-                {errorLog.length > 0 && (
-                    <MotionStack gap={1} {...itemProps}>
-                        <Text fontSize="sm" fontWeight={600}>
-                            Recent mistakes
+                {/* Graph */}
+                <MotionBox h="300px" w="100%" {...itemProps}>
+                    <ResultGraph data={history} height={300} />
+                </MotionBox>
+
+                {/* Detailed Stats */}
+                <MotionFlex gap={8} flexWrap="wrap" justify="center" {...itemProps}>
+                    <StatBox label="Raw" value={Math.round(wpm / acc || wpm).toString()} />
+                    <StatBox label="Characters" value={`${history[history.length - 1]?.raw * 5 || 0}/${errors}`} helper="correct/incorrect" />
+                    <StatBox label="Time" value={formatDuration(timeMs)} />
+                </MotionFlex>
+
+                {/* Most Mistaken */}
+                {mostMistaken.length > 0 && (
+                    <MotionBox {...itemProps} textAlign="center">
+                        <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.1em" color="var(--text-subtle)" mb={3}>
+                            Most Mistaken
                         </Text>
-                        {errorLog.slice(-5).map((entry, index) => (
-                            <Text key={`${entry.index}-${index}`} fontSize="xs" color="var(--text-subtle)">
-                                #{entry.index}: expected <strong>{JSON.stringify(entry.expected)}</strong> got{" "}
-                                <strong>{JSON.stringify(entry.got)}</strong>
-                            </Text>
-                        ))}
-                    </MotionStack>
+                        <Flex gap={3} flexWrap="wrap" justify="center">
+                            {mostMistaken.map(([char, count]) => (
+                                <Flex
+                                    key={char}
+                                    align="center"
+                                    gap={2}
+                                    bg="var(--surface)"
+                                    px={3}
+                                    py={1.5}
+                                    borderRadius="md"
+                                    border="1px solid var(--border)"
+                                >
+                                    <Text fontWeight="bold" fontFamily="monospace">{char}</Text>
+                                    <Text fontSize="xs" color="var(--error)">{count}</Text>
+                                </Flex>
+                            ))}
+                        </Flex>
+                    </MotionBox>
                 )}
 
-                <MotionFlex gap={3} flexWrap="wrap" align="center" {...itemProps}>
-                    <Button onClick={onReplay} colorScheme="yellow">
+                {/* Actions */}
+                <MotionFlex gap={3} flexWrap="wrap" justify="center" pt={4} borderTop="1px solid var(--border)" {...itemProps}>
+                    <Button onClick={onReplay} size="lg" colorScheme="yellow" px={8}>
                         Replay
                     </Button>
                     {onNext && (
-                        <Button onClick={onNext} variant="outline" borderColor="var(--border)">
-                            Next problem
+                        <Button
+                            onClick={onNext}
+                            size="lg"
+                            variant="outline"
+                            borderColor="var(--accent)"
+                            color="var(--accent)"
+                            _hover={{ bg: "var(--accent)", color: "var(--bg)" }}
+                            px={8}
+                        >
+                            Next Problem
                         </Button>
                     )}
-                    {countdown !== null && countdown > 0 && (
-                        <Text fontSize="xs" color="var(--text-subtle)" ml={2}>
-                            Auto-advancing in {countdown}s…
-                        </Text>
-                    )}
                 </MotionFlex>
+
+                {countdown !== null && countdown > 0 && (
+                    <Text textAlign="center" fontSize="xs" color="var(--text-subtle)">
+                        Auto-advancing in {countdown}s…
+                    </Text>
+                )}
             </Stack>
         </MotionBox>
     );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, helper }: { label: string; value: string; helper?: string }) {
     return (
-        <Box flex="1 1 140px" minW="140px">
+        <Box textAlign="center">
             <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.1em" color="var(--text-subtle)">
                 {label}
             </Text>
-            <Text fontSize="2xl" fontWeight={700}>
+            <Text fontSize="3xl" fontWeight={700} lineHeight={1.2}>
                 {value}
             </Text>
+            {helper && (
+                <Text fontSize="xs" color="var(--text-subtle)" opacity={0.7}>
+                    {helper}
+                </Text>
+            )}
         </Box>
     );
 }
+
+

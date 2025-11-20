@@ -21,8 +21,8 @@ export function computeMetrics({ correctProgress, elapsedMs, totalTyped, errors 
     }
     const minutes = elapsedMs / MS_IN_MINUTE;
     const rawWpm = totalTyped / 5 / minutes;
-    const netWords = totalTyped / 5 - errors;
-    const adjustedWpm = Math.max(0, netWords / minutes);
+    // Use correctProgress (net useful characters) for adjusted speed
+    const adjustedWpm = Math.max(0, (correctProgress / 5) / minutes);
     const accuracy =
         correctProgress <= 0 || totalTyped <= 0 ? 0 : Math.min(1, correctProgress / totalTyped);
     return {
