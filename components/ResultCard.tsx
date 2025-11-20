@@ -10,12 +10,12 @@ type ErrorEntry = { expected: string; got: string; index: number };
 
 type ResultCardProps = {
     wpm: number;
-    acc: number;
+    accuracy: number;
     timeMs: number;
     errors: number;
     snippetTitle: string;
     snippetId: string;
-    lang: "javascript" | "python" | "java" | "cpp";
+    language: "javascript" | "python" | "java" | "cpp";
     difficulty: string;
     lengthCategory: string;
     errorLog: ErrorEntry[];
@@ -61,12 +61,12 @@ const itemVariants = {
 
 export default function ResultCard({
     wpm,
-    acc,
+    accuracy,
     timeMs,
     errors,
     snippetTitle,
     snippetId,
-    lang,
+    language,
     difficulty,
     lengthCategory,
     errorLog,
@@ -108,11 +108,11 @@ export default function ResultCard({
     const meta = useMemo(
         () => [
             { label: "Problem", value: snippetTitle || snippetId },
-            { label: "Language", value: lang.toUpperCase() },
+            { label: "Language", value: language.toUpperCase() },
             { label: "Difficulty", value: capitalize(difficulty) },
             { label: "Length", value: capitalize(lengthCategory) },
         ],
-        [difficulty, lang, lengthCategory, snippetId, snippetTitle]
+        [difficulty, language, lengthCategory, snippetId, snippetTitle]
     );
 
     const animationProps = prefersReducedMotion ? {} : {
@@ -145,7 +145,7 @@ export default function ResultCard({
                     </Box>
                     <Box textAlign="center">
                         <Text fontSize="6xl" fontWeight={700} color="var(--text)" lineHeight={1}>
-                            {(acc * 100).toFixed(0)}%
+                            {(accuracy * 100).toFixed(0)}%
                         </Text>
                         <Text fontSize="xl" color="var(--text-subtle)">acc</Text>
                     </Box>
@@ -164,7 +164,7 @@ export default function ResultCard({
 
                 {/* Detailed Stats */}
                 <MotionFlex gap={8} flexWrap="wrap" justify="center" {...itemProps}>
-                    <StatBox label="Raw" value={Math.round(wpm / acc || wpm).toString()} />
+                    <StatBox label="Raw" value={Math.round(wpm / accuracy || wpm).toString()} />
                     <StatBox label="Characters" value={`${history[history.length - 1]?.raw * 5 || 0}/${errors}`} helper="correct/incorrect" />
                     <StatBox label="Time" value={formatDuration(timeMs)} />
                 </MotionFlex>

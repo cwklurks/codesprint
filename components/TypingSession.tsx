@@ -13,7 +13,7 @@ import {
 import CodePanel from "@/components/CodePanel";
 import LiveStats from "@/components/LiveStats";
 import ResultCard from "@/components/ResultCard";
-import { getProblemSnippets, getProblems, getSnippet, type Problem, type Snippet, type SnippetLength } from "@/lib/snippets";
+import { getProblemSnippets, getProblems, getSnippet, type Problem, type Snippet, type SnippetLength, type SupportedLanguage } from "@/lib/snippets";
 import { FADE_IN_UP, MOTION_DURATION, MOTION_EASE, POP_IN, SPRING_SMOOTH, usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
 import type { MotionProps } from "framer-motion";
@@ -23,14 +23,15 @@ import { useAutoScroll } from "@/hooks/useAutoScroll";
 type LengthFilter = SnippetLength | "all";
 
 export default function TypingSession() {
-    const [lang, setLang] = useState<"python" | "javascript" | "java" | "cpp">("javascript");
-    const [lengthPref, setLengthPref] = useState<LengthFilter>("all");
+    const [language, setLanguage] = useState<SupportedLanguage>("javascript");
+    const [lengthPreference, setLengthPreference] = useState<LengthFilter>("medium");
 
     // Problem & Snippet Selection
     const problemOptions = useMemo<Problem[]>(() => {
-        const filters = lengthPref === "all" ? undefined : { length: lengthPref };
-        return getProblems(lang, filters);
-    }, [lang, lengthPref]);
+        const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
+        const options = getProblems(language, lengthPreference === "all" ? undefined : { length: lengthPreference });
+        return options;
+    }, [language, lengthPreference]);
 
     const [problemId, setProblemId] = useState(() => problemOptions[0]?.id ?? "");
 
@@ -46,9 +47,10 @@ export default function TypingSession() {
 
     const snippetOptions = useMemo<Snippet[]>(() => {
         if (!problemId) return [];
-        const filters = lengthPref === "all" ? undefined : { length: lengthPref };
-        return getProblemSnippets(lang, problemId, filters);
-    }, [lang, problemId, lengthPref]);
+        const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
+        const options = getProblemSnippets(language, problemId, lengthPreference === "all" ? undefined : { length: lengthPreference });
+        return options;
+    }, [language, problemId, lengthPreference]);
 
     const [snippetId, setSnippetId] = useState(() => snippetOptions[0]?.id ?? "");
 
@@ -64,12 +66,12 @@ export default function TypingSession() {
 
     const snippet = useMemo(() => {
         if (snippetOptions.length === 0) {
-            const filters = lengthPref === "all" ? undefined : { length: lengthPref };
-            return getSnippet(lang, filters);
+            const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
+            return getSnippet(language, filters);
         }
         const selected = snippetOptions.find((option) => option.id === snippetId);
         return selected ?? snippetOptions[0];
-    }, [snippetOptions, snippetId, lang, lengthPref]);
+    }, [snippetOptions, snippetId, language, lengthPreference]);
 
     // Preferences
     const { preferences, setSurfaceStyle: persistSurfaceStyle, setShowLiveStatsDuringRun } = usePreferences();
@@ -505,7 +507,7 @@ export default function TypingSession() {
         )
         : null;
 
-    const languageOptions: Array<{ value: typeof lang; label: string }> = [
+    const languageOptions: Array<{ value: SupportedLanguage; label: string }> = [
         { value: "javascript", label: "JavaScript" },
         { value: "python", label: "Python" },
         { value: "java", label: "Java" },
@@ -586,8 +588,8 @@ export default function TypingSession() {
                                         {languageOptions.map((option) => (
                                             <Button
                                                 key={option.value}
-                                                {...pillButtonStyles(lang === option.value)}
-                                                onClick={() => setLang(option.value)}
+                                                {...pillButtonStyles(language === option.value)}
+                                                onClick={() => setLanguage(option.value)}
                                                 disabled={controlsDisabled}
                                             >
                                                 {option.label}
@@ -599,8 +601,8 @@ export default function TypingSession() {
                                             <TooltipRoot key={option.value}>
                                                 <TooltipTrigger asChild>
                                                     <Button
-                                                        {...pillButtonStyles(lengthPref === option.value)}
-                                                        onClick={() => setLengthPref(option.value)}
+                                                        {...pillButtonStyles(lengthPreference === option.value)}
+                                                        onClick={() => setLengthPreference(option.value)}
                                                         disabled={controlsDisabled}
                                                     >
                                                         {option.label}
@@ -656,7 +658,7 @@ export default function TypingSession() {
                                 <Box w="100%" position="relative">
                                     <motion.div
                                         ref={panelContainerRef}
-                                        key={`${snippet.id}-${lang}-${lengthPref}`}
+                                        key={`${snippet.id}-${language}-${lengthPreference}`}
                                         {...panelMotion}
                                         layout
                                         style={{ display: "flex", justifyContent: "center", width: "100%" }}
@@ -665,14 +667,14 @@ export default function TypingSession() {
                                             {sessionTopBar}
                                             {showRunningStats && (
                                                 <Box alignSelf="center" width="100%" maxW="md">
-                                                    <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} />
+                                                    <LiveStats wpm={metrics.rawWpm} accuracy={metrics.accuracy} />
                                                 </Box>
                                             )}
                                             <CodePanel
                                                 content={snippet.content}
                                                 cursorChar={cursorIndex}
                                                 wrongChars={wrongChars}
-                                                language={lang === "javascript" ? "javascript" : lang}
+                                                language={language === "javascript" ? "javascript" : language}
                                                 caretErrorActive={caretErrorActive}
                                                 onReady={handleEditorReady}
                                                 fontSize={editorFontSize}
@@ -731,10 +733,10 @@ export default function TypingSession() {
                         style={{ width: "100%", display: "flex", justifyContent: "center", marginTop: 32 }}
                     >
                         <Stack gap={5} align="center" w="100%" maxW="800px">
-                            {showLiveStatsPanel ? <LiveStats wpm={metrics.adjustedWpm} acc={metrics.acc} label="Final WPM" /> : null}
+                            {showLiveStatsPanel ? <LiveStats wpm={metrics.adjustedWpm} accuracy={metrics.accuracy} label="Final WPM" /> : null}
                             <ResultCard
                                 wpm={metrics.adjustedWpm}
-                                acc={metrics.acc}
+                                accuracy={metrics.accuracy}
                                 timeMs={elapsedMs}
                                 errors={wrongChars.size}
                                 onReplay={() => {
@@ -749,7 +751,7 @@ export default function TypingSession() {
                                 autoAdvanceDeadline={autoAdvanceDeadline}
                                 snippetTitle={snippet.title}
                                 snippetId={snippet.id}
-                                lang={lang}
+                                language={language}
                                 difficulty={snippet.difficulty}
                                 lengthCategory={snippet.lengthCategory}
                                 errorLog={errorLog}

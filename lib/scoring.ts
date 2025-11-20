@@ -3,7 +3,7 @@
 export type Metrics = {
     rawWpm: number;
     adjustedWpm: number;
-    acc: number;
+    accuracy: number;
 };
 
 const MS_IN_MINUTE = 1000 * 60;
@@ -16,7 +16,7 @@ type ComputeMetricsInput = {
 
 export function computeMetrics({ correctProgress, elapsedMs, totalTyped }: ComputeMetricsInput): Metrics {
     if (elapsedMs <= 0 || totalTyped <= 0) {
-        return { rawWpm: 0, adjustedWpm: 0, acc: totalTyped === 0 ? 1 : 0 };
+        return { rawWpm: 0, adjustedWpm: 0, accuracy: totalTyped === 0 ? 1 : 0 };
     }
     const minutes = elapsedMs / MS_IN_MINUTE;
     const rawWpm = totalTyped / 5 / minutes;
@@ -27,6 +27,6 @@ export function computeMetrics({ correctProgress, elapsedMs, totalTyped }: Compu
     return {
         rawWpm,
         adjustedWpm,
-        acc: accuracy,
+        accuracy,
     };
 }
