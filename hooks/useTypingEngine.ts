@@ -436,7 +436,6 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         correctProgress: correct,
         elapsedMs,
         totalTyped: totalTypedChars,
-        errors: outstandingErrors,
     });
 
     const caretErrorActive = lastErrorAt !== null && now >= lastErrorAt && now - lastErrorAt < 600;
@@ -457,4 +456,3 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setPhase, // Exposed for edge cases like "Escape" handled outside or "R"
     };
 }
-

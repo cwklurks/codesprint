@@ -69,8 +69,6 @@ const LENGTH_ORDER: Record<SnippetLength, number> = {
     long: 2,
 };
 
-const PYTHON_DOCSTRING_MARKERS = [":type", ":rtype", ":param"];
-
 function isSkeletal(content: string, language: SupportedLanguage): boolean {
     const lines = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
     let substantiveLines = 0;
@@ -700,5 +698,4 @@ function isSupportedLanguage(value: unknown): value is SupportedLanguage {
 function isDifficulty(value: unknown): value is Difficulty {
     return value === "easy" || value === "medium" || value === "hard";
 }
-
 

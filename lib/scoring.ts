@@ -12,10 +12,9 @@ type ComputeMetricsInput = {
     correctProgress: number;
     elapsedMs: number;
     totalTyped: number;
-    errors: number;
 };
 
-export function computeMetrics({ correctProgress, elapsedMs, totalTyped, errors }: ComputeMetricsInput): Metrics {
+export function computeMetrics({ correctProgress, elapsedMs, totalTyped }: ComputeMetricsInput): Metrics {
     if (elapsedMs <= 0 || totalTyped <= 0) {
         return { rawWpm: 0, adjustedWpm: 0, acc: totalTyped === 0 ? 1 : 0 };
     }

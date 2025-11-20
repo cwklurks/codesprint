@@ -4,7 +4,7 @@ import { Box, Flex, Text } from "@chakra-ui/react";
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
 
-type DataPoint = {
+export type ResultGraphPoint = {
     time: number;
     wpm: number;
     raw: number;
@@ -12,7 +12,7 @@ type DataPoint = {
 };
 
 type ResultGraphProps = {
-    data: DataPoint[];
+    data: ResultGraphPoint[];
     width?: number | string;
     height?: number | string;
 };
@@ -35,7 +35,6 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
     }
 
     const maxWpm = Math.max(...processedData.map((d) => d.raw), 60); // Minimum scale of 60
-    const maxErrors = Math.max(...processedData.map((d) => d.errors), 5); // Minimum scale of 5
     const duration = processedData[processedData.length - 1].time;
 
     const padding = { top: 20, right: 20, bottom: 30, left: 40 };
@@ -62,21 +61,6 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
             return `${i === 0 ? "M" : "L"} ${x},${y}`;
         })
         .join(" ");
-
-    // Error points (only show if errors > 0)
-    const errorPoints = processedData
-        .filter((d) => d.errors > 0)
-        .map((d) => ({
-            x: getX(d.time),
-            y: getY(d.errors, maxErrors), // Use separate scale for errors? Or overlay?
-            // Monkeytype puts errors as 'x' markers on the graph, usually relative to WPM or separate axis.
-            // Let's put them on a separate axis or just mark them at the bottom?
-            // Monkeytype puts them at the top or specific height.
-            // Let's just plot them as a separate line or scatter points.
-            // Actually, let's stick to WPM graph for now and maybe overlay errors as small X markers at the WPM line?
-            // Or better: secondary axis for errors.
-            count: d.errors,
-        }));
 
     return (
         <Box w={width} h={height} position="relative" userSelect="none">

@@ -1,10 +1,10 @@
 "use client";
 
-import { Box, Button, Flex, Stack, Text } from "@chakra-ui/react";
+import { Badge, Box, Button, Flex, Stack, Text } from "@chakra-ui/react";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { usePrefersReducedMotion } from "@/lib/motion";
-import ResultGraph from "./ResultGraph";
+import ResultGraph, { type ResultGraphPoint } from "./ResultGraph";
 
 type ErrorEntry = { expected: string; got: string; index: number };
 
@@ -22,6 +22,7 @@ type ResultCardProps = {
     onReplay: () => void;
     onNext?: () => void;
     autoAdvanceDeadline: number | null;
+    history: ResultGraphPoint[];
 };
 
 function formatDuration(ms: number) {
@@ -31,6 +32,11 @@ function formatDuration(ms: number) {
     const minutes = Math.floor(seconds / 60);
     const remaining = Math.round(seconds % 60);
     return `${minutes}m ${remaining}s`;
+}
+
+function capitalize(value: string) {
+    if (!value) return "";
+    return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 const containerVariants = {
@@ -68,7 +74,7 @@ export default function ResultCard({
     onReplay,
     onNext,
     autoAdvanceDeadline,
-}: ResultCardProps & { history: any[] }) {
+}: ResultCardProps) {
     const [countdown, setCountdown] = useState<number | null>(null);
     const prefersReducedMotion = usePrefersReducedMotion();
 
@@ -98,7 +104,16 @@ export default function ResultCard({
 
     const MotionBox = motion(Box);
     const MotionFlex = motion(Flex);
-    const MotionStack = motion(Stack);
+
+    const meta = useMemo(
+        () => [
+            { label: "Problem", value: snippetTitle || snippetId },
+            { label: "Language", value: lang.toUpperCase() },
+            { label: "Difficulty", value: capitalize(difficulty) },
+            { label: "Length", value: capitalize(lengthCategory) },
+        ],
+        [difficulty, lang, lengthCategory, snippetId, snippetTitle]
+    );
 
     const animationProps = prefersReducedMotion ? {} : {
         variants: containerVariants,
@@ -134,6 +149,12 @@ export default function ResultCard({
                         </Text>
                         <Text fontSize="xl" color="var(--text-subtle)">acc</Text>
                     </Box>
+                </MotionFlex>
+
+                <MotionFlex gap={2} flexWrap="wrap" justify="center" {...itemProps}>
+                    {meta.map((item) => (
+                        <MetaPill key={item.label} label={item.label} value={item.value} />
+                    ))}
                 </MotionFlex>
 
                 {/* Graph */}
@@ -222,4 +243,23 @@ function StatBox({ label, value, helper }: { label: string; value: string; helpe
     );
 }
 
-
+function MetaPill({ label, value }: { label: string; value: string }) {
+    return (
+        <Flex
+            align="center"
+            gap={2}
+            px={3}
+            py={1.5}
+            borderRadius="full"
+            border="1px solid var(--border)"
+            bg="var(--surface)"
+        >
+            <Text fontSize="xs" color="var(--text-subtle)" textTransform="uppercase" letterSpacing="0.1em">
+                {label}
+            </Text>
+            <Badge colorScheme="yellow" variant="subtle" px={2} py={0.5} borderRadius="full">
+                {value}
+            </Badge>
+        </Flex>
+    );
+}
