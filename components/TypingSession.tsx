@@ -10,7 +10,8 @@ import {
     TooltipRoot,
     TooltipTrigger,
 } from "@chakra-ui/react";
-import CodePanel from "@/components/CodePanel";
+import dynamic from "next/dynamic";
+import GapBufferVisualizer from "@/components/GapBufferVisualizer";
 import LiveStats from "@/components/LiveStats";
 import ResultCard from "@/components/ResultCard";
 import { getProblemSnippets, getProblems, getSnippet, type Problem, type Snippet, type SnippetLength, type SupportedLanguage } from "@/lib/snippets";
@@ -19,19 +20,26 @@ import { usePreferences } from "@/lib/preferences";
 import type { MotionProps } from "framer-motion";
 import { useTypingEngine } from "@/hooks/useTypingEngine";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { useSnippets } from "@/hooks/useSnippets";
+
+const CodePanel = dynamic(() => import("@/components/CodePanel"), {
+    ssr: false,
+    loading: () => <Box h="400px" bg="var(--panel)" borderRadius="md" />,
+});
 
 type LengthFilter = SnippetLength | "all";
 
 export default function TypingSession() {
     const [language, setLanguage] = useState<SupportedLanguage>("javascript");
     const [lengthPreference, setLengthPreference] = useState<LengthFilter>("medium");
+    const { snippets } = useSnippets();
+    const [isVimPreviewing, setIsVimPreviewing] = useState(false);
 
     // Problem & Snippet Selection
     const problemOptions = useMemo<Problem[]>(() => {
-        const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
-        const options = getProblems(language, lengthPreference === "all" ? undefined : { length: lengthPreference });
+        const options = getProblems(snippets, language, lengthPreference === "all" ? undefined : { length: lengthPreference });
         return options;
-    }, [language, lengthPreference]);
+    }, [language, lengthPreference, snippets]);
 
     const [problemId, setProblemId] = useState(() => problemOptions[0]?.id ?? "");
 
@@ -47,10 +55,9 @@ export default function TypingSession() {
 
     const snippetOptions = useMemo<Snippet[]>(() => {
         if (!problemId) return [];
-        const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
-        const options = getProblemSnippets(language, problemId, lengthPreference === "all" ? undefined : { length: lengthPreference });
+        const options = getProblemSnippets(snippets, language, problemId, lengthPreference === "all" ? undefined : { length: lengthPreference });
         return options;
-    }, [language, problemId, lengthPreference]);
+    }, [language, problemId, lengthPreference, snippets]);
 
     const [snippetId, setSnippetId] = useState(() => snippetOptions[0]?.id ?? "");
 
@@ -67,14 +74,14 @@ export default function TypingSession() {
     const snippet = useMemo(() => {
         if (snippetOptions.length === 0) {
             const filters = lengthPreference === "all" ? undefined : { length: lengthPreference };
-            return getSnippet(language, filters);
+            return getSnippet(snippets, language, filters);
         }
         const selected = snippetOptions.find((option) => option.id === snippetId);
         return selected ?? snippetOptions[0];
-    }, [snippetOptions, snippetId, language, lengthPreference]);
+    }, [snippetOptions, snippetId, language, lengthPreference, snippets]);
 
     // Preferences
-    const { preferences, setSurfaceStyle: persistSurfaceStyle, setShowLiveStatsDuringRun } = usePreferences();
+    const { preferences, setSurfaceStyle: persistSurfaceStyle, setShowLiveStatsDuringRun, setVimMode } = usePreferences();
     const editorFontSize = preferences.fontSize;
     const storedSurfaceStyle = preferences.surfaceStyle ?? "panel";
     const interfaceMode = preferences.interfaceMode;
@@ -154,14 +161,35 @@ export default function TypingSession() {
         enabled: true,
     });
 
+    const beginVimPreview = useCallback(() => {
+        if (!preferences.vimMode) {
+            setVimMode(true);
+        }
+        setIsVimPreviewing(true);
+        enableEditorFocus();
+        setTimeout(() => focusEditorRef.current?.(), 40);
+    }, [enableEditorFocus, preferences.vimMode, setVimMode]);
+
+    const exitVimPreview = useCallback(() => {
+        setIsVimPreviewing(false);
+    }, []);
+
     // Global Shortcuts & Event Listeners
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
+            const allowVimHandling = preferences.vimMode;
             const keyLower = e.key.toLowerCase();
 
-            // Global shortcuts
-            if (!e.metaKey && !e.ctrlKey && !e.altKey) {
-                if (e.key === "Escape" && (phase === "running" || phase === "countdown")) {
+            // 1. Global Escape Handling (Highest Priority)
+            if (e.key === "Escape") {
+                if (isVimPreviewing) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setVimMode(false);
+                    exitVimPreview();
+                    return;
+                }
+                if (phase === "running" || phase === "countdown") {
                     e.preventDefault();
                     e.stopPropagation();
                     if (autoAdvanceTimeoutRef.current !== null) {
@@ -172,6 +200,58 @@ export default function TypingSession() {
                     resetEngine();
                     return;
                 }
+            }
+
+            // 2. Vim Toggle (v) - Allow toggling ON/OFF when not running
+            if (!e.metaKey && !e.ctrlKey && !e.altKey && keyLower === "v" && phase !== "running") {
+                e.preventDefault();
+                e.stopPropagation();
+                if (isVimPreviewing || preferences.vimMode) {
+                    setVimMode(false);
+                    exitVimPreview();
+                } else {
+                    beginVimPreview();
+                }
+                return;
+            }
+
+            // 3. Vim Preview Mode - Delegate to Monaco, ignore Engine
+            if (isVimPreviewing) {
+                // In preview mode, we let events bubble to Monaco (Vim)
+                // We capture specific navigation keys if needed, but mostly we just want to avoid starting the engine
+                // or logging errors.
+
+                // Handle 'i' to start typing? (Optional enhancement)
+                // if (keyLower === 'i') { ... }
+
+                // Handle shortcuts that should work in preview
+                if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                    if (keyLower === "r") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setVimMode(false);
+                        exitVimPreview();
+                        enableEditorFocus();
+                        resetEngine();
+                        startEngine();
+                        focusEditorRef.current?.();
+                        return;
+                    }
+                    if (keyLower === "n" || keyLower === "q") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Keep vim mode? Or exit? Let's keep it for browsing next problem.
+                        // But we need to reset engine state.
+                        enableEditorFocus();
+                        handleNextProblem();
+                        return;
+                    }
+                }
+                return;
+            }
+
+            // 4. Global Shortcuts (Non-Vim)
+            if (!e.metaKey && !e.ctrlKey && !e.altKey) {
                 if (keyLower === "r" && phase !== "running") {
                     e.preventDefault();
                     e.stopPropagation();
@@ -201,7 +281,24 @@ export default function TypingSession() {
                 }
             }
 
-            // Pass to engine
+            // 5. Pass to Engine (Typing)
+            // Only if we are NOT in Vim Preview (already handled)
+            // And if we are in Vim Mode (but not previewing), we still pass to engine?
+            // If vimMode is true but !isVimPreviewing, it means we are "typing with vim mode enabled"?
+            // But we just decided that 'v' toggles both.
+            // So if vimMode is true, isVimPreviewing should be true?
+            // Not necessarily. 'beginVimPreview' sets both.
+            // But if user set vimMode in settings, isVimPreviewing is false initially.
+
+            if (allowVimHandling) {
+                // If vimMode is on but we are not in explicit preview, 
+                // we assume the user wants to type.
+                enableEditorFocus();
+                engineHandleKeyDown(e);
+                return;
+            }
+
+            // Standard typing
             enableEditorFocus();
             engineHandleKeyDown(e);
         }
@@ -236,13 +333,24 @@ export default function TypingSession() {
     }, [
         phase,
         preferences.showLiveStatsDuringRun,
+        preferences.vimMode,
         setShowLiveStatsDuringRun,
+        setVimMode,
         handleNextProblem,
         enableEditorFocus,
         resetEngine,
         startEngine,
         engineHandleKeyDown,
+        beginVimPreview,
+        exitVimPreview,
+        isVimPreviewing,
     ]);
+
+    useEffect(() => {
+        if (phase === "running" && isVimPreviewing) {
+            setIsVimPreviewing(false);
+        }
+    }, [phase, isVimPreviewing]);
 
     // Focus Mode (Body Class)
     useEffect(() => {
@@ -667,7 +775,7 @@ export default function TypingSession() {
                                             {sessionTopBar}
                                             {showRunningStats && (
                                                 <Box alignSelf="center" width="100%" maxW="md">
-                                                    <LiveStats wpm={metrics.rawWpm} accuracy={metrics.accuracy} />
+                                                    <LiveStats wpm={metrics.adjustedWpm} accuracy={metrics.accuracy} />
                                                 </Box>
                                             )}
                                             <CodePanel
@@ -681,6 +789,12 @@ export default function TypingSession() {
                                                 surfaceStyle={effectiveSurfaceStyle}
                                                 syntaxHighlightingEnabled={preferences.syntaxHighlightingEnabled}
                                             />
+                                            {preferences.debugGapBuffer && (
+                                                <GapBufferVisualizer
+                                                    content={snippet.content}
+                                                    cursorIndex={cursorIndex}
+                                                />
+                                            )}
                                         </Box>
                                     </motion.div>
                                     <AnimatePresence mode="wait">

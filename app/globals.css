@@ -33,6 +33,7 @@
     --terminal-bg: #16130e;
     --caret-width: 2px;
     --caret-height: 38px;
+    --font-mono: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace;
 }
 
 html,

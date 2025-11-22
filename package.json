@@ -10,25 +10,26 @@
     "sync:leetcode": "bun scripts/sync-leetcode.ts"
   },
   "dependencies": {
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
-    "next": "15.5.4",
     "@chakra-ui/react": "3.27.1",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@monaco-editor/react": "^4.6.0",
     "framer-motion": "12.23.24",
-    "monaco-editor": "^0.52.0"
+    "monaco-editor": "^0.52.0",
+    "monaco-vim": "^0.4.2",
+    "next": "15.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
-    "typescript": "^5",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@tailwindcss/postcss": "^4",
-    "tailwindcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "15.5.4",
-    "@eslint/eslintrc": "^3"
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

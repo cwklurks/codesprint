@@ -29,6 +29,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const [lastErrorAt, setLastErrorAt] = useState<number | null>(null);
     const [errorLog, setErrorLog] = useState<ErrorEntry[]>([]);
     const [totalTypedChars, setTotalTypedChars] = useState(0);
+    const [totalKeystrokes, setTotalKeystrokes] = useState(0);
+    const [correctKeystrokes, setCorrectKeystrokes] = useState(0);
 
     const phaseRef = useRef(phase);
     const startTimeRef = useRef(startTime);
@@ -51,59 +53,18 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         const id = setInterval(() => {
             const nowTs = Date.now();
             setNow(nowTs);
-
-            // Update history every 1s (approx)
-            if (startTimeRef.current) {
-                const currentElapsed = nowTs - startTimeRef.current;
-                // Only add history point if we have at least 1 second of data and it's roughly on a second boundary
-                // Actually, let's just push every second.
-                // We can use a separate interval or just check time.
-                // Let's keep it simple: push to history if enough time passed since last push?
-                // Better: just calculate metrics here and push.
-            }
         }, 100);
-
-        const historyId = setInterval(() => {
-            if (!startTimeRef.current) return;
-            const nowTs = Date.now();
-            const currentElapsed = nowTs - startTimeRef.current;
-
-            // Don't record if very start
-            if (currentElapsed < 1000) return;
-
-            setHistory(prev => {
-                // Avoid duplicates if multiple intervals fire (unlikely with 1s but good safety)
-                const last = prev[prev.length - 1];
-                const timeSeconds = Math.floor(currentElapsed / 1000);
-                if (last && last.time === timeSeconds) return prev;
-
-                // Calculate instantaneous metrics
-                // Note: This is "cumulative" metrics at this point in time, which is standard for these graphs
-                // For "instantaneous" we'd need a sliding window, but cumulative is smoother and easier.
-                // Monkeytype uses "raw" (all chars) and "wpm" (correct chars) over time.
-
-                // We need access to current state. 
-                // `totalTypedChars` and `wrongChars` and `cursorIndex` are from closure.
-                // They might be stale in this interval if not careful.
-                // Actually, `setInterval` closure will trap initial values if we don't use refs or dependency array.
-                // But adding them to dependency array restarts interval.
-                // Best way: use functional state update or refs.
-                // Let's use refs for the stats we need.
-                return prev;
-            });
-        }, 1000);
 
         return () => {
             clearInterval(id);
-            clearInterval(historyId);
         };
     }, [phase]);
 
     // We need refs for history tracking to avoid restarting interval
-    const statsRef = useRef({ cursorIndex: 0, totalTypedChars: 0, wrongCharsSize: 0 });
+    const statsRef = useRef({ cursorIndex: 0, totalKeystrokes: 0, correctKeystrokes: 0, wrongCharsSize: 0 });
     useEffect(() => {
-        statsRef.current = { cursorIndex, totalTypedChars, wrongCharsSize: wrongChars.size };
-    }, [cursorIndex, totalTypedChars, wrongChars]);
+        statsRef.current = { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize: wrongChars.size };
+    }, [cursorIndex, totalKeystrokes, correctKeystrokes, wrongChars]);
 
     // Separate effect for history to avoid complex dependencies
     useEffect(() => {
@@ -117,10 +78,16 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const elapsed = nowTs - start;
             if (elapsed < 1000) return;
 
-            const { cursorIndex, totalTypedChars, wrongCharsSize } = statsRef.current;
+            const { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize } = statsRef.current;
 
             const minutes = elapsed / 60000;
-            const rawWpm = Math.round((totalTypedChars / 5) / minutes);
+            const rawWpm = Math.round((totalKeystrokes / 5) / minutes);
+            // Approximate net wpm for history (using simple correct chars count for smoothness in graph)
+            // For the live stat we use the strict "perfect word" logic, but for history graph 
+            // a smoother approximation (cursor - errors) is often preferred to avoid jagged drops.
+            // However, to be consistent, we should ideally use the same logic. 
+            // But calculating perfect words inside this interval without access to full state/snippet is hard.
+            // Let's stick to the previous approximation for the graph for now, or use correctKeystrokes.
             const netWpm = Math.max(0, Math.round(((cursorIndex - wrongCharsSize) / 5) / minutes));
 
             setHistory(prev => {
@@ -150,6 +117,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setLastErrorAt(null);
         setErrorLog([]);
         setTotalTypedChars(0);
+        setTotalKeystrokes(0);
+        setCorrectKeystrokes(0);
         setHistory([]);
     }, []);
 
@@ -201,14 +170,21 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         const phaseNow = phaseRef.current;
+        const allowVimPropagation = preferences.vimMode;
+
+        const swallowEvent = () => {
+            if (!allowVimPropagation) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
 
         // Ignore modifiers
         if (e.key === "Meta" || e.key === "Alt" || e.key === "Control") return;
 
         // Handle Tab
         if (e.key === "Tab") {
-            e.preventDefault();
-            e.stopPropagation();
+            swallowEvent();
 
             if (phaseNow === "finished") return;
 
@@ -222,6 +198,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 }
             }
 
+            // Tab counts as a keystroke? Usually yes.
+            setTotalKeystrokes(prev => prev + 1);
+
             const { nextIndex: currentIndex, advanced: autoAdvanced } = autoAdvanceIndentationIfAllowed(cursorIndex);
 
             // If auto-advance happened, we need to account for it
@@ -232,6 +211,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (autoAdvanced > 0) {
                 setCursorIndex(currentIndex);
                 setTotalTypedChars(prev => prev + autoAdvanced);
+                // Auto-advance counts as correct keystrokes? 
+                // It's "free" characters. They shouldn't count as keystrokes, but they count as "correct chars" for progress.
+                // But for "Correct Keystrokes" metric, they are NOT keystrokes.
+
                 setWrongChars(prev => {
                     if (prev.size === 0) return prev;
                     const next = new Set(prev);
@@ -297,6 +280,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (advanced > 0) {
                 setCursorIndex(i => i + advanced);
                 setTotalTypedChars(prev => prev + advanced);
+                // Manual tab is a correct action
+                setCorrectKeystrokes(prev => prev + 1);
                 setWrongChars(prev => {
                     if (prev.size === 0) return prev;
                     const next = new Set(prev);
@@ -311,6 +296,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (expected === "\t") {
                 setCursorIndex(i => i + 1);
                 setTotalTypedChars(prev => prev + 1);
+                setCorrectKeystrokes(prev => prev + 1);
                 setWrongChars(prev => {
                     if (!prev.has(effectiveIndex)) return prev;
                     const next = new Set(prev);
@@ -327,8 +313,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         const timestamp = Date.now();
 
         if (phaseNow === "finished" && e.key !== "Backspace") {
-            e.preventDefault();
-            e.stopPropagation();
+            swallowEvent();
             return;
         }
 
@@ -341,12 +326,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
         }
 
+        // Count every actionable key press as a keystroke
+        setTotalKeystrokes(prev => prev + 1);
+
         if (e.key === "Backspace") {
             if (phaseNow === "finished") {
                 setPhase("running");
             }
-            e.preventDefault();
-            e.stopPropagation();
+            swallowEvent();
             if (cursorIndex === 0) return;
 
             const targetIndex = cursorIndex - 1;
@@ -386,8 +373,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         const expected = snippet.content[currentIndex];
         if (expected === undefined) return;
 
-        e.preventDefault();
-        e.stopPropagation();
+        swallowEvent();
 
         const got = e.key === "Enter" ? "\n" : e.key;
         const ok = normalizeWhitespace(got) === normalizeWhitespace(expected);
@@ -396,6 +382,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setTotalTypedChars(prev => prev + 1);
 
         if (ok) {
+            setCorrectKeystrokes(prev => prev + 1);
             setWrongChars(prev => {
                 if (!prev.has(currentIndex)) return prev;
                 const next = new Set(prev);
@@ -424,19 +411,86 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             });
         }
 
-    }, [cursorIndex, phase, snippet.content, autoAdvanceIndentationIfAllowed, onFinish]);
+    }, [cursorIndex, phase, snippet.content, autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode]);
 
-    // Check for finish (removed useEffect-based check to prevent race conditions and ensure immediate finish)
-    // The check is now performed directly in the keydown handler for immediate feedback.
+    // Calculate Perfect Words for Adjusted WPM
+    // A word is perfect if all its characters are typed and there are no errors in its range.
+    // AND it is fully behind the cursor.
+    const getPerfectWordChars = useCallback(() => {
+        const content = snippet.content;
+        let perfectChars = 0;
+        let wordStart = 0;
+
+        // Simple word boundary detection (space or newline)
+        // We iterate through content up to cursorIndex
+        for (let i = 0; i <= cursorIndex; i++) {
+            const char = content[i];
+            const isWordEnd = i === content.length || char === " " || char === "\n" || char === "\t";
+
+            if (isWordEnd) {
+                // Check if this word [wordStart, i) is fully typed and perfect
+                if (i <= cursorIndex) {
+                    let isPerfect = true;
+                    // Check for errors in this range
+                    for (let j = wordStart; j < i; j++) {
+                        if (wrongChars.has(j)) {
+                            isPerfect = false;
+                            break;
+                        }
+                    }
+
+                    // Also, strictly speaking, if we passed it, and wrongChars doesn't have it, it's correct.
+                    // But we only count it if we have *completed* the word.
+                    // i <= cursorIndex means we have reached the end of the word.
+
+                    if (isPerfect && i > wordStart) {
+                        perfectChars += (i - wordStart);
+                        // Add 1 for the space/separator if we typed it correctly?
+                        // User said: "Total Correct Characters typically includes the space after a correct word."
+                        // If we are past the space (i < cursorIndex), we typed the space.
+                        // Was the space correct?
+                        if (i < cursorIndex && !wrongChars.has(i)) {
+                            perfectChars += 1;
+                        }
+                    }
+                }
+                wordStart = i + 1;
+            }
+        }
+        return perfectChars;
+    }, [cursorIndex, wrongChars, snippet.content]);
 
     const elapsedMs = startTime ? now - startTime : 0;
-    const outstandingErrors = wrongChars.size;
-    const correct = Math.max(0, cursorIndex - outstandingErrors);
-    const metrics = computeMetrics({
-        correctProgress: correct,
+    // Use the new perfect word calculation
+    const perfectChars = getPerfectWordChars();
+
+    const currentMetrics = computeMetrics({
+        correctProgress: perfectChars,
         elapsedMs,
         totalTyped: totalTypedChars,
+        totalKeystrokes,
+        correctKeystrokes
     });
+
+    const [publishedMetrics, setPublishedMetrics] = useState(currentMetrics);
+    const lastPublishedRef = useRef(0);
+
+    useEffect(() => {
+        const nowTs = Date.now();
+        // Update if:
+        // 1. Phase is finished (ensure final stats are accurate)
+        // 2. Phase is idle (reset)
+        // 3. 1.5 seconds have passed since last update
+        const shouldUpdate =
+            phase === "finished" ||
+            phase === "idle" ||
+            nowTs - lastPublishedRef.current >= 1500;
+
+        if (shouldUpdate) {
+            setPublishedMetrics(currentMetrics);
+            lastPublishedRef.current = nowTs;
+        }
+    }, [currentMetrics, phase]);
 
     const caretErrorActive = lastErrorAt !== null && now >= lastErrorAt && now - lastErrorAt < 600;
 
@@ -445,7 +499,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         countdown,
         cursorIndex,
         wrongChars,
-        metrics,
+        metrics: publishedMetrics,
         elapsedMs,
         errorLog,
         caretErrorActive,

@@ -1,6 +1,6 @@
 "use client";
 
-import leetcodeDataset from "@/data/leetcode-snippets.json";
+// import leetcodeDataset from "@/data/leetcode-snippets.json";
 
 export type SupportedLanguage = "javascript" | "python" | "java" | "cpp";
 export type SnippetLength = "short" | "medium" | "long";
@@ -497,14 +497,15 @@ private:
     }),
 ];
 
-const DATASET_SNIPPETS = normalizeDataset(leetcodeDataset);
-const SOURCE_SNIPPETS =
-    CURATED_SNIPPETS.length > 0
-        ? [...CURATED_SNIPPETS, ...DATASET_SNIPPETS]
-        : DATASET_SNIPPETS; // curated snippets guarantee usable content even if LeetCode data is filtered out
-const PROBLEMS = buildProblems(SOURCE_SNIPPETS);
+// const DATASET_SNIPPETS = normalizeDataset(leetcodeDataset);
+export const CURATED_SNIPPETS_LIST = CURATED_SNIPPETS;
+// const SOURCE_SNIPPETS =
+//     CURATED_SNIPPETS.length > 0
+//         ? [...CURATED_SNIPPETS, ...DATASET_SNIPPETS]
+//         : DATASET_SNIPPETS; // curated snippets guarantee usable content even if LeetCode data is filtered out
+// const PROBLEMS = buildProblems(SOURCE_SNIPPETS);
 
-function normalizeDataset(raw: unknown): Snippet[] {
+export function normalizeDataset(raw: unknown): Snippet[] {
     if (!Array.isArray(raw)) return [];
     return raw.flatMap((entry: DatasetSnippet): Snippet[] => {
         if (!entry || typeof entry !== "object") return [];
@@ -587,23 +588,29 @@ function buildProblems(snippets: Snippet[]): Problem[] {
     return Array.from(byProblem.values()).sort((a, b) => a.title.localeCompare(b.title));
 }
 
+export function buildProblemsFromSnippets(snippets: Snippet[]): Problem[] {
+    return buildProblems(snippets);
+}
+
 function matchesLength(lengths: SnippetLength[], requested?: SnippetLength) {
     if (!requested) return true;
     return lengths.includes(requested);
 }
 
-export function getProblems(language: SupportedLanguage, filters?: ProblemFilters): Problem[] {
-    return PROBLEMS.filter(
+export function getProblems(snippets: Snippet[], language: SupportedLanguage, filters?: ProblemFilters): Problem[] {
+    const problems = buildProblems(snippets);
+    return problems.filter(
         (problem) => problem.language === language && matchesLength(problem.availableLengths, filters?.length)
     );
 }
 
 export function getProblemSnippets(
+    snippets: Snippet[],
     language: SupportedLanguage,
     problemId: string,
     filters?: SnippetFilters
 ): Snippet[] {
-    return SOURCE_SNIPPETS.filter(
+    return snippets.filter(
         (snippet) =>
             snippet.language === language &&
             snippet.problemId === problemId &&
@@ -611,11 +618,11 @@ export function getProblemSnippets(
     );
 }
 
-export function getSnippet(language: SupportedLanguage, filters?: SnippetFilters): Snippet {
-    const preferred = SOURCE_SNIPPETS.find(
+export function getSnippet(snippets: Snippet[], language: SupportedLanguage, filters?: SnippetFilters): Snippet {
+    const preferred = snippets.find(
         (snippet) => snippet.language === language && (!filters?.length || snippet.lengthCategory === filters.length)
     );
-    const fallback = SOURCE_SNIPPETS.find((snippet) => snippet.language === language) ?? SOURCE_SNIPPETS[0];
+    const fallback = snippets.find((snippet) => snippet.language === language) ?? snippets[0];
     return preferred ?? fallback;
 }
 

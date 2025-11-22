@@ -60,6 +60,8 @@ export type PreferencesState = {
     interfaceMode: InterfaceMode;
     requireTabForIndent: boolean;
     syntaxHighlightingEnabled: boolean;
+    vimMode: boolean;
+    debugGapBuffer: boolean;
 };
 
 export const STORAGE_KEY = "codesprint-preferences";
@@ -140,7 +142,7 @@ function createMinimalTheme(base: string, accent: string, overrides: Partial<The
         error: "#da3333",
         errorExtra: "#791717",
         panel: withAlpha(surfaceBlend, 0.12),
-        panelGlass: withAlpha(surfaceBlend, 0.18),
+        panelGlass: withAlpha(surfaceBlend, 0.12),
         panelSoft: withAlpha(surfaceBlend, 0.24),
         btn: withAlpha(surfaceBlend, 0.12),
         btnActive: withAlpha(surfaceStrongBlend, 0.24),
@@ -193,7 +195,7 @@ function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
         errorExtra,
         // UI Elements derived from sub/subAlt for a cohesive look
         panel: withAlpha(subAlt, 0.4),
-        panelGlass: withAlpha(subAlt, 0.6),
+        panelGlass: withAlpha(subAlt, 0.3),
         panelSoft: withAlpha(subAlt, 0.8),
         btn: withAlpha(sub, 0.2),
         btnActive: withAlpha(sub, 0.4),
@@ -378,6 +380,8 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     interfaceMode: "ide",
     requireTabForIndent: false,
     syntaxHighlightingEnabled: true,
+    vimMode: false,
+    debugGapBuffer: false,
 };
 
 export function computeCaretHeight(fontSize: number): number {
@@ -421,6 +425,9 @@ export function sanitizePreferences(value: unknown): PreferencesState {
             typeof source.syntaxHighlightingEnabled === "boolean"
                 ? source.syntaxHighlightingEnabled
                 : DEFAULT_PREFERENCES.syntaxHighlightingEnabled,
+        vimMode: typeof source.vimMode === "boolean" ? source.vimMode : DEFAULT_PREFERENCES.vimMode,
+        debugGapBuffer:
+            typeof source.debugGapBuffer === "boolean" ? source.debugGapBuffer : DEFAULT_PREFERENCES.debugGapBuffer,
     };
 }
 

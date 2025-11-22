@@ -2,6 +2,7 @@
 
 import { Box } from "@chakra-ui/react";
 import Editor, { type OnMount } from "@monaco-editor/react";
+import { initVimMode } from "monaco-vim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import { THEME_PRESETS, usePreferences, type SurfaceStyle } from "@/lib/preferences";
@@ -80,6 +81,9 @@ export default function CodePanel({
     const caretBlinkTimeoutRef = useRef<number | null>(null);
     const [editorReadyToken, setEditorReadyToken] = useState(0);
     const caretUpdatePendingRef = useRef(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vimModeRef = useRef<any>(null);
+    const statusNodeRef = useRef<HTMLDivElement | null>(null);
 
     const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
     const estimatedHeight = useMemo(() => {
@@ -210,7 +214,59 @@ export default function CodePanel({
             },
         });
         monaco.editor.setTheme(themeName);
+        monaco.editor.setTheme(themeName);
     }, [preferences.theme]);
+
+    // Vim Mode Management
+    useEffect(() => {
+        const editor = editorRef.current;
+        if (!editor) return;
+
+        if (preferences.vimMode) {
+            if (!vimModeRef.current) {
+                const statusNode = document.createElement("div");
+                statusNode.className = "vim-status-bar";
+                statusNode.style.position = "absolute";
+                statusNode.style.bottom = "0";
+                statusNode.style.right = "0";
+                statusNode.style.padding = "4px 12px";
+                statusNode.style.fontSize = "12px";
+                statusNode.style.fontFamily = "var(--font-mono)";
+                statusNode.style.color = "var(--text)";
+                statusNode.style.background = "var(--surface)";
+                statusNode.style.borderTopLeftRadius = "8px";
+                statusNode.style.border = "1px solid var(--border)";
+                statusNode.style.borderRight = "none";
+                statusNode.style.borderBottom = "none";
+                statusNode.style.zIndex = "10";
+                statusNode.style.opacity = "0.9";
+
+                // Find the editor container to append the status bar
+                const editorDom = editor.getDomNode();
+                if (editorDom && editorDom.parentElement) {
+                    editorDom.parentElement.appendChild(statusNode);
+                    statusNodeRef.current = statusNode;
+                }
+
+                vimModeRef.current = initVimMode(editor, statusNode);
+            }
+        } else {
+            if (vimModeRef.current) {
+                vimModeRef.current.dispose();
+                vimModeRef.current = null;
+                if (statusNodeRef.current && statusNodeRef.current.parentElement) {
+                    statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
+                    statusNodeRef.current = null;
+                }
+            }
+        }
+
+        return () => {
+            // Cleanup on unmount is handled by the separate cleanup effect, 
+            // but we should also handle preference changes here if needed.
+            // Actually, let's leave cleanup to the main cleanup effect or when toggled off.
+        };
+    }, [preferences.vimMode, editorReadyToken]);
 
     const handleMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -367,7 +423,17 @@ export default function CodePanel({
             caretNodeRef.current = null;
             caretLayerRef.current = null;
             caretPositionRef.current = null;
+            caretPositionRef.current = null;
             caretUpdatePendingRef.current = false;
+
+            if (vimModeRef.current) {
+                vimModeRef.current.dispose();
+                vimModeRef.current = null;
+            }
+            if (statusNodeRef.current && statusNodeRef.current.parentElement) {
+                statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
+                statusNodeRef.current = null;
+            }
         };
     }, []);
 

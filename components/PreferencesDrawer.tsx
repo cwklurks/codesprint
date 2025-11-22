@@ -41,6 +41,8 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         setTheme,
         setSurfaceStyle,
         setInterfaceMode,
+        setVimMode,
+        setDebugGapBuffer,
     } = usePreferences();
 
     const surfaceStyleOptions: Array<{ value: SurfaceStyle; label: string }> = [
@@ -156,6 +158,47 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                     <SwitchRoot
                                         checked={preferences.countdownEnabled}
                                         onCheckedChange={({ checked }) => setCountdownEnabled(checked)}
+                                        colorPalette="yellow"
+                                        display="inline-flex"
+                                        alignItems="center"
+                                    >
+                                        <SwitchControl />
+                                        <SwitchHiddenInput />
+                                    </SwitchRoot>
+                                </HStack>
+                            </Box>
+                            <Box>
+                                <Text fontSize="sm" fontWeight={600} mb={2}>
+                                    Vim Mode
+                                </Text>
+                                <HStack justify="space-between" align="center">
+                                    <Text fontSize="xs" color="var(--text-subtle)">
+                                        Enable Vim keybindings
+                                    </Text>
+                                    <SwitchRoot
+                                        checked={preferences.vimMode}
+                                        onCheckedChange={({ checked }) => setVimMode(checked)}
+                                        colorPalette="yellow"
+                                        display="inline-flex"
+                                        alignItems="center"
+                                    >
+                                        <SwitchControl />
+                                        <SwitchHiddenInput />
+                                    </SwitchRoot>
+                                </HStack>
+                            </Box>
+
+                            <Box>
+                                <Text fontSize="sm" fontWeight={600} mb={2}>
+                                    Debug: Gap Buffer
+                                </Text>
+                                <HStack justify="space-between" align="center">
+                                    <Text fontSize="xs" color="var(--text-subtle)">
+                                        Visualize memory layout
+                                    </Text>
+                                    <SwitchRoot
+                                        checked={preferences.debugGapBuffer}
+                                        onCheckedChange={({ checked }) => setDebugGapBuffer(checked)}
                                         colorPalette="yellow"
                                         display="inline-flex"
                                         alignItems="center"

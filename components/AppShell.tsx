@@ -95,7 +95,7 @@ function Header({ onOpenPreferences, onOpenShortcuts }: HeaderProps) {
         | { label: string; icon: ReactNode; href: string; isExternal?: boolean };
     const iconLinks: IconLink[] = [
         { label: "Shortcuts", icon: <CommandIcon boxSize={6} />, onClick: onOpenShortcuts },
-        { label: "GitHub", href: "https://github.com/", icon: <GitHubIcon boxSize={5} />, isExternal: true },
+        { label: "GitHub", href: "https://github.com/cwklurks/codesprint", icon: <GitHubIcon boxSize={5} />, isExternal: true },
     ];
 
     return (

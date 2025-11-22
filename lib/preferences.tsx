@@ -24,6 +24,8 @@ type PreferencesContextValue = {
     setInterfaceMode: (mode: InterfaceMode) => void;
     setRequireTabForIndent: (require: boolean) => void;
     setSyntaxHighlightingEnabled: (enabled: boolean) => void;
+    setVimMode: (enabled: boolean) => void;
+    setDebugGapBuffer: (enabled: boolean) => void;
 };
 
 const LIVE_STATS_MIGRATION_KEY = "codesprint-live-stats-default-v1";
@@ -162,6 +164,14 @@ export function PreferencesProvider({
         setPreferences((prev) => ({ ...prev, syntaxHighlightingEnabled: enabled }));
     }, []);
 
+    const setVimMode = useCallback((enabled: boolean) => {
+        setPreferences((prev) => ({ ...prev, vimMode: enabled }));
+    }, []);
+
+    const setDebugGapBuffer = useCallback((enabled: boolean) => {
+        setPreferences((prev) => ({ ...prev, debugGapBuffer: enabled }));
+    }, []);
+
     useEffect(() => {
         if (typeof document === "undefined") return;
         document.documentElement.setAttribute(
@@ -182,6 +192,8 @@ export function PreferencesProvider({
             setInterfaceMode,
             setRequireTabForIndent,
             setSyntaxHighlightingEnabled,
+            setVimMode,
+            setDebugGapBuffer,
         }),
         [
             preferences,
@@ -194,6 +206,8 @@ export function PreferencesProvider({
             setInterfaceMode,
             setRequireTabForIndent,
             setSyntaxHighlightingEnabled,
+            setVimMode,
+            setDebugGapBuffer,
         ]
     );
 
