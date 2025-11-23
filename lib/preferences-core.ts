@@ -428,8 +428,8 @@ export function sanitizePreferences(value: unknown): PreferencesState {
                 source.syntaxHighlighting === "none"
                 ? source.syntaxHighlighting
                 : // Migration for legacy boolean
-                typeof (source as any).syntaxHighlightingEnabled === "boolean"
-                    ? (source as any).syntaxHighlightingEnabled
+                typeof (source as { syntaxHighlightingEnabled?: boolean }).syntaxHighlightingEnabled === "boolean"
+                    ? (source as { syntaxHighlightingEnabled?: boolean }).syntaxHighlightingEnabled
                         ? "full"
                         : "none"
                     : DEFAULT_PREFERENCES.syntaxHighlighting,
