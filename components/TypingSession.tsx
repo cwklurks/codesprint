@@ -31,7 +31,7 @@ type LengthFilter = SnippetLength | "all";
 
 export default function TypingSession() {
     const [language, setLanguage] = useState<SupportedLanguage>("javascript");
-    const [lengthPreference, setLengthPreference] = useState<LengthFilter>("medium");
+    const [lengthPreference, setLengthPreference] = useState<LengthFilter>("short");
     const { snippets } = useSnippets();
     const [isVimPreviewing, setIsVimPreviewing] = useState(false);
 
@@ -190,14 +190,22 @@ export default function TypingSession() {
                     return;
                 }
                 if (phase === "running" || phase === "countdown") {
-                    e.preventDefault();
-                    e.stopPropagation();
                     if (autoAdvanceTimeoutRef.current !== null) {
                         window.clearTimeout(autoAdvanceTimeoutRef.current);
                         autoAdvanceTimeoutRef.current = null;
                     }
                     setAutoAdvanceDeadline(null);
                     resetEngine();
+
+                    // If Vim mode is enabled, go back to preview instead of just resetting
+                    if (preferences.vimMode) {
+                        beginVimPreview();
+                        // Allow propagation so monaco-vim sees Esc and exits Insert mode
+                        return;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
                     return;
                 }
             }
@@ -221,8 +229,18 @@ export default function TypingSession() {
                 // We capture specific navigation keys if needed, but mostly we just want to avoid starting the engine
                 // or logging errors.
 
-                // Handle 'i' to start typing? (Optional enhancement)
-                // if (keyLower === 'i') { ... }
+                // Handle 'i' to start typing
+                if (keyLower === "i" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                    // Allow propagation so monaco-vim enters Insert mode
+
+                    setVimMode(true); // Ensure it's on
+                    setIsVimPreviewing(false);
+                    enableEditorFocus();
+                    resetEngine();
+                    startEngine();
+                    focusEditorRef.current?.();
+                    return;
+                }
 
                 // Handle shortcuts that should work in preview
                 if (!e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -787,7 +805,7 @@ export default function TypingSession() {
                                                 onReady={handleEditorReady}
                                                 fontSize={editorFontSize}
                                                 surfaceStyle={effectiveSurfaceStyle}
-                                                syntaxHighlightingEnabled={preferences.syntaxHighlightingEnabled}
+                                                syntaxHighlighting={preferences.syntaxHighlighting}
                                             />
                                             {preferences.debugGapBuffer && (
                                                 <GapBufferVisualizer

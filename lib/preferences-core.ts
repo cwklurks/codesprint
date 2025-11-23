@@ -49,6 +49,7 @@ export type ThemeTokens = {
 
 export type SurfaceStyle = "panel" | "immersive";
 export type InterfaceMode = "ide" | "terminal";
+export type SyntaxHighlightingMode = "full" | "partial" | "none";
 
 export type PreferencesState = {
     theme: ThemePreset;
@@ -59,7 +60,7 @@ export type PreferencesState = {
     showLiveStatsDuringRun: boolean;
     interfaceMode: InterfaceMode;
     requireTabForIndent: boolean;
-    syntaxHighlightingEnabled: boolean;
+    syntaxHighlighting: SyntaxHighlightingMode;
     vimMode: boolean;
     debugGapBuffer: boolean;
 };
@@ -379,7 +380,7 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     showLiveStatsDuringRun: true,
     interfaceMode: "ide",
     requireTabForIndent: false,
-    syntaxHighlightingEnabled: true,
+    syntaxHighlighting: "full",
     vimMode: false,
     debugGapBuffer: false,
 };
@@ -421,10 +422,17 @@ export function sanitizePreferences(value: unknown): PreferencesState {
             typeof source.requireTabForIndent === "boolean"
                 ? source.requireTabForIndent
                 : DEFAULT_PREFERENCES.requireTabForIndent,
-        syntaxHighlightingEnabled:
-            typeof source.syntaxHighlightingEnabled === "boolean"
-                ? source.syntaxHighlightingEnabled
-                : DEFAULT_PREFERENCES.syntaxHighlightingEnabled,
+        syntaxHighlighting:
+            source.syntaxHighlighting === "full" ||
+                source.syntaxHighlighting === "partial" ||
+                source.syntaxHighlighting === "none"
+                ? source.syntaxHighlighting
+                : // Migration for legacy boolean
+                typeof (source as any).syntaxHighlightingEnabled === "boolean"
+                    ? (source as any).syntaxHighlightingEnabled
+                        ? "full"
+                        : "none"
+                    : DEFAULT_PREFERENCES.syntaxHighlighting,
         vimMode: typeof source.vimMode === "boolean" ? source.vimMode : DEFAULT_PREFERENCES.vimMode,
         debugGapBuffer:
             typeof source.debugGapBuffer === "boolean" ? source.debugGapBuffer : DEFAULT_PREFERENCES.debugGapBuffer,

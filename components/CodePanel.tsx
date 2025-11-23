@@ -52,7 +52,7 @@ type CodePanelProps = {
     onReady?: (focusEditor: () => void) => void;
     fontSize: number;
     surfaceStyle: SurfaceStyle;
-    syntaxHighlightingEnabled: boolean;
+    syntaxHighlighting: "full" | "partial" | "none";
 };
 
 const LINE_HEIGHT_MULTIPLIER = 1.55;
@@ -68,7 +68,7 @@ export default function CodePanel({
     onReady,
     fontSize,
     surfaceStyle,
-    syntaxHighlightingEnabled,
+    syntaxHighlighting,
 }: CodePanelProps) {
     const { preferences } = usePreferences();
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -189,22 +189,54 @@ export default function CodePanel({
         const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
         const isLight = luminance > 128;
 
+        // Helper to apply 25% opacity to a color for the "untyped" state
+        const fade = (color: string) => {
+            const c = toMonacoColor(color);
+            if (c.length === 9) {
+                // Already has alpha, adjust it? simpler to just replace
+                return c.substring(0, 7) + "40";
+            }
+            return c + "40"; // Append 25% alpha (0x40)
+        };
+
         const themeName = `codesprint-${preferences.theme}`;
         monaco.editor.defineTheme(themeName, {
             base: isLight ? "vs" : "vs-dark",
             inherit: true,
             rules: [
-                { token: "", foreground: toMonacoColor(theme.text).replace("#", "") },
-                { token: "comment", foreground: toMonacoColor(theme.textSubtle).replace("#", "") },
-                { token: "keyword", foreground: toMonacoColor(theme.accent).replace("#", "") },
-                // Basic syntax overrides to ensure contrast
-                { token: "identifier", foreground: toMonacoColor(theme.text).replace("#", "") },
-                { token: "type", foreground: toMonacoColor(theme.accent).replace("#", "") },
-                { token: "delimiter", foreground: toMonacoColor(theme.textSubtle).replace("#", "") },
+                { token: "", foreground: fade(theme.text).replace("#", "") },
+                { token: "comment", foreground: fade(theme.textSubtle).replace("#", "") },
+                // Partial highlighting logic
+                ...(syntaxHighlighting === "partial"
+                    ? [
+                        // In partial mode, we want to mute everything except keywords and types
+                        { token: "identifier", foreground: fade(theme.text).replace("#", "") },
+                        { token: "string", foreground: fade(theme.text).replace("#", "") },
+                        { token: "delimiter", foreground: fade(theme.text).replace("#", "") },
+                        { token: "number", foreground: fade(theme.text).replace("#", "") },
+                        { token: "regexp", foreground: fade(theme.text).replace("#", "") },
+                        // Keep keywords and types highlighted (using fade to ensure they match the "untyped" opacity)
+                        { token: "keyword", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "type", foreground: fade(theme.accent).replace("#", "") },
+                    ]
+                    : [
+                        // Full highlighting - be explicit to ensure coverage
+                        { token: "keyword", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "type", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "identifier", foreground: fade(theme.text).replace("#", "") },
+                        { token: "string", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "number", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "regexp", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "delimiter", foreground: fade(theme.textSubtle).replace("#", "") },
+                        { token: "delimiter.html", foreground: fade(theme.textSubtle).replace("#", "") },
+                        { token: "tag", foreground: fade(theme.accent).replace("#", "") },
+                        { token: "attribute.name", foreground: fade(theme.text).replace("#", "") },
+                        { token: "attribute.value", foreground: fade(theme.accent).replace("#", "") },
+                    ]),
             ],
             colors: {
                 "editor.background": "#00000000", // Transparent to allow CSS background
-                "editor.foreground": toMonacoColor(theme.text),
+                "editor.foreground": fade(theme.text),
                 "editorCursor.foreground": toMonacoColor(theme.caret),
                 "editor.lineHighlightBackground": toMonacoColor(theme.surface),
                 "editorLineNumber.foreground": toMonacoColor(theme.textSubtle),
@@ -215,7 +247,7 @@ export default function CodePanel({
         });
         monaco.editor.setTheme(themeName);
         monaco.editor.setTheme(themeName);
-    }, [preferences.theme]);
+    }, [preferences.theme, syntaxHighlighting]);
 
     // Vim Mode Management
     useEffect(() => {
@@ -244,11 +276,22 @@ export default function CodePanel({
                 // Find the editor container to append the status bar
                 const editorDom = editor.getDomNode();
                 if (editorDom && editorDom.parentElement) {
+                    // We need to be careful. monaco-vim expects to be able to append to the container.
+                    // Sometimes the parentElement is the scrollable element.
+                    // Let's try to find the wrapper we created.
+                    // editorDom.parentElement is usually the .monaco-editor div.
+                    // We want to append to the CodePanel container if possible, or just absolute position it relative to the editor.
+
+                    // Actually, let's append to the editor's container so it stays with it.
                     editorDom.parentElement.appendChild(statusNode);
                     statusNodeRef.current = statusNode;
                 }
 
-                vimModeRef.current = initVimMode(editor, statusNode);
+                try {
+                    vimModeRef.current = initVimMode(editor, statusNode);
+                } catch (e) {
+                    console.error("Failed to init vim mode", e);
+                }
             }
         } else {
             if (vimModeRef.current) {
@@ -455,7 +498,7 @@ export default function CodePanel({
                 p: { base: 3, md: 4 },
             };
 
-    const editorLanguage = syntaxHighlightingEnabled ? language : "plaintext";
+    const editorLanguage = syntaxHighlighting === "none" ? "plaintext" : language;
 
     return (
         <Box {...panelProps} minH={`${estimatedHeight}px`} transition="background 0.3s ease" position="relative">

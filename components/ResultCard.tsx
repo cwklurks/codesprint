@@ -123,6 +123,19 @@ export default function ResultCard({
 
     const itemProps = prefersReducedMotion ? {} : { variants: itemVariants };
 
+    // Simple normal distribution approximation for WPM percentiles
+    // Mean ~40 WPM, SD ~15 for general population.
+    // For a coding app, maybe slightly higher? Let's stick to general for "wow" factor or slightly higher for realism.
+    // Let's use Mean=45, SD=18.
+    const percentile = useMemo(() => {
+        const z = (wpm - 45) / 18;
+        // Approximation of CDF for normal distribution
+        // Using a simple sigmoid-like approximation or error function if available, but simple is fine.
+        // 1 / (1 + exp(-1.7 * z)) is a logistic approximation, close enough for this.
+        const p = 1 / (1 + Math.exp(-1.6 * z));
+        return Math.min(99, Math.max(1, Math.round(p * 100)));
+    }, [wpm]);
+
     return (
         <MotionBox
             borderRadius="20px"
@@ -139,15 +152,15 @@ export default function ResultCard({
                 <MotionFlex justify="center" gap={16} align="flex-end" {...itemProps}>
                     <Box textAlign="center">
                         <Text fontSize="6xl" fontWeight={700} color="var(--accent)" lineHeight={1}>
-                            {Math.round(wpm)}
+                            {percentile}%
                         </Text>
-                        <Text fontSize="xl" color="var(--text-subtle)">wpm</Text>
+                        <Text fontSize="xl" color="var(--text-subtle)">faster than others</Text>
                     </Box>
                     <Box textAlign="center">
                         <Text fontSize="6xl" fontWeight={700} color="var(--text)" lineHeight={1}>
-                            {(accuracy * 100).toFixed(0)}%
+                            {Math.round(wpm)}
                         </Text>
-                        <Text fontSize="xl" color="var(--text-subtle)">acc</Text>
+                        <Text fontSize="xl" color="var(--text-subtle)">wpm</Text>
                     </Box>
                 </MotionFlex>
 

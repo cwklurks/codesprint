@@ -23,7 +23,12 @@ import {
     SwitchRoot,
     Text,
 } from "@chakra-ui/react";
-import { DEFAULT_PREFERENCES, type SurfaceStyle, usePreferences } from "@/lib/preferences";
+import {
+    DEFAULT_PREFERENCES,
+    type SurfaceStyle,
+    type SyntaxHighlightingMode,
+    usePreferences,
+} from "@/lib/preferences";
 import { ThemeSelector } from "@/components/ThemeSelector";
 
 type PreferencesDrawerProps = {
@@ -43,7 +48,14 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         setInterfaceMode,
         setVimMode,
         setDebugGapBuffer,
+        setSyntaxHighlighting,
     } = usePreferences();
+
+    const syntaxHighlightingOptions: Array<{ value: SyntaxHighlightingMode; label: string }> = [
+        { value: "full", label: "Full" },
+        { value: "partial", label: "Partial" },
+        { value: "none", label: "None" },
+    ];
 
     const surfaceStyleOptions: Array<{ value: SurfaceStyle; label: string }> = [
         { value: "immersive", label: "Immersive" },
@@ -186,6 +198,34 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                         <SwitchHiddenInput />
                                     </SwitchRoot>
                                 </HStack>
+                            </Box>
+
+                            <Box>
+                                <Text fontSize="sm" fontWeight={600} mb={2}>
+                                    Syntax Highlighting
+                                </Text>
+                                <Flex gap={2} flexWrap="wrap">
+                                    {syntaxHighlightingOptions.map((option) => {
+                                        const active = preferences.syntaxHighlighting === option.value;
+                                        return (
+                                            <Button
+                                                key={option.value}
+                                                size="sm"
+                                                borderRadius="full"
+                                                px={4}
+                                                py={2}
+                                                bg={active ? "var(--surface-active)" : "transparent"}
+                                                color={active ? "var(--text)" : "var(--text-subtle)"}
+                                                border="1px solid"
+                                                borderColor={active ? "var(--border-strong)" : "var(--border)"}
+                                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
+                                                onClick={() => setSyntaxHighlighting(option.value)}
+                                            >
+                                                {option.label}
+                                            </Button>
+                                        );
+                                    })}
+                                </Flex>
                             </Box>
 
                             <Box>

@@ -6,6 +6,7 @@ import {
     InterfaceMode,
     PreferencesState,
     SurfaceStyle,
+    SyntaxHighlightingMode,
     ThemePreset,
     THEME_PRESETS,
     STORAGE_KEY,
@@ -23,7 +24,7 @@ type PreferencesContextValue = {
     setShowLiveStatsDuringRun: (show: boolean) => void;
     setInterfaceMode: (mode: InterfaceMode) => void;
     setRequireTabForIndent: (require: boolean) => void;
-    setSyntaxHighlightingEnabled: (enabled: boolean) => void;
+    setSyntaxHighlighting: (mode: SyntaxHighlightingMode) => void;
     setVimMode: (enabled: boolean) => void;
     setDebugGapBuffer: (enabled: boolean) => void;
 };
@@ -160,8 +161,8 @@ export function PreferencesProvider({
         setPreferences((prev) => ({ ...prev, requireTabForIndent: require }));
     }, []);
 
-    const setSyntaxHighlightingEnabled = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, syntaxHighlightingEnabled: enabled }));
+    const setSyntaxHighlighting = useCallback((mode: SyntaxHighlightingMode) => {
+        setPreferences((prev) => ({ ...prev, syntaxHighlighting: mode }));
     }, []);
 
     const setVimMode = useCallback((enabled: boolean) => {
@@ -191,7 +192,7 @@ export function PreferencesProvider({
             setShowLiveStatsDuringRun,
             setInterfaceMode,
             setRequireTabForIndent,
-            setSyntaxHighlightingEnabled,
+            setSyntaxHighlighting,
             setVimMode,
             setDebugGapBuffer,
         }),
@@ -205,7 +206,7 @@ export function PreferencesProvider({
             setShowLiveStatsDuringRun,
             setInterfaceMode,
             setRequireTabForIndent,
-            setSyntaxHighlightingEnabled,
+            setSyntaxHighlighting,
             setVimMode,
             setDebugGapBuffer,
         ]
@@ -246,4 +247,4 @@ export const THEME_OPTIONS: Array<{ value: ThemePreset; label: string }> = [
 ];
 
 export { DEFAULT_PREFERENCES, THEME_PRESETS } from "@/lib/preferences-core";
-export type { ThemePreset, SurfaceStyle, InterfaceMode, PreferencesState } from "@/lib/preferences-core";
+export type { ThemePreset, SurfaceStyle, InterfaceMode, PreferencesState, SyntaxHighlightingMode } from "@/lib/preferences-core";
