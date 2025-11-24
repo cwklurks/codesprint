@@ -1,7 +1,6 @@
 "use client";
 
-import { Box, Flex, Text } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { Box, Flex, Stack, Text } from "@chakra-ui/react";
 import { useMemo, useState } from "react";
 
 export type ResultGraphPoint = {
@@ -9,6 +8,7 @@ export type ResultGraphPoint = {
     wpm: number;
     raw: number;
     errors: number;
+    burst: number;
 };
 
 type ResultGraphProps = {
@@ -23,7 +23,7 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
     const processedData = useMemo(() => {
         if (data.length === 0) return [];
         // Ensure we start at 0
-        return [{ time: 0, wpm: 0, raw: 0, errors: 0 }, ...data];
+        return [{ time: 0, wpm: 0, raw: 0, errors: 0, burst: 0 }, ...data];
     }, [data]);
 
     if (processedData.length < 2) {
@@ -34,7 +34,7 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
         );
     }
 
-    const maxWpm = Math.max(...processedData.map((d) => d.raw), 60); // Minimum scale of 60
+    const maxWpm = Math.max(...processedData.map((d) => Math.max(d.raw, d.burst)), 60); // Minimum scale of 60
     const duration = processedData[processedData.length - 1].time;
 
     const padding = { top: 20, right: 20, bottom: 30, left: 40 };
@@ -62,12 +62,43 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
         })
         .join(" ");
 
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (processedData.length < 2) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+
+        // Scale x to SVG coordinate system
+        // viewBox width is graphWidth (800)
+        const svgX = x * (graphWidth / rect.width);
+
+        const rawTime = ((svgX - padding.left) / innerWidth) * duration;
+
+        // Find closest data point
+        let closestIndex = 0;
+        let minDiff = Number.MAX_VALUE;
+
+        processedData.forEach((d, i) => {
+            const diff = Math.abs(d.time - rawTime);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestIndex = i;
+            }
+        });
+
+        setHoverIndex(closestIndex);
+    };
+
     return (
-        <Box w={width} h={height} position="relative" userSelect="none">
+        <Box
+            w={width}
+            h={height}
+            position="relative"
+            userSelect="none"
+        >
             <svg
                 viewBox={`0 0 ${graphWidth} ${graphHeight}`}
                 style={{ width: "100%", height: "100%", overflow: "visible" }}
-                onMouseLeave={() => setHoverIndex(null)}
+                pointerEvents="none"
             >
                 {/* Grid Lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((t) => {
@@ -83,26 +114,21 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
                 })}
 
                 {/* Raw WPM Line */}
-                <motion.path
+                <path
                     d={rawPath}
                     fill="none"
                     stroke="var(--text-subtle)"
                     strokeWidth="2"
                     strokeDasharray="5 5"
-                    initial={{ pathLength: 0, opacity: 0 }}
-                    animate={{ pathLength: 1, opacity: 0.5 }}
-                    transition={{ duration: 1, ease: "easeOut" }}
+                    opacity="0.5"
                 />
 
                 {/* Net WPM Line */}
-                <motion.path
+                <path
                     d={wpmPath}
                     fill="none"
                     stroke="var(--accent)"
                     strokeWidth="3"
-                    initial={{ pathLength: 0, opacity: 0 }}
-                    animate={{ pathLength: 1, opacity: 1 }}
-                    transition={{ duration: 1, ease: "easeOut" }}
                 />
 
                 {/* Error Markers */}
@@ -114,32 +140,6 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
                         <text key={i} x={x} y={y - 10} textAnchor="middle" fontSize="12" fill="var(--error)" fontWeight="bold">
                             ×
                         </text>
-                    );
-                })}
-
-                {/* Hover Overlay */}
-                {/* Invisible rects for hover detection */}
-                {processedData.map((d, i) => {
-                    if (i === 0) return null;
-                    const prev = processedData[i - 1];
-                    const xStart = getX((prev.time + d.time) / 2);
-                    const xEnd = i < processedData.length - 1
-                        ? getX((d.time + processedData[i + 1].time) / 2)
-                        : graphWidth - padding.right;
-
-                    // For first point
-                    const effectiveXStart = i === 1 ? padding.left : xStart;
-
-                    return (
-                        <rect
-                            key={i}
-                            x={effectiveXStart}
-                            y={padding.top}
-                            width={xEnd - effectiveXStart}
-                            height={innerHeight}
-                            fill="transparent"
-                            onMouseEnter={() => setHoverIndex(i)}
-                        />
                     );
                 })}
 
@@ -167,28 +167,68 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
                 )}
             </svg>
 
+            {/* Interaction Overlay */}
+            <Box
+                position="absolute"
+                inset={0}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setHoverIndex(null)}
+                cursor="crosshair"
+                zIndex={5}
+            />
+
             {/* Tooltip */}
-            {hoverIndex !== null && (
+            {hoverIndex !== null && processedData[hoverIndex] && (
                 <Box
                     position="absolute"
                     left={`${(getX(processedData[hoverIndex].time) / graphWidth) * 100}%`}
-                    top={`${(getY(processedData[hoverIndex].wpm, maxWpm) / graphHeight) * 100}%`}
-                    transform="translate(-50%, -120%)"
-                    bg="var(--tooltip-bg)"
-                    color="var(--tooltip-fg)"
-                    px={3}
-                    py={2}
+                    top="0"
+                    transform="translate(-50%, -110%)"
+                    bg="#111"
+                    border="1px solid #333"
+                    color="#eee"
+                    p={2}
                     borderRadius="md"
                     fontSize="xs"
-                    boxShadow="lg"
+                    boxShadow="xl"
                     pointerEvents="none"
                     whiteSpace="nowrap"
-                    zIndex={10}
+                    zIndex={20}
+                    minW="120px"
                 >
-                    <Text fontWeight="bold">{processedData[hoverIndex].wpm} WPM</Text>
-                    <Text opacity={0.8}>Raw: {processedData[hoverIndex].raw}</Text>
-                    <Text opacity={0.8}>Errors: {processedData[hoverIndex].errors}</Text>
-                    <Text opacity={0.6} fontSize="10px" mt={1}>Time: {processedData[hoverIndex].time}s</Text>
+                    <Text fontWeight="bold" mb={1} borderBottom="1px solid #333" pb={1}>
+                        Time: {processedData[hoverIndex].time}s
+                    </Text>
+                    <Stack gap={1}>
+                        <Flex align="center" justify="space-between" gap={3}>
+                            <Flex align="center" gap={2}>
+                                <Box w={2} h={2} bg="var(--error)" borderRadius="sm" />
+                                <Text opacity={0.8}>errors:</Text>
+                            </Flex>
+                            <Text fontWeight="bold">{processedData[hoverIndex].errors}</Text>
+                        </Flex>
+                        <Flex align="center" justify="space-between" gap={3}>
+                            <Flex align="center" gap={2}>
+                                <Box w={2} h={2} bg="var(--accent)" borderRadius="sm" />
+                                <Text opacity={0.8}>wpm:</Text>
+                            </Flex>
+                            <Text fontWeight="bold">{processedData[hoverIndex].wpm}</Text>
+                        </Flex>
+                        <Flex align="center" justify="space-between" gap={3}>
+                            <Flex align="center" gap={2}>
+                                <Box w={2} h={2} bg="var(--text-subtle)" borderRadius="sm" />
+                                <Text opacity={0.8}>raw:</Text>
+                            </Flex>
+                            <Text fontWeight="bold">{processedData[hoverIndex].raw}</Text>
+                        </Flex>
+                        <Flex align="center" justify="space-between" gap={3}>
+                            <Flex align="center" gap={2}>
+                                <Box w={2} h={2} bg="var(--text-subtle)" borderRadius="sm" opacity={0.5} />
+                                <Text opacity={0.8}>burst:</Text>
+                            </Flex>
+                            <Text fontWeight="bold">{processedData[hoverIndex].burst}</Text>
+                        </Flex>
+                    </Stack>
                 </Box>
             )}
         </Box>

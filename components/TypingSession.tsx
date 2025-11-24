@@ -21,6 +21,8 @@ import type { MotionProps } from "framer-motion";
 import { useTypingEngine } from "@/hooks/useTypingEngine";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useSnippets } from "@/hooks/useSnippets";
+import { saveScore } from "@/lib/leaderboard";
+import LeaderboardModal from "@/components/LeaderboardModal";
 
 const CodePanel = dynamic(() => import("@/components/CodePanel"), {
     ssr: false,
@@ -30,10 +32,11 @@ const CodePanel = dynamic(() => import("@/components/CodePanel"), {
 type LengthFilter = SnippetLength | "all";
 
 export default function TypingSession() {
-    const [language, setLanguage] = useState<SupportedLanguage>("javascript");
+    const [language, setLanguage] = useState<SupportedLanguage>("python");
     const [lengthPreference, setLengthPreference] = useState<LengthFilter>("short");
     const { snippets } = useSnippets();
     const [isVimPreviewing, setIsVimPreviewing] = useState(false);
+    const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 
     // Problem & Snippet Selection
     const problemOptions = useMemo<Problem[]>(() => {
@@ -94,21 +97,6 @@ export default function TypingSession() {
     const [autoAdvanceDeadline, setAutoAdvanceDeadline] = useState<number | null>(null);
     const autoAdvanceTimeoutRef = useRef<number | null>(null);
 
-    const handleNextProblem = useCallback(() => {
-        if (autoAdvanceTimeoutRef.current !== null) {
-            window.clearTimeout(autoAdvanceTimeoutRef.current);
-            autoAdvanceTimeoutRef.current = null;
-        }
-        setAutoAdvanceDeadline(null);
-
-        if (problemOptions.length === 0) return;
-
-        const currentIndex = problemOptions.findIndex((problem) => problem.id === problemId);
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % problemOptions.length : 0;
-        const nextProblem = problemOptions[nextIndex];
-        setProblemId(nextProblem.id);
-    }, [problemId, problemOptions]);
-
     // Typing Engine
     const {
         phase,
@@ -126,6 +114,31 @@ export default function TypingSession() {
     } = useTypingEngine({
         snippet,
     });
+
+    const handleNextProblem = useCallback(() => {
+        console.log("handleNextProblem called");
+        if (autoAdvanceTimeoutRef.current !== null) {
+            window.clearTimeout(autoAdvanceTimeoutRef.current);
+            autoAdvanceTimeoutRef.current = null;
+        }
+        setAutoAdvanceDeadline(null);
+
+        if (problemOptions.length === 0) {
+            console.log("No problem options");
+            return;
+        }
+
+        const currentIndex = problemOptions.findIndex((problem) => problem.id === problemId);
+        console.log("Current index:", currentIndex, "Problem ID:", problemId);
+        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % problemOptions.length : 0;
+        const nextProblem = problemOptions[nextIndex];
+        console.log("Next problem:", nextProblem.id);
+
+        // Explicitly reset engine state
+        console.log("Calling resetEngine");
+        resetEngine();
+        setProblemId(nextProblem.id);
+    }, [problemId, problemOptions, resetEngine]);
 
     // Reset engine when snippet changes
     useEffect(() => {
@@ -369,6 +382,18 @@ export default function TypingSession() {
             setIsVimPreviewing(false);
         }
     }, [phase, isVimPreviewing]);
+
+    // Save score on finish
+    useEffect(() => {
+        if (phase === "finished") {
+            saveScore({
+                wpm: metrics.adjustedWpm,
+                accuracy: metrics.accuracy,
+                language,
+                snippetId: snippet.id,
+            });
+        }
+    }, [phase, metrics.adjustedWpm, metrics.accuracy, language, snippet.id]);
 
     // Focus Mode (Body Class)
     useEffect(() => {
@@ -626,6 +651,15 @@ export default function TypingSession() {
                 ) : null}
                 {hasActions ? (
                     <Flex align="center" gap={2} flexWrap="wrap" ml={hasMeta ? undefined : "auto"}>
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            color="var(--text-subtle)"
+                            _hover={{ color: "var(--accent)", bg: "var(--surface-hover)" }}
+                            onClick={() => setIsLeaderboardOpen(true)}
+                        >
+                            Leaderboard
+                        </Button>
                         {nextProblemButton}
                     </Flex>
                 ) : null}
@@ -861,7 +895,6 @@ export default function TypingSession() {
                     <motion.div
                         key="result"
                         {...resultCardMotion}
-                        layout
                         style={{ width: "100%", display: "flex", justifyContent: "center", marginTop: 32 }}
                     >
                         <Stack gap={5} align="center" w="100%" maxW="800px">
@@ -871,11 +904,6 @@ export default function TypingSession() {
                                 accuracy={metrics.accuracy}
                                 timeMs={elapsedMs}
                                 errors={wrongChars.size}
-                                onReplay={() => {
-                                    enableEditorFocus();
-                                    resetEngine();
-                                    focusEditorRef.current?.();
-                                }}
                                 onNext={problemOptions.length > 1 ? () => {
                                     enableEditorFocus();
                                     handleNextProblem();
@@ -893,6 +921,7 @@ export default function TypingSession() {
                     </motion.div>
                 )}
             </AnimatePresence>
+            <LeaderboardModal isOpen={isLeaderboardOpen} onOpenChange={(e) => setIsLeaderboardOpen(e.open)} />
         </Box>
     );
 }

@@ -106,6 +106,18 @@ function isSkeletal(content: string, language: SupportedLanguage): boolean {
 
 const CURATED_SNIPPETS: Snippet[] = [
     defineSnippet({
+        id: "py-area-short",
+        language: "python",
+        difficulty: "easy",
+        title: "Area of Circle",
+        sourceSlug: "py-area",
+        lengthCategory: "short",
+        content: `import math
+
+def area(radius):
+    return math.pi * radius * radius`,
+    }),
+    defineSnippet({
         id: "js-array-dedupe-short",
         language: "javascript",
         difficulty: "easy",

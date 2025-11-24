@@ -19,7 +19,6 @@ type ResultCardProps = {
     difficulty: string;
     lengthCategory: string;
     errorLog: ErrorEntry[];
-    onReplay: () => void;
     onNext?: () => void;
     autoAdvanceDeadline: number | null;
     history: ResultGraphPoint[];
@@ -71,7 +70,6 @@ export default function ResultCard({
     lengthCategory,
     errorLog,
     history,
-    onReplay,
     onNext,
     autoAdvanceDeadline,
 }: ResultCardProps) {
@@ -145,11 +143,10 @@ export default function ResultCard({
             p={{ base: 5, md: 8 }}
             w="100%"
             maxW="1000px"
-            {...animationProps}
         >
             <Stack gap={8}>
                 {/* Header */}
-                <MotionFlex justify="center" gap={16} align="flex-end" {...itemProps}>
+                <MotionFlex justify="center" gap={16} align="flex-end">
                     <Box textAlign="center">
                         <Text fontSize="6xl" fontWeight={700} color="var(--accent)" lineHeight={1}>
                             {percentile}%
@@ -164,19 +161,19 @@ export default function ResultCard({
                     </Box>
                 </MotionFlex>
 
-                <MotionFlex gap={2} flexWrap="wrap" justify="center" {...itemProps}>
+                <MotionFlex gap={2} flexWrap="wrap" justify="center">
                     {meta.map((item) => (
                         <MetaPill key={item.label} label={item.label} value={item.value} />
                     ))}
                 </MotionFlex>
 
                 {/* Graph */}
-                <MotionBox h="300px" w="100%" {...itemProps}>
+                <MotionBox h="300px" w="100%">
                     <ResultGraph data={history} height={300} />
                 </MotionBox>
 
                 {/* Detailed Stats */}
-                <MotionFlex gap={8} flexWrap="wrap" justify="center" {...itemProps}>
+                <MotionFlex gap={8} flexWrap="wrap" justify="center">
                     <StatBox label="Raw" value={Math.round(wpm / accuracy || wpm).toString()} />
                     <StatBox label="Characters" value={`${history[history.length - 1]?.raw * 5 || 0}/${errors}`} helper="correct/incorrect" />
                     <StatBox label="Time" value={formatDuration(timeMs)} />
@@ -184,7 +181,7 @@ export default function ResultCard({
 
                 {/* Most Mistaken */}
                 {mostMistaken.length > 0 && (
-                    <MotionBox {...itemProps} textAlign="center">
+                    <MotionBox textAlign="center">
                         <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.1em" color="var(--text-subtle)" mb={3}>
                             Most Mistaken
                         </Text>
@@ -209,10 +206,7 @@ export default function ResultCard({
                 )}
 
                 {/* Actions */}
-                <MotionFlex gap={3} flexWrap="wrap" justify="center" pt={4} borderTop="1px solid var(--border)" {...itemProps}>
-                    <Button onClick={onReplay} size="lg" colorScheme="yellow" px={8}>
-                        Replay
-                    </Button>
+                <MotionFlex gap={3} flexWrap="wrap" justify="center" pt={4} borderTop="1px solid var(--border)">
                     {onNext && (
                         <Button
                             onClick={onNext}

@@ -44,7 +44,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     }, [startTime]);
 
     // History tracking
-    const [history, setHistory] = useState<Array<{ time: number; wpm: number; raw: number; errors: number }>>([]);
+    const [history, setHistory] = useState<Array<{ time: number; wpm: number; raw: number; errors: number; burst: number }>>([]);
 
     // Timer tick & History update
     useEffect(() => {
@@ -61,9 +61,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     }, [phase]);
 
     // We need refs for history tracking to avoid restarting interval
-    const statsRef = useRef({ cursorIndex: 0, totalKeystrokes: 0, correctKeystrokes: 0, wrongCharsSize: 0 });
+    const statsRef = useRef({ cursorIndex: 0, totalKeystrokes: 0, correctKeystrokes: 0, wrongCharsSize: 0, lastKeystrokes: 0 });
     useEffect(() => {
-        statsRef.current = { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize: wrongChars.size };
+        statsRef.current = { ...statsRef.current, cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize: wrongChars.size };
     }, [cursorIndex, totalKeystrokes, correctKeystrokes, wrongChars]);
 
     // Separate effect for history to avoid complex dependencies
@@ -78,7 +78,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const elapsed = nowTs - start;
             if (elapsed < 1000) return;
 
-            const { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize } = statsRef.current;
+            const { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize, lastKeystrokes } = statsRef.current;
 
             const minutes = elapsed / 60000;
             const rawWpm = Math.round((totalKeystrokes / 5) / minutes);
@@ -90,6 +90,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             // Let's stick to the previous approximation for the graph for now, or use correctKeystrokes.
             const netWpm = Math.max(0, Math.round(((cursorIndex - wrongCharsSize) / 5) / minutes));
 
+            // Burst: Instantaneous Raw WPM over the last second
+            // We track lastKeystrokes in the ref
+            const keystrokesDelta = totalKeystrokes - lastKeystrokes;
+            const burst = Math.round((keystrokesDelta / 5) * 60);
+
+            // Update lastKeystrokes for next tick
+            statsRef.current.lastKeystrokes = totalKeystrokes;
+
             setHistory(prev => {
                 const timePoint = Math.floor(elapsed / 1000);
                 // Avoid duplicate seconds
@@ -99,7 +107,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                     time: timePoint,
                     wpm: netWpm,
                     raw: rawWpm,
-                    errors: wrongCharsSize
+                    errors: wrongCharsSize,
+                    burst
                 }];
             });
         }, 1000);
@@ -108,6 +117,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     }, [phase]);
 
     const reset = useCallback(() => {
+        console.log("Engine reset called");
         setPhase("idle");
         setCountdown(null);
         setCursorIndex(0);
