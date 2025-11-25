@@ -202,6 +202,13 @@ export default function TypingSession() {
                     exitVimPreview();
                     return;
                 }
+                if (phase === "finished" && problemOptions.length > 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    enableEditorFocus();
+                    handleNextProblem();
+                    return;
+                }
                 if (phase === "running" || phase === "countdown") {
                     if (autoAdvanceTimeoutRef.current !== null) {
                         window.clearTimeout(autoAdvanceTimeoutRef.current);
@@ -283,6 +290,16 @@ export default function TypingSession() {
 
             // 4. Global Shortcuts (Non-Vim)
             if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                // Handle Escape, Tab, and Space to go to next test when finished
+                if (phase === "finished" && problemOptions.length > 1) {
+                    if (e.key === "Tab" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        enableEditorFocus();
+                        handleNextProblem();
+                        return;
+                    }
+                }
                 if (keyLower === "r" && phase !== "running") {
                     e.preventDefault();
                     e.stopPropagation();
@@ -375,6 +392,7 @@ export default function TypingSession() {
         beginVimPreview,
         exitVimPreview,
         isVimPreviewing,
+        problemOptions,
     ]);
 
     useEffect(() => {

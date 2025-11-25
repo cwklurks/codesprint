@@ -222,6 +222,12 @@ export default function ResultCard({
                     )}
                 </MotionFlex>
 
+                {onNext && (
+                    <Text textAlign="center" fontSize="xs" color="var(--text-subtle)">
+                        Press Q, Escape, Tab, or Space to go to the next page
+                    </Text>
+                )}
+
                 {countdown !== null && countdown > 0 && (
                     <Text textAlign="center" fontSize="xs" color="var(--text-subtle)">
                         Auto-advancing in {countdown}s…
