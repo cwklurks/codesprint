@@ -11,11 +11,12 @@ type LanguageLoadState = {
 const LANGUAGES: SupportedLanguage[] = ["javascript", "python", "java", "cpp"];
 
 // Dynamic imports for each language file
+// Type assertion needed because JSON imports infer `language` as string, not SupportedLanguage
 const languageImports: Record<SupportedLanguage, () => Promise<{ default: Snippet[] }>> = {
-    javascript: () => import("@/data/snippets-javascript.json"),
-    python: () => import("@/data/snippets-python.json"),
-    java: () => import("@/data/snippets-java.json"),
-    cpp: () => import("@/data/snippets-cpp.json"),
+    javascript: () => import("@/data/snippets-javascript.json") as Promise<{ default: Snippet[] }>,
+    python: () => import("@/data/snippets-python.json") as Promise<{ default: Snippet[] }>,
+    java: () => import("@/data/snippets-java.json") as Promise<{ default: Snippet[] }>,
+    cpp: () => import("@/data/snippets-cpp.json") as Promise<{ default: Snippet[] }>,
 };
 
 export function useSnippets(currentLanguage: SupportedLanguage = "python") {
