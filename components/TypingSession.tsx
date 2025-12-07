@@ -34,7 +34,8 @@ type LengthFilter = SnippetLength | "all";
 export default function TypingSession() {
     const [language, setLanguage] = useState<SupportedLanguage>("python");
     const [lengthPreference, setLengthPreference] = useState<LengthFilter>("short");
-    const { snippets } = useSnippets();
+    // Pass current language to load that language's snippets first (fast), then others in background
+    const { snippets } = useSnippets(language);
     const [isVimPreviewing, setIsVimPreviewing] = useState(false);
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
 

@@ -375,7 +375,7 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     theme: "gruvbox",
     fontSize: 24,
     caretWidth: 3,
-    countdownEnabled: true,
+    countdownEnabled: false,
     surfaceStyle: "immersive",
     showLiveStatsDuringRun: true,
     interfaceMode: "ide",

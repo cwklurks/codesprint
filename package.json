@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "bun run build:snippets && next build",
+    "build:snippets": "bun scripts/build-snippets.ts",
     "start": "next start",
     "lint": "eslint",
-    "sync:leetcode": "bun scripts/sync-leetcode.ts"
+    "sync:leetcode": "bun scripts/sync-leetcode.ts && bun run build:snippets"
   },
   "dependencies": {
     "@chakra-ui/react": "3.27.1",
@@ -17,7 +18,7 @@
     "framer-motion": "12.23.24",
     "monaco-editor": "^0.52.0",
     "monaco-vim": "^0.4.2",
-    "next": "15.5.4",
+    "next": "15.5.7",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

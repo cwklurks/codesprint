@@ -30,6 +30,8 @@ type PreferencesContextValue = {
 };
 
 const LIVE_STATS_MIGRATION_KEY = "codesprint-live-stats-default-v1";
+const COUNTDOWN_MIGRATION_KEY = "codesprint-countdown-default-v1";
+const VIM_MODE_MIGRATION_KEY = "codesprint-vim-mode-default-v1";
 
 const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined);
 
@@ -120,6 +122,42 @@ export function PreferencesProvider({
             });
         } catch (err) {
             console.warn("Failed to migrate live stats preference", err);
+        }
+    }, [hydrated, setPreferences]);
+
+    useEffect(() => {
+        if (!hydrated || typeof window === "undefined") return;
+        try {
+            const storage = window.localStorage;
+            if (storage.getItem(COUNTDOWN_MIGRATION_KEY)) return;
+            setPreferences((prev) => {
+                storage.setItem(COUNTDOWN_MIGRATION_KEY, "1");
+                // Migrate countdownEnabled from true (old default) to false (new default)
+                if (prev.countdownEnabled === true) {
+                    return { ...prev, countdownEnabled: false };
+                }
+                return prev;
+            });
+        } catch (err) {
+            console.warn("Failed to migrate countdown preference", err);
+        }
+    }, [hydrated, setPreferences]);
+
+    useEffect(() => {
+        if (!hydrated || typeof window === "undefined") return;
+        try {
+            const storage = window.localStorage;
+            if (storage.getItem(VIM_MODE_MIGRATION_KEY)) return;
+            setPreferences((prev) => {
+                storage.setItem(VIM_MODE_MIGRATION_KEY, "1");
+                // Disable vim mode by default - it was causing confusion
+                if (prev.vimMode === true) {
+                    return { ...prev, vimMode: false };
+                }
+                return prev;
+            });
+        } catch (err) {
+            console.warn("Failed to migrate vim mode preference", err);
         }
     }, [hydrated, setPreferences]);
 

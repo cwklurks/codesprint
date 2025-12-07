@@ -34,6 +34,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     const phaseRef = useRef(phase);
     const startTimeRef = useRef(startTime);
+    const cursorIndexRef = useRef(cursorIndex);
+    const snippetRef = useRef(snippet);
 
     useEffect(() => {
         phaseRef.current = phase;
@@ -42,6 +44,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     useEffect(() => {
         startTimeRef.current = startTime;
     }, [startTime]);
+
+    useEffect(() => {
+        cursorIndexRef.current = cursorIndex;
+    }, [cursorIndex]);
+
+    useEffect(() => {
+        snippetRef.current = snippet;
+    }, [snippet]);
 
     // History tracking
     const [history, setHistory] = useState<Array<{ time: number; wpm: number; raw: number; errors: number; burst: number }>>([]);
@@ -147,9 +157,31 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
     }, [preferences.countdownEnabled]);
 
+    // Countdown timer effect
+    useEffect(() => {
+        if (phase !== "countdown" || countdown === null) return;
+
+        const intervalId = setInterval(() => {
+            setCountdown((prev) => {
+                if (prev === null) return null;
+                if (prev <= 1) {
+                    // Countdown finished, transition to running
+                    setPhase("running");
+                    const ts = Date.now();
+                    setStartTime(ts);
+                    setNow(ts);
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [phase, countdown]);
+
     // Auto-advance indentation logic
     const autoAdvanceIndentationIfAllowed = useCallback((index: number): { advanced: number; nextIndex: number } => {
-        const content = snippet.content;
+        const content = snippetRef.current.content;
         if (!content || content.length === 0) {
             return { advanced: 0, nextIndex: index };
         }
@@ -176,7 +208,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         // Side effects are tricky in a pure function, but this is a helper for the event handler
         // We will return the values and let the handler apply updates
         return { advanced, nextIndex: target };
-    }, [snippet.content, preferences.requireTabForIndent]);
+    }, [preferences.requireTabForIndent]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         const phaseNow = phaseRef.current;
@@ -198,11 +230,20 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
             if (phaseNow === "finished") return;
 
-            if (phaseNow === "idle" || phaseNow === "countdown") {
+            // During countdown, ignore Tab (let countdown finish automatically)
+            if (phaseNow === "countdown") {
+                swallowEvent();
+                return;
+            }
+
+            if (phaseNow === "idle") {
+                // Update ref immediately to prevent race conditions with rapid keystrokes
+                phaseRef.current = "running";
                 setPhase("running");
                 setCountdown(null);
                 if (!startTimeRef.current) {
                     const ts = Date.now();
+                    startTimeRef.current = ts;
                     setStartTime(ts);
                     setNow(ts);
                 }
@@ -211,7 +252,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             // Tab counts as a keystroke? Usually yes.
             setTotalKeystrokes(prev => prev + 1);
 
-            const { nextIndex: currentIndex, advanced: autoAdvanced } = autoAdvanceIndentationIfAllowed(cursorIndex);
+            const { nextIndex: currentIndex, advanced: autoAdvanced } = autoAdvanceIndentationIfAllowed(cursorIndexRef.current);
 
             // If auto-advance happened, we need to account for it
             // But wait, the original logic applied updates inside the helper.
@@ -228,7 +269,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 setWrongChars(prev => {
                     if (prev.size === 0) return prev;
                     const next = new Set(prev);
-                    for (let offset = cursorIndex; offset < currentIndex; offset++) {
+                    for (let offset = cursorIndexRef.current; offset < currentIndex; offset++) {
                         next.delete(offset);
                     }
                     return next;
@@ -241,7 +282,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 // I should probably just inline it or keep it as a helper that returns what to do.
             }
 
-            const content = snippet.content;
+            const content = snippetRef.current.content;
             if (currentIndex >= content.length) return;
 
             // Manual tab handling (if not auto-advanced or if we are at indentation point)
@@ -254,7 +295,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
             // Re-implementing the logic cleanly:
 
-            let effectiveIndex = cursorIndex;
+            let effectiveIndex = cursorIndexRef.current;
             let effectiveTyped = 0; // delta
 
             // 1. Auto-advance check
@@ -269,7 +310,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 setWrongChars(prev => {
                     if (prev.size === 0) return prev;
                     const next = new Set(prev);
-                    for (let i = cursorIndex; i < effectiveIndex; i++) next.delete(i);
+                    for (let i = cursorIndexRef.current; i < effectiveIndex; i++) next.delete(i);
                     return next;
                 });
 
@@ -278,6 +319,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             // 2. Manual Tab (spaces)
+            // content is already defined above
             let advanced = 0;
             while (
                 advanced < INDENT_WIDTH &&
@@ -302,7 +344,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             // 3. Manual Tab (literal tab character)
-            const expected = content[effectiveIndex];
+            const expected = snippetRef.current.content[effectiveIndex];
             if (expected === "\t") {
                 setCursorIndex(i => i + 1);
                 setTotalTypedChars(prev => prev + 1);
@@ -327,12 +369,22 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             return;
         }
 
-        if (phaseNow === "idle" || phaseNow === "countdown") {
+        // During countdown, ignore all typing keys (let countdown finish automatically)
+        if (phaseNow === "countdown") {
+            swallowEvent();
+            return;
+        }
+
+        if (phaseNow === "idle") {
+            // Update ref immediately to prevent race conditions with rapid keystrokes
+            phaseRef.current = "running";
             setPhase("running");
             setCountdown(null);
             if (!startTimeRef.current) {
-                setStartTime(timestamp);
-                setNow(timestamp);
+                const ts = timestamp;
+                startTimeRef.current = ts;
+                setStartTime(ts);
+                setNow(ts);
             }
         }
 
@@ -344,9 +396,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 setPhase("running");
             }
             swallowEvent();
-            if (cursorIndex === 0) return;
+            const currentCursor = cursorIndexRef.current;
+            if (currentCursor === 0) return;
 
-            const targetIndex = cursorIndex - 1;
+            const targetIndex = currentCursor - 1;
             setCursorIndex(i => Math.max(0, i - 1));
             setWrongChars(prev => {
                 const next = new Set(prev);
@@ -357,7 +410,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
 
         // Regular typing
-        const { nextIndex: currentIndex, advanced } = autoAdvanceIndentationIfAllowed(cursorIndex);
+        const { nextIndex: currentIndex, advanced } = autoAdvanceIndentationIfAllowed(cursorIndexRef.current);
 
         // If auto-advance happened
         if (advanced > 0) {
@@ -366,7 +419,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             setWrongChars(prev => {
                 if (prev.size === 0) return prev;
                 const next = new Set(prev);
-                for (let i = cursorIndex; i < currentIndex; i++) next.delete(i);
+                for (let i = cursorIndexRef.current; i < currentIndex; i++) next.delete(i);
                 return next;
             });
             // We continue to process the key press at the NEW index?
@@ -380,7 +433,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             // So yes, it advances past whitespace, THEN checks the key against the character AFTER the whitespace.
         }
 
-        const expected = snippet.content[currentIndex];
+        const expected = snippetRef.current.content[currentIndex];
         if (expected === undefined) return;
 
         swallowEvent();
@@ -403,8 +456,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             // Check for completion immediately after a correct keystroke
             // We use currentIndex + 1 because we just advanced the cursor
             const nextIdx = currentIndex + 1;
-            const isEnd = nextIdx >= snippet.content.length;
-            const isTrailingNewline = nextIdx === snippet.content.length - 1 && snippet.content[nextIdx] === "\n";
+            const snippetContent = snippetRef.current.content;
+            const isEnd = nextIdx >= snippetContent.length;
+            const isTrailingNewline = nextIdx === snippetContent.length - 1 && snippetContent[nextIdx] === "\n";
 
             if (isEnd || isTrailingNewline) {
                 setPhase("finished");
@@ -421,7 +475,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             });
         }
 
-    }, [cursorIndex, phase, snippet.content, autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode]);
+    }, [autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode]);
 
     // Calculate Perfect Words for Adjusted WPM
     // A word is perfect if all its characters are typed and there are no errors in its range.
