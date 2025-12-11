@@ -477,43 +477,61 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     }, [autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode]);
 
-    // Calculate Perfect Words for Adjusted WPM
-    // A word is perfect if all its characters are typed and there are no errors in its range.
-    // AND it is fully behind the cursor.
-    const getPerfectWordChars = useCallback(() => {
-        const content = snippet.content;
+    const elapsedMs = startTime ? now - startTime : 0;
+
+    // Memoized initial metrics (only computed once for useState initial value)
+    const [publishedMetrics, setPublishedMetrics] = useState<Metrics>(() => ({
+        rawWpm: 0,
+        adjustedWpm: 0,
+        accuracy: 1,
+    }));
+
+    // Ref to track latest values for metrics calculation without triggering re-renders
+    const metricsInputRef = useRef({
+        cursorIndex: 0,
+        wrongChars: new Set<number>(),
+        snippetContent: snippet.content,
+        startTime: null as number | null,
+        totalTypedChars: 0,
+        totalKeystrokes: 0,
+        correctKeystrokes: 0,
+    });
+
+    // Keep ref in sync (doesn't trigger re-renders)
+    useEffect(() => {
+        metricsInputRef.current = {
+            cursorIndex,
+            wrongChars,
+            snippetContent: snippet.content,
+            startTime,
+            totalTypedChars,
+            totalKeystrokes,
+            correctKeystrokes,
+        };
+    }, [cursorIndex, wrongChars, snippet.content, startTime, totalTypedChars, totalKeystrokes, correctKeystrokes]);
+
+    // Helper to calculate and publish metrics (only when called)
+    const calculateAndPublishMetrics = useCallback(() => {
+        const { cursorIndex: idx, wrongChars: errs, snippetContent, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct } = metricsInputRef.current;
+
+        // Calculate getPerfectWordChars
         let perfectChars = 0;
         let wordStart = 0;
-
-        // Simple word boundary detection (space or newline)
-        // We iterate through content up to cursorIndex
-        for (let i = 0; i <= cursorIndex; i++) {
-            const char = content[i];
-            const isWordEnd = i === content.length || char === " " || char === "\n" || char === "\t";
-
+        for (let i = 0; i <= idx; i++) {
+            const char = snippetContent[i];
+            const isWordEnd = i === snippetContent.length || char === " " || char === "\n" || char === "\t";
             if (isWordEnd) {
-                // Check if this word [wordStart, i) is fully typed and perfect
-                if (i <= cursorIndex) {
+                if (i <= idx) {
                     let isPerfect = true;
-                    // Check for errors in this range
                     for (let j = wordStart; j < i; j++) {
-                        if (wrongChars.has(j)) {
+                        if (errs.has(j)) {
                             isPerfect = false;
                             break;
                         }
                     }
-
-                    // Also, strictly speaking, if we passed it, and wrongChars doesn't have it, it's correct.
-                    // But we only count it if we have *completed* the word.
-                    // i <= cursorIndex means we have reached the end of the word.
-
                     if (isPerfect && i > wordStart) {
                         perfectChars += (i - wordStart);
-                        // Add 1 for the space/separator if we typed it correctly?
-                        // User said: "Total Correct Characters typically includes the space after a correct word."
-                        // If we are past the space (i < cursorIndex), we typed the space.
-                        // Was the space correct?
-                        if (i < cursorIndex && !wrongChars.has(i)) {
+                        if (i < idx && !errs.has(i)) {
                             perfectChars += 1;
                         }
                     }
@@ -521,40 +539,39 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 wordStart = i + 1;
             }
         }
-        return perfectChars;
-    }, [cursorIndex, wrongChars, snippet.content]);
 
-    const elapsedMs = startTime ? now - startTime : 0;
-    // Use the new perfect word calculation
-    const perfectChars = getPerfectWordChars();
-
-    const currentMetrics = computeMetrics({
-        correctProgress: perfectChars,
-        elapsedMs,
-        totalTyped: totalTypedChars,
-        totalKeystrokes,
-        correctKeystrokes
-    });
-
-    const [publishedMetrics, setPublishedMetrics] = useState(currentMetrics);
-    const lastPublishedRef = useRef(0);
-
-    useEffect(() => {
         const nowTs = Date.now();
-        // Update if:
-        // 1. Phase is finished (ensure final stats are accurate)
-        // 2. Phase is idle (reset)
-        // 3. 1.5 seconds have passed since last update
-        const shouldUpdate =
-            phase === "finished" ||
-            phase === "idle" ||
-            nowTs - lastPublishedRef.current >= 1500;
+        const elapsed = start ? nowTs - start : 0;
+        const metrics = computeMetrics({
+            correctProgress: perfectChars,
+            elapsedMs: elapsed,
+            totalTyped: typed,
+            totalKeystrokes: strokes,
+            correctKeystrokes: correct,
+        });
+        setPublishedMetrics(metrics);
+    }, []);
 
-        if (shouldUpdate) {
-            setPublishedMetrics(currentMetrics);
-            lastPublishedRef.current = nowTs;
+    // Interval-based metrics publishing (every 1.5s during running phase)
+    useEffect(() => {
+        if (phase !== "running") return;
+
+        // Publish immediately when entering running phase
+        calculateAndPublishMetrics();
+
+        const intervalId = setInterval(() => {
+            calculateAndPublishMetrics();
+        }, 1500);
+
+        return () => clearInterval(intervalId);
+    }, [phase, calculateAndPublishMetrics]);
+
+    // Publish final metrics on phase change to finished/idle
+    useEffect(() => {
+        if (phase === "finished" || phase === "idle") {
+            calculateAndPublishMetrics();
         }
-    }, [currentMetrics, phase]);
+    }, [phase, calculateAndPublishMetrics]);
 
     const caretErrorActive = lastErrorAt !== null && now >= lastErrorAt && now - lastErrorAt < 600;
 

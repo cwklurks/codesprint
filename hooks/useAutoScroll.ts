@@ -8,11 +8,17 @@ type UseAutoScrollProps = {
     enabled?: boolean;
 };
 
+// Throttle scroll checks to avoid RAF overhead on every keystroke
+const SCROLL_CHECK_INTERVAL_MS = 100;
+const SCROLL_CHECK_KEYSTROKE_INTERVAL = 5;
+
 export function useAutoScroll({ cursorIndex, phase, containerRef, enabled = true }: UseAutoScrollProps) {
     const prefersReducedMotion = usePrefersReducedMotion();
     const skipNextAutoScrollRef = useRef(false);
     const suppressAutoScrollUntilRef = useRef<number | null>(null);
     const previousPhaseRef = useRef(phase);
+    const lastScrollCheckRef = useRef(0);
+    const lastScrollCheckCursorRef = useRef(0);
 
     const scrollSessionIntoView = useCallback(() => {
         if (typeof window === "undefined") return;
@@ -60,11 +66,11 @@ export function useAutoScroll({ cursorIndex, phase, containerRef, enabled = true
         previousPhaseRef.current = phase;
     }, [phase, scrollSessionIntoView]);
 
-    // Continuous auto-scroll during running
+    // Continuous auto-scroll during running (throttled to avoid RAF overhead on every keystroke)
     useEffect(() => {
         if (typeof window === "undefined") return;
         if (phase !== "running" || !enabled) return;
-        
+
         const suppressUntil = suppressAutoScrollUntilRef.current;
         if (suppressUntil && Date.now() < suppressUntil) {
             return;
@@ -76,6 +82,19 @@ export function useAutoScroll({ cursorIndex, phase, containerRef, enabled = true
             skipNextAutoScrollRef.current = false;
             return;
         }
+
+        // Throttle: skip if not enough time/keystrokes have passed
+        const nowTs = Date.now();
+        const cursorDelta = cursorIndex - lastScrollCheckCursorRef.current;
+        const timeDelta = nowTs - lastScrollCheckRef.current;
+
+        // Only check scroll if enough time OR enough keystrokes have passed
+        if (timeDelta < SCROLL_CHECK_INTERVAL_MS && cursorDelta < SCROLL_CHECK_KEYSTROKE_INTERVAL) {
+            return;
+        }
+
+        lastScrollCheckRef.current = nowTs;
+        lastScrollCheckCursorRef.current = cursorIndex;
 
         const rafId = window.requestAnimationFrame(() => {
             const caret = document.querySelector<HTMLElement>(".cs-caret");

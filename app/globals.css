@@ -55,6 +55,14 @@ body {
     font-family: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace;
     position: relative;
     transition: background 0.45s ease, color 0.3s ease;
+    /* Firefox text wrapping fix */
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+
+/* Firefox flexbox text wrapping fix - flex items need min-width: 0 to allow text truncation */
+* {
+    min-width: 0;
 }
 
 body::before {
