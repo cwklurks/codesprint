@@ -1,13 +1,24 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const STORAGE_KEY = "codesprint-leaderboard";
+
+// Mock localStorage for jsdom environment
+const store: Record<string, string> = {};
+const mockLocalStorage = {
+    getItem: vi.fn((key: string) => store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => { store[key] = value; }),
+    removeItem: vi.fn((key: string) => { delete store[key]; }),
+};
+
+vi.stubGlobal("window", { localStorage: mockLocalStorage });
+
 import { getLeaderboard, saveScore, clearLeaderboard } from "../leaderboard";
 
 describe("getLeaderboard", () => {
     beforeEach(() => {
-        localStorage.clear();
-    });
-
-    afterEach(() => {
-        localStorage.clear();
+        // Clear store and mocks
+        for (const key of Object.keys(store)) delete store[key];
+        vi.clearAllMocks();
     });
 
     it("returns empty array when storage is empty", () => {
@@ -15,17 +26,17 @@ describe("getLeaderboard", () => {
     });
 
     it("returns empty array when stored value is not an array", () => {
-        localStorage.setItem("codesprint-leaderboard", JSON.stringify({ bad: "data" }));
+        store[STORAGE_KEY] = JSON.stringify({ bad: "data" });
         expect(getLeaderboard()).toEqual([]);
     });
 
     it("returns empty array when stored value is a string", () => {
-        localStorage.setItem("codesprint-leaderboard", '"just a string"');
+        store[STORAGE_KEY] = '"just a string"';
         expect(getLeaderboard()).toEqual([]);
     });
 
     it("returns empty array when stored value is invalid JSON", () => {
-        localStorage.setItem("codesprint-leaderboard", "not json at all {{{");
+        store[STORAGE_KEY] = "not json at all {{{";
         expect(getLeaderboard()).toEqual([]);
     });
 
@@ -33,7 +44,7 @@ describe("getLeaderboard", () => {
         const entries = [
             { id: "1", wpm: 100, accuracy: 0.95, date: "2026-01-01", language: "python", snippetId: "py-1" },
         ];
-        localStorage.setItem("codesprint-leaderboard", JSON.stringify(entries));
+        store[STORAGE_KEY] = JSON.stringify(entries);
         expect(getLeaderboard()).toEqual(entries);
     });
 
@@ -41,7 +52,7 @@ describe("getLeaderboard", () => {
         const entries = Array.from({ length: 10 }, (_, i) => ({
             id: String(i), wpm: 100 - i, accuracy: 0.95, date: "2026-01-01", language: "python", snippetId: "py-1",
         }));
-        localStorage.setItem("codesprint-leaderboard", JSON.stringify(entries));
+        store[STORAGE_KEY] = JSON.stringify(entries);
         expect(getLeaderboard(3)).toHaveLength(3);
     });
 });
