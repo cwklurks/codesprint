@@ -125,6 +125,10 @@ export default function TypingSession() {
     // Adaptive Difficulty
     const adaptive = useAdaptiveDifficulty(controls.language, preferences.adaptiveDifficultyEnabled);
 
+    // Extract stable method refs to avoid callback identity churn
+    const srUpdateMastery = sr.updateMastery;
+    const adaptiveUpdateSkillModel = adaptive.updateSkillModel;
+
     // Session finished callback for SR + adaptive updates
     const handleSessionFinished = useCallback((sessionData: {
         snippetId: string;
@@ -135,18 +139,18 @@ export default function TypingSession() {
         difficulty: Difficulty;
         lengthCategory: SnippetLength;
     }) => {
-        sr.updateMastery({
+        srUpdateMastery({
             snippetId: sessionData.snippetId,
             language: sessionData.language,
             accuracy: sessionData.accuracy,
             patternScore: sessionData.patternScore,
         });
-        adaptive.updateSkillModel({
+        adaptiveUpdateSkillModel({
             wpm: sessionData.wpm,
             accuracy: sessionData.accuracy,
             difficulty: sessionData.difficulty,
         });
-    }, [sr, adaptive]);
+    }, [srUpdateMastery, adaptiveUpdateSkillModel]);
 
     // Session Lifecycle (auto-advance, score saving)
     const lifecycle = useSessionLifecycle({
