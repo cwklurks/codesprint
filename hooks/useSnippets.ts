@@ -62,20 +62,18 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
     // Load current language first (priority), then others in background
     useEffect(() => {
         let mounted = true;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let idleId: number | null = null;
 
         async function loadProgressively() {
-            // 1. Load current language first (fast path - user can start immediately)
             await loadLanguage(currentLanguage);
             if (!mounted) return;
-            
-            // Update with current language snippets immediately
+
             rebuildSnippets();
             setIsLoading(false);
 
-            // 2. Load other languages in background (low priority)
             const otherLanguages = LANGUAGES.filter(lang => lang !== currentLanguage);
-            
-            // Use requestIdleCallback for background loading if available
+
             const loadInBackground = async () => {
                 for (const lang of otherLanguages) {
                     if (!mounted) return;
@@ -86,10 +84,9 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
             };
 
             if (typeof requestIdleCallback !== "undefined") {
-                requestIdleCallback(() => loadInBackground());
+                idleId = requestIdleCallback(() => loadInBackground());
             } else {
-                // Fallback: small delay to let UI settle
-                setTimeout(() => loadInBackground(), 100);
+                timeoutId = setTimeout(() => loadInBackground(), 100);
             }
         }
 
@@ -97,6 +94,12 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
 
         return () => {
             mounted = false;
+            if (idleId !== null && typeof cancelIdleCallback !== "undefined") {
+                cancelIdleCallback(idleId);
+            }
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
         };
     }, [currentLanguage, loadLanguage, rebuildSnippets]);
 
