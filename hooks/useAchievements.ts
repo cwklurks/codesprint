@@ -235,6 +235,7 @@ export function useAchievements({
                 setLevelProgress(levelInfo.progress);
             } catch (error) {
                 console.error("[useAchievements] Failed to process session:", error);
+                hasProcessedRef.current = false;
             } finally {
                 processingRef.current = false;
             }
