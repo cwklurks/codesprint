@@ -287,7 +287,6 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 setCursorIndex(advancedIndex);
                 setTotalTypedChars(prev => prev + auto.advanced);
                 for (let i = startIndex; i < advancedIndex; i++) wrongCharsRef.current.delete(i);
-                publishWrongChars();
 
                 return;
             }
@@ -309,7 +308,6 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 // Manual tab is a correct action
                 setCorrectKeystrokes(prev => prev + 1);
                 for (let i = 0; i < advanced; i++) wrongCharsRef.current.delete(startIndex + i);
-                publishWrongChars();
                 return;
             }
 
@@ -321,7 +319,6 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 setTotalTypedChars(prev => prev + 1);
                 setCorrectKeystrokes(prev => prev + 1);
                 wrongCharsRef.current.delete(startIndex);
-                publishWrongChars();
             }
             return;
         }
@@ -370,7 +367,6 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             cursorIndexRef.current = targetIndex;
             setCursorIndex(targetIndex);
             wrongCharsRef.current.delete(targetIndex);
-            publishWrongChars();
             return;
         }
 
@@ -411,14 +407,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 return next;
             });
         }
-        publishWrongChars();
 
         if (shouldFinishAtIndex(newCursor, snippetRef.current.content)) {
             setPhase("finished");
             if (onFinish) onFinish();
         }
 
-    }, [autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode, publishWrongChars]);
+    }, [autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode]);
 
     const elapsedMs = startTime ? now - startTime : 0;
 

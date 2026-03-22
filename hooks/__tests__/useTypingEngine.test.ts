@@ -189,6 +189,9 @@ describe("useTypingEngine", () => {
             result.current.handleKeyDown(fireKey("x")); // wrong: expected 'h'
         });
 
+        // wrongChars is published on the 100ms tick, advance timers to trigger it
+        act(() => { vi.advanceTimersByTime(100); });
+
         expect(result.current.wrongChars.has(0)).toBe(true);
     });
 
@@ -453,6 +456,9 @@ describe("useTypingEngine", () => {
             result.current.handleKeyDown(fireKey("f")); // correct
         });
 
+        // Advance timer to publish wrongChars snapshot
+        act(() => { vi.advanceTimersByTime(100); });
+
         expect(result.current.cursorIndex).toBe(6);
         expect(result.current.wrongChars.has(1)).toBe(true);
         expect(result.current.wrongChars.has(3)).toBe(true);
@@ -470,12 +476,17 @@ describe("useTypingEngine", () => {
             result.current.handleKeyDown(fireKey("x")); // wrong at 1
         });
 
+        // Advance timer to publish wrongChars snapshot
+        act(() => { vi.advanceTimersByTime(100); });
+
         expect(result.current.wrongChars.size).toBe(2);
 
         act(() => {
             result.current.handleKeyDown(fireKey("Backspace")); // back to 1, clear 1
             result.current.handleKeyDown(fireKey("Backspace")); // back to 0, clear 0
         });
+
+        act(() => { vi.advanceTimersByTime(100); });
 
         expect(result.current.wrongChars.size).toBe(0);
     });
