@@ -64,6 +64,7 @@ export function useAchievements({
     const [levelProgress, setLevelProgress] = useState(0);
 
     const hasProcessedRef = useRef(false);
+    const processingRef = useRef(false);
 
     // Reset guard when phase changes away from "finished"
     useEffect(() => {
@@ -72,9 +73,25 @@ export function useAchievements({
         }
     }, [phase]);
 
+    const sessionSnippetId = session.snippetId;
+    const sessionWpm = session.wpm;
+    const sessionAccuracy = session.accuracy;
+    const sessionElapsedMs = session.elapsedMs;
+    const sessionLanguage = session.language;
+    const sessionDifficulty = session.difficulty;
+    const sessionLengthCategory = session.lengthCategory;
+    const sessionErrorCount = session.errorCount;
+    const sessionTotalKeystrokes = session.totalKeystrokes;
+    const sessionCorrectKeystrokes = session.correctKeystrokes;
+    const sessionPatternScore = session.patternScore;
+    const sessionHistory = session.history;
+    const prefVimMode = preferences.vimMode;
+    const prefTheme = preferences.theme;
+
     useEffect(() => {
-        if (phase !== "finished" || hasProcessedRef.current) return;
+        if (phase !== "finished" || hasProcessedRef.current || processingRef.current) return;
         hasProcessedRef.current = true;
+        processingRef.current = true;
 
         async function process() {
             try {
@@ -104,10 +121,10 @@ export function useAchievements({
 
                 // 3. Compute XP
                 const xpResult = computeSessionXp({
-                    wpm: session.wpm,
-                    accuracy: session.accuracy,
-                    difficulty: session.difficulty as Difficulty,
-                    lengthCategory: session.lengthCategory as SnippetLength,
+                    wpm: sessionWpm,
+                    accuracy: sessionAccuracy,
+                    difficulty: sessionDifficulty as Difficulty,
+                    lengthCategory: sessionLengthCategory as SnippetLength,
                 });
                 const prevXp = storedTotalXp ?? 0;
                 const newTotalXp = prevXp + xpResult.sessionXp;
@@ -118,7 +135,7 @@ export function useAchievements({
 
                 // 5. Track vim mode
                 let vimCount = storedVimCount ?? 0;
-                if (preferences.vimMode) {
+                if (prefVimMode) {
                     vimCount += 1;
                     await setMetaValue("vimModeSessionCount", vimCount);
                 }
@@ -126,7 +143,7 @@ export function useAchievements({
                 // 6. Track themes
                 const themesArr = storedThemes ?? [];
                 const themesSet = new Set(themesArr);
-                themesSet.add(preferences.theme);
+                themesSet.add(prefTheme);
                 const updatedThemes = Array.from(themesSet);
                 await setMetaValue("themesUsed", updatedThemes);
 
@@ -134,16 +151,16 @@ export function useAchievements({
                 const alreadyUnlocked = new Set(unlockedRecords.map((r) => r.id));
 
                 const allLanguages = new Set(recentSessions.map((s: SessionRecord) => s.language));
-                allLanguages.add(session.language as AchievementContext["session"]["language"]);
+                allLanguages.add(sessionLanguage as AchievementContext["session"]["language"]);
 
                 const sessionsPerLanguage: Record<string, number> = {};
                 for (const s of recentSessions) {
                     sessionsPerLanguage[s.language] = (sessionsPerLanguage[s.language] ?? 0) + 1;
                 }
-                sessionsPerLanguage[session.language] = (sessionsPerLanguage[session.language] ?? 0) + 1;
+                sessionsPerLanguage[sessionLanguage] = (sessionsPerLanguage[sessionLanguage] ?? 0) + 1;
 
                 // Count consecutive high accuracy sessions (>95%)
-                let consecutiveHighAcc = session.accuracy > 0.95 ? 1 : 0;
+                let consecutiveHighAcc = sessionAccuracy > 0.95 ? 1 : 0;
                 if (consecutiveHighAcc > 0) {
                     for (const s of recentSessions) {
                         if (s.accuracy > 0.95) {
@@ -165,24 +182,24 @@ export function useAchievements({
 
                 const ctx: AchievementContext = {
                     session: {
-                        snippetId: session.snippetId,
-                        wpm: session.wpm,
-                        accuracy: session.accuracy,
-                        elapsedMs: session.elapsedMs,
-                        language: session.language as AchievementContext["session"]["language"],
-                        difficulty: session.difficulty as Difficulty,
-                        lengthCategory: session.lengthCategory as SnippetLength,
-                        errorCount: session.errorCount,
-                        totalKeystrokes: session.totalKeystrokes,
-                        correctKeystrokes: session.correctKeystrokes,
-                        patternScore: session.patternScore,
-                        history: session.history as AchievementContext["session"]["history"],
+                        snippetId: sessionSnippetId,
+                        wpm: sessionWpm,
+                        accuracy: sessionAccuracy,
+                        elapsedMs: sessionElapsedMs,
+                        language: sessionLanguage as AchievementContext["session"]["language"],
+                        difficulty: sessionDifficulty as Difficulty,
+                        lengthCategory: sessionLengthCategory as SnippetLength,
+                        errorCount: sessionErrorCount,
+                        totalKeystrokes: sessionTotalKeystrokes,
+                        correctKeystrokes: sessionCorrectKeystrokes,
+                        patternScore: sessionPatternScore,
+                        history: sessionHistory as AchievementContext["session"]["history"],
                     },
                     stats: {
                         totalSessions: stats.totalSessions + 1,
                         averageWpm: stats.averageWpm,
-                        bestWpm: Math.max(stats.bestWpm, session.wpm),
-                        totalTimeMs: stats.totalTimeMs + session.elapsedMs,
+                        bestWpm: Math.max(stats.bestWpm, sessionWpm),
+                        totalTimeMs: stats.totalTimeMs + sessionElapsedMs,
                     },
                     recentSessions,
                     allSessionLanguages: allLanguages,
@@ -218,11 +235,19 @@ export function useAchievements({
                 setLevelProgress(levelInfo.progress);
             } catch (error) {
                 console.error("[useAchievements] Failed to process session:", error);
+            } finally {
+                processingRef.current = false;
             }
         }
 
         process();
-    }, [phase, session, preferences]);
+    }, [
+        phase,
+        sessionSnippetId, sessionWpm, sessionAccuracy, sessionElapsedMs,
+        sessionLanguage, sessionDifficulty, sessionLengthCategory,
+        sessionErrorCount, sessionTotalKeystrokes, sessionCorrectKeystrokes,
+        sessionPatternScore, sessionHistory, prefVimMode, prefTheme,
+    ]);
 
     const dismissAchievements = useCallback(() => {
         setNewlyUnlocked([]);
