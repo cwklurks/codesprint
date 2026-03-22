@@ -470,7 +470,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     // Helper to calculate and publish metrics (only when called)
     const calculateAndPublishMetrics = useCallback(() => {
-        const { cursorIndex: idx, wrongChars: errs, snippetContent, snippetRef: snip, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errors } = metricsInputRef.current;
+        const { cursorIndex: idx, wrongChars: errs, snippetContent, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errors } = metricsInputRef.current;
 
         // Calculate getPerfectWordChars
         let perfectChars = 0;
