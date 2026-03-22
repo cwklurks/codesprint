@@ -367,6 +367,14 @@ export default function CodePanel({
         editor.revealRangeNearTopIfOutsideViewport(previewRange, monaco.editor.ScrollType.Immediate);
     }, [cursorChar, content, editorReadyToken, scheduleCaretRender, triggerCaretActivity, ensureCaretNode]);
 
+    // Caret error visual toggle (cheap - no decoration work)
+    useEffect(() => {
+        const caretNode = caretNodeRef.current;
+        if (caretNode) {
+            caretNode.classList.toggle("cs-caret-error", caretErrorActive);
+        }
+    }, [caretErrorActive]);
+
     useEffect(() => {
         ensureCaretNode();
         const editor = editorRef.current;
@@ -376,10 +384,6 @@ export default function CodePanel({
         if (!model) return;
 
         const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
-        const caretNode = caretNodeRef.current;
-        if (caretNode) {
-            caretNode.classList.toggle("cs-caret-error", caretErrorActive);
-        }
 
         const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = [];
         let rangeStart = -1;
@@ -406,6 +410,19 @@ export default function CodePanel({
                 rangeStart = -1;
             }
         }
+        if (rangeStart !== -1) {
+            const startPos = model.getPositionAt(rangeStart);
+            const endPos = model.getPositionAt(caretIndex);
+            completedDecorations.push({
+                range: new monaco.Range(
+                    startPos.lineNumber,
+                    startPos.column,
+                    endPos.lineNumber,
+                    endPos.column,
+                ),
+                options: { inlineClassName: "cs-complete" },
+            });
+        }
 
         const errorDecorations: Monaco.editor.IModelDeltaDecoration[] = Array.from(wrongChars).map((abs) => {
             const pos = model.getPositionAt(abs);
@@ -419,7 +436,7 @@ export default function CodePanel({
             ...completedDecorations,
             ...errorDecorations,
         ]);
-    }, [cursorChar, wrongChars, content, caretErrorActive, editorReadyToken, ensureCaretNode]);
+    }, [cursorChar, wrongChars, content, editorReadyToken, ensureCaretNode]);
 
     useEffect(() => {
         return () => {
