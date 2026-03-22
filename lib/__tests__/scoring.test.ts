@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeMetrics, computePatternScore } from "../scoring";
+import { computeMetrics, computePatternScore, createPatternScoreCalculator } from "../scoring";
 import { tokenize } from "../tokenizer";
 
 describe("computeMetrics", () => {
@@ -100,5 +100,36 @@ describe("computePatternScore", () => {
             language: "javascript",
         });
         expect(score).toBe(100);
+    });
+});
+
+describe("createPatternScoreCalculator", () => {
+    it("returns same result as direct computePatternScore", () => {
+        const content = "const x = 1;";
+        const tokens = tokenize(content, "javascript");
+        const calculator = createPatternScoreCalculator({
+            tokens,
+            contentLength: content.length,
+            language: "javascript",
+        });
+        const directScore = computePatternScore({
+            errorPositions: [0, 3],
+            tokens,
+            contentLength: content.length,
+            language: "javascript",
+        });
+        expect(calculator([0, 3])).toBe(directScore);
+    });
+
+    it("returns 100 for no errors", () => {
+        const content = "def foo():";
+        const tokens = tokenize(content, "python");
+        const calculator = createPatternScoreCalculator({ tokens, contentLength: content.length, language: "python" });
+        expect(calculator([])).toBe(100);
+    });
+
+    it("returns 100 for empty tokens", () => {
+        const calculator = createPatternScoreCalculator({ tokens: [], contentLength: 5, language: "javascript" });
+        expect(calculator([0, 1])).toBe(100);
     });
 });

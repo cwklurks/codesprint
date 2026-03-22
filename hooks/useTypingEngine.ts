@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { computeMetrics, computePatternScore, type Metrics } from "@/lib/scoring";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { computeMetrics, createPatternScoreCalculator, type Metrics } from "@/lib/scoring";
 import type { Snippet } from "@/lib/snippets";
 import { tokenize } from "@/lib/tokenizer";
 import { usePreferences } from "@/lib/preferences";
@@ -472,6 +472,22 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         };
     }, [cursorIndex, wrongChars, snippet, startTime, totalTypedChars, totalKeystrokes, correctKeystrokes, errorLog]);
 
+    // Cache the pattern score calculator per snippet — rebuilding categoryMap on
+    // every 1.5s tick is wasteful since tokens and weights never change mid-snippet.
+    const patternCalculator = useMemo(() => {
+        const tokens = snippet.tokens ?? tokenize(snippet.content, snippet.language);
+        return createPatternScoreCalculator({
+            tokens,
+            contentLength: snippet.content.length,
+            language: snippet.language,
+        });
+    }, [snippet]);
+
+    const patternCalculatorRef = useRef(patternCalculator);
+    useEffect(() => {
+        patternCalculatorRef.current = patternCalculator;
+    }, [patternCalculator]);
+
     // Helper to calculate and publish metrics (only when called)
     const calculateAndPublishMetrics = useCallback(() => {
         const { cursorIndex: idx, wrongChars: errs, snippetContent, snippetRef: snip, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errors } = metricsInputRef.current;
@@ -512,15 +528,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             correctKeystrokes: correct,
         });
 
-        // Compute pattern score using tokens
-        const tokens = snip.tokens ?? tokenize(snippetContent, snip.language);
+        // Use the cached calculator — avoids rebuilding categoryMap every tick
         const errorPositions = errors.map((e) => e.index);
-        metrics.patternScore = computePatternScore({
-            errorPositions,
-            tokens,
-            contentLength: snippetContent.length,
-            language: snip.language,
-        });
+        metrics.patternScore = patternCalculatorRef.current(errorPositions);
 
         setPublishedMetrics(metrics);
     }, []);

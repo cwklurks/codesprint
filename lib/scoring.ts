@@ -103,3 +103,53 @@ export function computePatternScore({
     const score = Math.round(((totalWeight - errorWeight) / totalWeight) * 100);
     return Math.max(0, Math.min(100, score));
 }
+
+// ---------------------------------------------------------------------------
+// createPatternScoreCalculator - cached version of computePatternScore
+// ---------------------------------------------------------------------------
+
+type PatternScoreCalculatorInput = {
+    tokens: Token[];
+    contentLength: number;
+    language: SupportedLanguage;
+};
+
+/**
+ * Creates a reusable pattern score calculator that caches the categoryMap and
+ * totalWeight for a given snippet. Call this once per snippet and reuse the
+ * returned function on every keystroke interval to avoid rebuilding the map.
+ */
+export function createPatternScoreCalculator({
+    tokens,
+    contentLength,
+    language,
+}: PatternScoreCalculatorInput): (errorPositions: number[]) => number {
+    if (tokens.length === 0 || contentLength === 0) {
+        return () => 100;
+    }
+
+    const categoryMap = buildCategoryMap(tokens, contentLength);
+    const weights = getWeights(language);
+
+    let totalWeight = 0;
+    for (let i = 0; i < contentLength; i++) {
+        totalWeight += weights[categoryMap[i]];
+    }
+
+    if (totalWeight === 0) {
+        return () => 100;
+    }
+
+    return (errorPositions: number[]): number => {
+        if (errorPositions.length === 0) return 100;
+        let errorWeight = 0;
+        const errorSet = new Set(errorPositions);
+        for (const pos of errorSet) {
+            if (pos >= 0 && pos < contentLength) {
+                errorWeight += weights[categoryMap[pos]];
+            }
+        }
+        const score = Math.round(((totalWeight - errorWeight) / totalWeight) * 100);
+        return Math.max(0, Math.min(100, score));
+    };
+}
