@@ -471,8 +471,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     // Helper to calculate and publish metrics (only when called)
     const calculateAndPublishMetrics = useCallback(() => {
-        const { cursorIndex: idx, snippetContent, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errors } = metricsInputRef.current;
-        const errs = wrongCharsRef.current;
+        const { cursorIndex: idx, snippetContent, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errorLogEntries } = metricsInputRef.current;
+        const wrongChars = wrongCharsRef.current;
 
         // Calculate getPerfectWordChars
         let perfectChars = 0;
@@ -484,14 +484,14 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 if (i <= idx) {
                     let isPerfect = true;
                     for (let j = wordStart; j < i; j++) {
-                        if (errs.has(j)) {
+                        if (wrongChars.has(j)) {
                             isPerfect = false;
                             break;
                         }
                     }
                     if (isPerfect && i > wordStart) {
                         perfectChars += (i - wordStart);
-                        if (i < idx && !errs.has(i)) {
+                        if (i < idx && !wrongChars.has(i)) {
                             perfectChars += 1;
                         }
                     }
@@ -511,7 +511,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         });
 
         // Use the cached calculator — avoids rebuilding categoryMap every tick
-        const errorPositions = errors.map((e) => e.index);
+        const errorPositions = errorLogEntries.map((e) => e.index);
         metrics.patternScore = patternCalculatorRef.current(errorPositions);
 
         setPublishedMetrics(metrics);
@@ -538,7 +538,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
     }, [phase, calculateAndPublishMetrics]);
 
-    // Publish wrongChars when phase transitions to finished or idle
+    // Safety net: publish wrongChars on phase transition (covers edge cases
+    // like setPhase("finished") called externally via the exposed setPhase).
+    // The primary synchronous publish happens inside handleKeyDown before setPhase.
     useEffect(() => {
         if (phase === "finished" || phase === "idle") {
             publishWrongChars();
