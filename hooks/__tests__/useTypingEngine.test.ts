@@ -440,6 +440,46 @@ describe("useTypingEngine", () => {
     // Return shape
     // -------------------------------------------------------------------------
 
+    it("wrongChars is accurate after rapid mixed correct/incorrect keystrokes", () => {
+        const snippet = makeSnippet("abcdef\n");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("a")); // correct
+            result.current.handleKeyDown(fireKey("x")); // wrong at 1
+            result.current.handleKeyDown(fireKey("c")); // correct
+            result.current.handleKeyDown(fireKey("x")); // wrong at 3
+            result.current.handleKeyDown(fireKey("e")); // correct
+            result.current.handleKeyDown(fireKey("f")); // correct
+        });
+
+        expect(result.current.cursorIndex).toBe(6);
+        expect(result.current.wrongChars.has(1)).toBe(true);
+        expect(result.current.wrongChars.has(3)).toBe(true);
+        expect(result.current.wrongChars.has(0)).toBe(false);
+        expect(result.current.wrongChars.has(2)).toBe(false);
+        expect(result.current.wrongChars.size).toBe(2);
+    });
+
+    it("wrongChars clears correctly after backspace through errors", () => {
+        const snippet = makeSnippet("abc\n");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("x")); // wrong at 0
+            result.current.handleKeyDown(fireKey("x")); // wrong at 1
+        });
+
+        expect(result.current.wrongChars.size).toBe(2);
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("Backspace")); // back to 1, clear 1
+            result.current.handleKeyDown(fireKey("Backspace")); // back to 0, clear 0
+        });
+
+        expect(result.current.wrongChars.size).toBe(0);
+    });
+
     it("exposes the expected return properties", () => {
         const snippet = makeSnippet("hello");
         const { result } = renderHook(() => useTypingEngine({ snippet }));
