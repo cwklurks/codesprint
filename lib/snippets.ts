@@ -844,7 +844,6 @@ function stripCStyleComments(content: string): string {
     while (i < content.length) {
         const ch = content[i];
         const next = i + 1 < content.length ? content[i + 1] : "";
-        const prev = i > 0 ? content[i - 1] : "";
 
         if (inBlock) {
             if (ch === "*" && next === "/") {

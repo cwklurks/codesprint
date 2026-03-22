@@ -106,7 +106,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const elapsed = nowTs - start;
             if (elapsed < 1000) return;
 
-            const { cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize, lastKeystrokes } = statsRef.current;
+            const { cursorIndex, totalKeystrokes, wrongCharsSize, lastKeystrokes } = statsRef.current;
 
             const minutes = elapsed / 60000;
             const rawWpm = Math.round((totalKeystrokes / 5) / minutes);
