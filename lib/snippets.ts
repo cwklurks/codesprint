@@ -764,22 +764,132 @@ function sanitizeContentForLanguage(content: string, language: SupportedLanguage
 
 function stripComments(content: string, language: SupportedLanguage): string {
     if (language === "python") {
-        // Remove hash comments
-        let cleaned = content.replace(/#.*$/gm, "");
-        // Remove docstrings ("""...""" and '''...''')
-        // Note: This simple regex assumes docstrings are not nested inside other strings in complex ways,
-        // which is generally true for LeetCode snippets.
-        cleaned = cleaned.replace(/"""[\s\S]*?"""/g, "");
-        cleaned = cleaned.replace(/'''[\s\S]*?'''/g, "");
-        return cleaned;
-    } else {
-        // JavaScript, Java, C++
-        // Remove block comments
-        let cleaned = content.replace(/\/\*[\s\S]*?\*\//g, "");
-        // Remove line comments
-        cleaned = cleaned.replace(/\/\/.*$/gm, "");
-        return cleaned;
+        return stripPythonComments(content);
     }
+    return stripCStyleComments(content);
+}
+
+function stripPythonComments(content: string): string {
+    let result = "";
+    let i = 0;
+
+    while (i < content.length) {
+        // Check for triple-quoted strings (""" or ''')
+        if (i + 2 < content.length) {
+            const triple = content.slice(i, i + 3);
+            if (triple === '"""' || triple === "'''") {
+                const preceding = content.slice(Math.max(0, i - 20), i).trimEnd();
+                const isDocstring = preceding.endsWith(":") || preceding.length === 0 || preceding.endsWith("\n");
+
+                const closeIdx = content.indexOf(triple, i + 3);
+                if (closeIdx === -1) {
+                    result += content.slice(i);
+                    break;
+                }
+
+                if (isDocstring) {
+                    i = closeIdx + 3;
+                    continue;
+                } else {
+                    result += content.slice(i, closeIdx + 3);
+                    i = closeIdx + 3;
+                    continue;
+                }
+            }
+        }
+
+        const ch = content[i];
+        if (ch === '"' || ch === "'") {
+            const quote = ch;
+            result += ch;
+            i++;
+            while (i < content.length && content[i] !== quote) {
+                if (content[i] === "\\" && i + 1 < content.length) {
+                    result += content[i] + content[i + 1];
+                    i += 2;
+                    continue;
+                }
+                if (content[i] === "\n") break;
+                result += content[i];
+                i++;
+            }
+            if (i < content.length && content[i] === quote) {
+                result += content[i];
+                i++;
+            }
+            continue;
+        }
+
+        if (ch === "#") {
+            while (i < content.length && content[i] !== "\n") i++;
+            continue;
+        }
+
+        result += ch;
+        i++;
+    }
+
+    return result;
+}
+
+function stripCStyleComments(content: string): string {
+    let result = "";
+    let i = 0;
+    let inSingle = false;
+    let inDouble = false;
+    let inTemplate = false;
+    let inBlock = false;
+    let inLine = false;
+
+    while (i < content.length) {
+        const ch = content[i];
+        const next = i + 1 < content.length ? content[i + 1] : "";
+        const prev = i > 0 ? content[i - 1] : "";
+
+        if (inBlock) {
+            if (ch === "*" && next === "/") {
+                inBlock = false;
+                i += 2;
+                continue;
+            }
+            i++;
+            continue;
+        }
+
+        if (inLine) {
+            if (ch === "\n") {
+                inLine = false;
+                result += ch;
+            }
+            i++;
+            continue;
+        }
+
+        if (prev !== "\\") {
+            if (ch === "'" && !inDouble && !inTemplate) { inSingle = !inSingle; }
+            else if (ch === '"' && !inSingle && !inTemplate) { inDouble = !inDouble; }
+            else if (ch === '`' && !inSingle && !inDouble) { inTemplate = !inTemplate; }
+        }
+
+        const inString = inSingle || inDouble || inTemplate;
+
+        if (!inString && ch === "/" && next === "*") {
+            inBlock = true;
+            i += 2;
+            continue;
+        }
+
+        if (!inString && ch === "/" && next === "/") {
+            inLine = true;
+            i += 2;
+            continue;
+        }
+
+        result += ch;
+        i++;
+    }
+
+    return result;
 }
 
 function condenseBlankRuns(content: string): string {

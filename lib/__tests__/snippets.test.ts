@@ -237,6 +237,57 @@ describe("getSnippet", () => {
     });
 });
 
+describe("stripComments (via normalizeDataset)", () => {
+    function makeRawSnippet(content: string, lang: string) {
+        return [{
+            id: "test-strip",
+            lang,
+            difficulty: "easy",
+            title: "Test",
+            content,
+            lines: content.split("\n").length,
+            lengthCategory: "short",
+            problemId: "test",
+        }];
+    }
+
+    it("preserves URLs inside JavaScript strings", () => {
+        const content = 'const url = "https://example.com";\nconst x = 1;\n';
+        const result = normalizeDataset(makeRawSnippet(content, "javascript"));
+        expect(result).toHaveLength(1);
+        expect(result[0].content).toContain("https://example.com");
+    });
+
+    it("removes actual line comments in JavaScript", () => {
+        const content = 'const x = 1; // comment\nconst y = 2;\n';
+        const result = normalizeDataset(makeRawSnippet(content, "javascript"));
+        expect(result).toHaveLength(1);
+        expect(result[0].content).not.toContain("// comment");
+        expect(result[0].content).toContain("const x = 1;");
+    });
+
+    it("preserves hash characters inside Python strings", () => {
+        const content = 'color = "#ff0000"\nprint(color)\n';
+        const result = normalizeDataset(makeRawSnippet(content, "python"));
+        expect(result).toHaveLength(1);
+        expect(result[0].content).toContain("#ff0000");
+    });
+
+    it("removes actual hash comments in Python", () => {
+        const content = 'x = 1  # comment\ny = 2\n';
+        const result = normalizeDataset(makeRawSnippet(content, "python"));
+        expect(result).toHaveLength(1);
+        expect(result[0].content).not.toContain("# comment");
+    });
+
+    it("preserves triple-quoted strings that are not docstrings", () => {
+        const content = 'msg = """hello world"""\nprint(msg)\n';
+        const result = normalizeDataset(makeRawSnippet(content, "python"));
+        expect(result).toHaveLength(1);
+        expect(result[0].content).toContain("hello world");
+    });
+});
+
 describe("snippet variance helpers", () => {
     it("marks short pandas signatures as low variance", () => {
         const snippet: Snippet = {
