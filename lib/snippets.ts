@@ -865,7 +865,16 @@ function stripCStyleComments(content: string): string {
             continue;
         }
 
-        if (prev !== "\\") {
+        // Count consecutive backslashes before current position
+        let backslashCount = 0;
+        let j = i - 1;
+        while (j >= 0 && content[j] === "\\") {
+            backslashCount++;
+            j--;
+        }
+        const isEscaped = backslashCount % 2 !== 0;
+
+        if (!isEscaped) {
             if (ch === "'" && !inDouble && !inTemplate) { inSingle = !inSingle; }
             else if (ch === '"' && !inSingle && !inTemplate) { inDouble = !inDouble; }
             else if (ch === '`' && !inSingle && !inDouble) { inTemplate = !inTemplate; }
