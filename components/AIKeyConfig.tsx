@@ -8,7 +8,6 @@ import {
     Text,
     Flex,
     Badge,
-    Alert,
 } from "@chakra-ui/react";
 import { usePreferences } from "@/lib/preferences";
 import { storeApiKey, clearApiKey, hasApiKey, getApiKey, type AIProvider } from "@/lib/ai/key-storage";
@@ -108,16 +107,32 @@ export function AIKeyConfig() {
                 </Badge>
             </Flex>
 
-            <Alert.Root status="info" mb={4} size="sm">
-                <Alert.Indicator />
-                <Alert.Content>
-                    <Alert.Title>Bring Your Own Key</Alert.Title>
-                    <Alert.Description>
-                        Your API key is stored locally in your browser. It is sent to our server
-                        per-request to proxy the AI call, but is never stored or logged.
-                    </Alert.Description>
-                </Alert.Content>
-            </Alert.Root>
+            <Box
+                mb={4}
+                p={3}
+                borderRadius="md"
+                bg="var(--panel-soft)"
+                border="1px solid var(--border)"
+            >
+                <Flex gap={3}>
+                    <Box color="var(--accent)" mt={0.5}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4"/>
+                            <path d="M12 8h.01"/>
+                        </svg>
+                    </Box>
+                    <Box>
+                        <Text fontSize="sm" fontWeight={600} color="var(--text)">
+                            Bring Your Own Key
+                        </Text>
+                        <Text fontSize="sm" color="var(--text-subtle)" mt={1}>
+                            Your API key is stored locally in your browser. It is sent to our server
+                            per-request to proxy the AI call, but is never stored or logged.
+                        </Text>
+                    </Box>
+                </Flex>
+            </Box>
 
             {/* Claude */}
             <Box mb={4}>
