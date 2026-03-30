@@ -1,11 +1,14 @@
 "use client";
 
-import { Button, Flex, Text } from "@chakra-ui/react";
 import {
-    TooltipContent,
-    TooltipPositioner,
+    Button,
+    Flex,
+    Text,
+    Badge,
     TooltipRoot,
     TooltipTrigger,
+    TooltipPositioner,
+    TooltipContent,
 } from "@chakra-ui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getPillButtonStyles, getStartButtonStyles, SESSION_CSS_VARS } from "@/lib/session-styles";
@@ -14,6 +17,10 @@ import type { SupportedLanguage } from "@/lib/snippets";
 import type { LengthFilter } from "@/hooks/useSessionControls";
 import type { Phase } from "@/hooks/useFocusManagement";
 import type { Difficulty } from "@/lib/snippets";
+import { getActiveProvider } from "@/lib/ai/key-storage";
+import { checkRateLimit } from "@/lib/ai/rate-limiter";
+import { useAIDrills } from "@/hooks/useAIDrills";
+import { usePreferences } from "@/lib/preferences";
 
 export type SurfaceStyle = "panel" | "immersive";
 
@@ -44,6 +51,8 @@ export interface SessionControlBarProps {
     dueCount?: number;
     /** Suggested difficulty from adaptive system */
     suggestedDifficulty?: Difficulty;
+    /** Callback when AI Drill button is clicked */
+    onOpenAIDrill?: () => void;
 }
 
 const LANGUAGE_OPTIONS: Array<{ value: SupportedLanguage; label: string }> = [
@@ -83,11 +92,19 @@ export function SessionControlBar({
     prefersReducedMotion,
     dueCount,
     suggestedDifficulty,
+    onOpenAIDrill,
 }: SessionControlBarProps) {
     const { panelGlass, border } = SESSION_CSS_VARS;
     const controlsMotion = getControlsMotion(prefersReducedMotion);
     const startButtonMotion = getStartButtonMotion(prefersReducedMotion);
     const startButtonStyles = getStartButtonStyles(isTerminalMode);
+
+    // AI Drills
+    const { preferences } = usePreferences();
+    const ai = useAIDrills(preferences);
+    const showAIDrill = preferences.aiDrillsEnabled && getActiveProvider() !== null && 
+        phase !== "running" && phase !== "countdown";
+    const rateLimit = checkRateLimit(preferences.aiMaxDrillsPerDay);
 
     return (
         <motion.div
@@ -149,6 +166,35 @@ export function SessionControlBar({
                     </TooltipRoot>
                 ))}
             </Flex>
+
+            {/* AI Drill Button */}
+            {showAIDrill && (
+                <TooltipRoot>
+                    <TooltipTrigger asChild>
+                        <Button
+                            {...getPillButtonStyles(false, isTerminalMode)}
+                            onClick={onOpenAIDrill}
+                            disabled={!rateLimit.allowed}
+                            ml={2}
+                        >
+                            ⚡ AI
+                            <Badge ml={1} size="sm">{ai.remainingToday}</Badge>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipPositioner>
+                        <TooltipContent
+                            bg="var(--surface)"
+                            color="var(--text)"
+                            border="1px solid var(--border)"
+                            fontSize="xs"
+                            px={2}
+                            py={1}
+                        >
+                            {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A)"}
+                        </TooltipContent>
+                    </TooltipPositioner>
+                </TooltipRoot>
+            )}
 
             {/* Surface Style Selector */}
             <Flex gap={2} flexWrap="wrap" align="center" ml="auto">

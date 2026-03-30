@@ -53,6 +53,8 @@ export interface ResultScreenProps {
     newlyUnlocked?: AchievementDefinition[];
     /** Difficulty transition suggestion */
     difficultyTransition?: { newDifficulty: Difficulty; reason: string };
+    /** Whether the snippet was AI-generated */
+    isAIDrill?: boolean;
 }
 
 /**
@@ -81,6 +83,7 @@ export function ResultScreen({
     xpGained,
     newlyUnlocked,
     difficultyTransition,
+    isAIDrill,
 }: ResultScreenProps) {
     const resultCardMotion = getResultCardMotion(prefersReducedMotion);
 
@@ -113,6 +116,7 @@ export function ResultScreen({
                     patternScore={patternScore}
                     tokens={tokens}
                     contentLength={contentLength}
+                    isAIDrill={isAIDrill}
                 />
 
                 {(xpGained !== undefined && xpGained > 0) && (

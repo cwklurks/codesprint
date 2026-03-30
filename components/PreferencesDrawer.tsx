@@ -32,6 +32,7 @@ import {
 } from "@/lib/preferences";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { exportSessions, importSessions, downloadFile, type ImportResult } from "@/lib/export";
+import { AIKeyConfig } from "@/components/AIKeyConfig";
 
 type PreferencesDrawerProps = {
     isOpen: boolean;
@@ -314,6 +315,13 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                         <SwitchHiddenInput />
                                     </SwitchRoot>
                                 </HStack>
+                            </Box>
+
+                            <Box>
+                                <Text fontSize="sm" fontWeight={600} mb={3}>
+                                    AI Drills
+                                </Text>
+                                <AIKeyConfig />
                             </Box>
 
                             <Box>

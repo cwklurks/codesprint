@@ -31,6 +31,7 @@ type ResultCardProps = {
     patternScore?: number;
     tokens?: Token[];
     contentLength?: number;
+    isAIDrill?: boolean;
 };
 
 function formatDuration(ms: number) {
@@ -65,6 +66,7 @@ export default function ResultCard({
     patternScore,
     tokens,
     contentLength,
+    isAIDrill,
 }: ResultCardProps) {
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isSharing, setIsSharing] = useState(false);
@@ -206,6 +208,40 @@ export default function ResultCard({
                     {meta.map((item) => (
                         <MetaPill key={item.label} label={item.label} value={item.value} />
                     ))}
+                    {isAIDrill && (
+                        <MotionBox
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <Flex
+                                align="center"
+                                gap={2}
+                                px={3}
+                                py={1.5}
+                                borderRadius="full"
+                                border="1px solid var(--border)"
+                                bg="var(--surface)"
+                            >
+                                <chakra.svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    width={14}
+                                    height={14}
+                                    color="var(--accent)"
+                                >
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                                </chakra.svg>
+                                <Text fontSize="xs" color="var(--accent)" fontWeight={600}>
+                                    AI
+                                </Text>
+                            </Flex>
+                        </MotionBox>
+                    )}
                 </MotionFlex>
 
                 {/* Graph */}

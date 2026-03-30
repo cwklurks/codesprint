@@ -11,4 +11,5 @@ export const KEYBOARD_SHORTCUTS: Shortcut[] = [
     { combo: "A", detail: "Open analytics dashboard" },
     { combo: "V", detail: "Toggle Vim preview to skim the snippet before typing" },
     { combo: "Esc", detail: "Abort the current run" },
+    { combo: "Shift + A", detail: "Generate AI drill (requires API key)" },
 ];

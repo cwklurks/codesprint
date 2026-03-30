@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import GapBufferVisualizer from "@/components/GapBufferVisualizer";
 import LiveStats from "@/components/LiveStats";
 import LeaderboardModal from "@/components/LeaderboardModal";
+import AIDrillPanel from "@/components/AIDrillPanel";
 
 import { SessionControlBar } from "@/components/session/SessionControlBar";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
@@ -38,6 +39,7 @@ const CodePanel = dynamic(() => import("@/components/CodePanel"), {
 
 export default function TypingSession() {
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+    const [isDrillPanelOpen, setIsDrillPanelOpen] = useState(false);
     const panelContainerRef = useRef<HTMLDivElement | null>(null);
 
     // Store engine reset function in a ref to break circular dependency
@@ -165,6 +167,9 @@ export default function TypingSession() {
         history: engine.history,
         lengthCategory: controls.snippet.lengthCategory,
         difficulty: controls.snippet.difficulty,
+        // NEW - pass error data for AI drill weak pattern aggregation
+        errors: engine.errorLog,
+        snippetContent: controls.snippet.content,
         onResetEngine: engine.reset,
         onSessionFinished: handleSessionFinished,
     });
@@ -187,6 +192,7 @@ export default function TypingSession() {
         setShowLiveStatsDuringRun,
         showLiveStatsDuringRun: preferences.showLiveStatsDuringRun,
         clearAutoAdvance: lifecycle.clearAutoAdvance,
+        onOpenAIDrill: () => setIsDrillPanelOpen(true),
     });
 
     // Auto Scroll
@@ -225,6 +231,11 @@ export default function TypingSession() {
         controls.handleNextProblem();
     }, [focus, lifecycle, controls]);
 
+    const handleDrillAccept = useCallback((snippet: import("@/lib/snippets").Snippet) => {
+        // Load the AI drill as current snippet via controls
+        controls.setSnippet(snippet);
+    }, [controls]);
+
     return (
         <Box position="relative" minH="400px">
             <AnimatePresence mode="wait">
@@ -254,6 +265,7 @@ export default function TypingSession() {
                                     prefersReducedMotion={prefersReducedMotion}
                                     dueCount={sr.dueCount}
                                     suggestedDifficulty={adaptive.suggestedDifficulty}
+                                    onOpenAIDrill={() => setIsDrillPanelOpen(true)}
                                 />
                             )}
 
@@ -345,6 +357,7 @@ export default function TypingSession() {
                         xpGained={achievements.xpGained}
                         newlyUnlocked={achievements.newlyUnlocked}
                         difficultyTransition={adaptive.suggestedDifficulty !== controls.snippet.difficulty ? { newDifficulty: adaptive.suggestedDifficulty, reason: "promoted" as const } : undefined}
+                        isAIDrill={controls.snippet.problemId.startsWith("ai-drill-")}
                     />
                 )}
             </AnimatePresence>
@@ -352,6 +365,13 @@ export default function TypingSession() {
             <LeaderboardModal
                 isOpen={isLeaderboardOpen}
                 onOpenChange={(e) => setIsLeaderboardOpen(e.open)}
+            />
+
+            <AIDrillPanel
+                isOpen={isDrillPanelOpen}
+                onClose={() => setIsDrillPanelOpen(false)}
+                onAccept={handleDrillAccept}
+                language={controls.language}
             />
         </Box>
     );

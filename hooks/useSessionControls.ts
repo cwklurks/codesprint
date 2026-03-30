@@ -47,6 +47,7 @@ export interface UseSessionControlsReturn {
 
     // Actions
     handleNextProblem: () => void;
+    setSnippet: (snippet: Snippet) => void;
 }
 
 const RECENT_PROBLEM_WINDOW = 10;
@@ -247,6 +248,13 @@ export function useSessionControls({
         setProblemId(nextProblem.id);
     }, [problemId, problemOptions, snippet, onResetEngine, getNextRecommendation, representativeByProblem, availableSnippets]);
 
+    // Directly set a custom snippet (for AI drills)
+    const setSnippet = useCallback((newSnippet: Snippet) => {
+        onResetEngine();
+        setProblemId(newSnippet.problemId);
+        setSnippetId(newSnippet.id);
+    }, [onResetEngine]);
+
     return {
         language,
         setLanguage,
@@ -262,5 +270,6 @@ export function useSessionControls({
         setSnippetId,
         snippet,
         handleNextProblem,
+        setSnippet,
     };
 }

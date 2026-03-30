@@ -17,6 +17,7 @@ export interface UseKeyboardShortcutsProps {
     setShowLiveStatsDuringRun: (enabled: boolean) => void;
     showLiveStatsDuringRun: boolean;
     clearAutoAdvance: () => void;
+    onOpenAIDrill?: () => void;
 }
 
 export interface UseKeyboardShortcutsReturn {
@@ -56,6 +57,7 @@ export function useKeyboardShortcuts({
     setShowLiveStatsDuringRun,
     showLiveStatsDuringRun,
     clearAutoAdvance,
+    onOpenAIDrill,
 }: UseKeyboardShortcutsProps): UseKeyboardShortcutsReturn {
     const [isVimPreviewing, setIsVimPreviewing] = useState(false);
     const vimPreviewTimeoutRef = useRef<number | null>(null);
@@ -232,6 +234,13 @@ export function useKeyboardShortcuts({
                     // Allow propagation to AppShell for analytics modal
                     return;
                 }
+                // Shift+A for AI Drills
+                if (e.shiftKey && keyLower === "a" && phase !== "running" && phase !== "countdown" && onOpenAIDrill) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenAIDrill();
+                    return;
+                }
             }
 
             // 6. Pass to Engine (Typing)
@@ -274,6 +283,7 @@ export function useKeyboardShortcuts({
         problemCount,
         focusEditor,
         clearAutoAdvance,
+        onOpenAIDrill,
     ]);
 
     return {
