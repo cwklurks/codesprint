@@ -52,6 +52,21 @@ export type CustomSnippetRecord = {
     content: string;
     language: string;
     createdAt: string; // ISO
+    // NEW - discriminator
+    source?: "user" | "ai";
+    // NEW - AI-specific metadata (only when source === "ai")
+    aiMetadata?: {
+        provider: "claude" | "openai";
+        model: string;
+        reasoning: string;           // why this drill was generated
+        focusAreas: string[];        // token categories targeted
+        weakPatternsInput: string[]; // what was sent to the AI
+        tokensUsed: number;
+        costUsd: number;
+        accepted: boolean;
+        difficulty: string;
+        lengthCategory: string;
+    };
 };
 
 export type MetaRecord = {

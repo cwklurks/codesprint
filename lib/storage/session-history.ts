@@ -1,5 +1,5 @@
 import type { SupportedLanguage, SnippetLength, Difficulty } from "@/lib/snippets";
-import type { HistoryEntry } from "@/hooks/useTypingEngine";
+import type { HistoryEntry, ErrorEntry } from "@/hooks/useTypingEngine";
 import { idbGetAll, idbGet, idbPut, idbDelete, idbClear, isIdbAvailable, STORES } from "./idb-store";
 
 export type SessionRecord = {
@@ -18,6 +18,10 @@ export type SessionRecord = {
     errorCount: number;
     history: HistoryEntry[];
     patternScore?: number;
+    // For AI drill weak pattern aggregation
+    errors?: ErrorEntry[];
+    snippetContentLength?: number;
+    snippetContent?: string;
 };
 
 export type CreateSessionInput = Omit<SessionRecord, "id" | "date">;

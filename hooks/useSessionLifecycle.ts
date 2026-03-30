@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { saveScore } from "@/lib/leaderboard";
 import { createSessionAsync } from "@/lib/storage/session-history";
 import type { SupportedLanguage, SnippetLength, Difficulty } from "@/lib/snippets";
-import type { HistoryEntry } from "@/hooks/useTypingEngine";
+import type { HistoryEntry, ErrorEntry } from "@/hooks/useTypingEngine";
 import type { Phase } from "./useFocusManagement";
 
 export interface UseSessionLifecycleProps {
@@ -24,6 +24,9 @@ export interface UseSessionLifecycleProps {
     history: HistoryEntry[];
     lengthCategory: SnippetLength;
     difficulty: Difficulty;
+    // NEW - for AI drill weak pattern aggregation
+    errors?: ErrorEntry[];
+    snippetContent?: string;
     onResetEngine: () => void;
     onSessionFinished?: (sessionData: {
         snippetId: string;
@@ -63,6 +66,8 @@ export function useSessionLifecycle({
     history,
     lengthCategory,
     difficulty,
+    errors,
+    snippetContent,
     onResetEngine,
     onSessionFinished,
 }: UseSessionLifecycleProps): UseSessionLifecycleReturn {
@@ -127,6 +132,9 @@ export function useSessionLifecycle({
             errorCount,
             history,
             patternScore: metrics.patternScore,
+            errors,
+            snippetContentLength: snippetContent?.length,
+            snippetContent,
         }).catch(() => {
             // IndexedDB may be unavailable; legacy saveScore above provides fallback
         });
@@ -142,7 +150,7 @@ export function useSessionLifecycle({
                 lengthCategory,
             });
         }
-    }, [phase, metrics.adjustedWpm, metrics.rawWpm, metrics.accuracy, metrics.patternScore, language, snippetId, elapsedMs, totalKeystrokes, correctKeystrokes, errorCount, history, lengthCategory, difficulty, onSessionFinished]);
+    }, [phase, metrics.adjustedWpm, metrics.rawWpm, metrics.accuracy, metrics.patternScore, language, snippetId, elapsedMs, totalKeystrokes, correctKeystrokes, errorCount, history, lengthCategory, difficulty, onSessionFinished, errors, snippetContent]);
 
     return {
         autoAdvanceDeadline,
