@@ -53,6 +53,7 @@ export type ThemeTokens = {
 export type SurfaceStyle = "panel" | "immersive";
 export type InterfaceMode = "ide" | "terminal";
 export type SyntaxHighlightingMode = "full" | "partial" | "none";
+export type SnippetLength = "short" | "medium" | "long";
 
 export type PreferencesState = {
     theme: ThemePreset;
@@ -68,6 +69,12 @@ export type PreferencesState = {
     debugGapBuffer: boolean;
     spacedRepetitionEnabled: boolean;
     adaptiveDifficultyEnabled: boolean;
+    // NEW - AI drill preferences
+    aiDrillsEnabled: boolean;
+    aiProvider: "claude" | "openai";
+    aiMaxDrillsPerDay: number;
+    aiAutoGenerate: boolean;
+    aiDrillLengthPreference: SnippetLength | "auto";
 };
 
 export const STORAGE_KEY = "codesprint-preferences";
@@ -399,6 +406,12 @@ export const DEFAULT_PREFERENCES: PreferencesState = {
     debugGapBuffer: false,
     spacedRepetitionEnabled: false,
     adaptiveDifficultyEnabled: false,
+    // NEW - AI drill preferences
+    aiDrillsEnabled: false,
+    aiProvider: "claude",
+    aiMaxDrillsPerDay: 20,
+    aiAutoGenerate: false,
+    aiDrillLengthPreference: "auto",
 };
 
 export function computeCaretHeight(fontSize: number): number {
@@ -460,6 +473,30 @@ export function sanitizePreferences(value: unknown): PreferencesState {
             typeof source.adaptiveDifficultyEnabled === "boolean"
                 ? source.adaptiveDifficultyEnabled
                 : DEFAULT_PREFERENCES.adaptiveDifficultyEnabled,
+        // NEW - AI drill preferences
+        aiDrillsEnabled:
+            typeof source.aiDrillsEnabled === "boolean"
+                ? source.aiDrillsEnabled
+                : DEFAULT_PREFERENCES.aiDrillsEnabled,
+        aiProvider:
+            source.aiProvider === "openai"
+                ? "openai"
+                : DEFAULT_PREFERENCES.aiProvider,
+        aiMaxDrillsPerDay:
+            typeof source.aiMaxDrillsPerDay === "number" && source.aiMaxDrillsPerDay >= 1 && source.aiMaxDrillsPerDay <= 1000
+                ? source.aiMaxDrillsPerDay
+                : DEFAULT_PREFERENCES.aiMaxDrillsPerDay,
+        aiAutoGenerate:
+            typeof source.aiAutoGenerate === "boolean"
+                ? source.aiAutoGenerate
+                : DEFAULT_PREFERENCES.aiAutoGenerate,
+        aiDrillLengthPreference:
+            source.aiDrillLengthPreference === "short" ||
+            source.aiDrillLengthPreference === "medium" ||
+            source.aiDrillLengthPreference === "long" ||
+            source.aiDrillLengthPreference === "auto"
+                ? source.aiDrillLengthPreference
+                : DEFAULT_PREFERENCES.aiDrillLengthPreference,
     };
 }
 

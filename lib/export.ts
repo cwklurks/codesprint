@@ -6,6 +6,7 @@
  */
 
 import type { SessionRecord } from "./storage/session-history";
+import type { CustomSnippetRecord } from "./storage/idb-store";
 import { idbGetAll, idbPutMany, STORES } from "./storage/idb-store";
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,7 @@ export type ExportData = {
     version: number;
     exportedAt: string;
     sessions: SessionRecord[];
+    customSnippets?: CustomSnippetRecord[];  // NEW - AI drills and user snippets
 };
 
 export type ImportResult = {
@@ -25,6 +27,8 @@ export type ImportResult = {
     duplicates: number;
     invalid: number;
     total: number;
+    customSnippetsImported?: number;  // NEW
+    customSnippetsDuplicates?: number;  // NEW
 };
 
 // ---------------------------------------------------------------------------
@@ -32,21 +36,26 @@ export type ImportResult = {
 // ---------------------------------------------------------------------------
 
 export async function exportSessions(format: ExportFormat = "json"): Promise<string> {
-    const sessions = await idbGetAll<SessionRecord>(STORES.sessions);
+    const [sessions, customSnippets] = await Promise.all([
+        idbGetAll<SessionRecord>(STORES.sessions),
+        idbGetAll<CustomSnippetRecord>(STORES.customSnippets),
+    ]);
 
     // Sort by date descending
-    const sorted = [...sessions].sort(
+    const sortedSessions = [...sessions].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 
     if (format === "csv") {
-        return sessionsToCSV(sorted);
+        // CSV only exports sessions (custom snippets are JSON-only)
+        return sessionsToCSV(sortedSessions);
     }
 
     const data: ExportData = {
-        version: 1,
+        version: 2,  // Bumped version for custom snippets
         exportedAt: new Date().toISOString(),
-        sessions: sorted,
+        sessions: sortedSessions,
+        customSnippets,  // NEW - include custom snippets
     };
 
     return JSON.stringify(data, null, 2);
@@ -85,57 +94,84 @@ function csvEscape(value: unknown): string {
 export async function importSessions(content: string): Promise<ImportResult> {
     const parsed = parseImportData(content);
 
-    if (parsed.length === 0) {
+    if (parsed.sessions.length === 0 && parsed.customSnippets.length === 0) {
         return { imported: 0, duplicates: 0, invalid: 0, total: 0 };
     }
 
-    // Validate records
-    const valid: SessionRecord[] = [];
+    // Validate and import sessions
+    const validSessions: SessionRecord[] = [];
     let invalid = 0;
-    for (const record of parsed) {
+    for (const record of parsed.sessions) {
         if (isValidSessionRecord(record)) {
-            valid.push(record);
+            validSessions.push(record);
         } else {
             invalid++;
         }
     }
 
-    // Deduplicate against existing records
-    const existing = await idbGetAll<SessionRecord>(STORES.sessions);
-    const existingIds = new Set(existing.map((r) => r.id));
+    // Deduplicate sessions against existing records
+    const existingSessions = await idbGetAll<SessionRecord>(STORES.sessions);
+    const existingSessionIds = new Set(existingSessions.map((r) => r.id));
+    const newSessions = validSessions.filter((r) => !existingSessionIds.has(r.id));
+    const sessionDuplicates = validSessions.length - newSessions.length;
 
-    const newRecords = valid.filter((r) => !existingIds.has(r.id));
-    const duplicates = valid.length - newRecords.length;
+    if (newSessions.length > 0) {
+        await idbPutMany<SessionRecord>(STORES.sessions, newSessions);
+    }
 
-    if (newRecords.length > 0) {
-        await idbPutMany<SessionRecord>(STORES.sessions, newRecords);
+    // Validate and import custom snippets
+    const validSnippets: CustomSnippetRecord[] = [];
+    for (const record of parsed.customSnippets) {
+        if (isValidCustomSnippetRecord(record)) {
+            validSnippets.push(record as CustomSnippetRecord);
+        }
+    }
+
+    // Deduplicate snippets against existing records
+    const existingSnippets = await idbGetAll<CustomSnippetRecord>(STORES.customSnippets);
+    const existingSnippetIds = new Set(existingSnippets.map((r) => r.id));
+    const newSnippets = validSnippets.filter((r) => !existingSnippetIds.has(r.id));
+    const snippetDuplicates = validSnippets.length - newSnippets.length;
+
+    if (newSnippets.length > 0) {
+        await idbPutMany<CustomSnippetRecord>(STORES.customSnippets, newSnippets);
     }
 
     return {
-        imported: newRecords.length,
-        duplicates,
+        imported: newSessions.length,
+        duplicates: sessionDuplicates,
         invalid,
-        total: parsed.length,
+        total: parsed.sessions.length + parsed.customSnippets.length,
+        customSnippetsImported: newSnippets.length,
+        customSnippetsDuplicates: snippetDuplicates,
     };
 }
 
-function parseImportData(content: string): unknown[] {
+type ParsedImportData = {
+    sessions: unknown[];
+    customSnippets: unknown[];
+};
+
+function parseImportData(content: string): ParsedImportData {
     try {
         const json = JSON.parse(content);
 
-        // ExportData format
-        if (json && typeof json === "object" && Array.isArray(json.sessions)) {
-            return json.sessions;
+        // ExportData format with custom snippets (v2+)
+        if (json && typeof json === "object") {
+            return {
+                sessions: Array.isArray(json.sessions) ? json.sessions : [],
+                customSnippets: Array.isArray(json.customSnippets) ? json.customSnippets : [],
+            };
         }
 
-        // Plain array format
+        // Plain array format (sessions only, legacy)
         if (Array.isArray(json)) {
-            return json;
+            return { sessions: json, customSnippets: [] };
         }
 
-        return [];
+        return { sessions: [], customSnippets: [] };
     } catch {
-        return [];
+        return { sessions: [], customSnippets: [] };
     }
 }
 
@@ -150,6 +186,18 @@ function isValidSessionRecord(value: unknown): value is SessionRecord {
         typeof r.wpm === "number" &&
         typeof r.accuracy === "number" &&
         typeof r.elapsedMs === "number"
+    );
+}
+
+function isValidCustomSnippetRecord(value: unknown): value is CustomSnippetRecord {
+    if (!value || typeof value !== "object") return false;
+    const r = value as Record<string, unknown>;
+    return (
+        typeof r.id === "string" &&
+        typeof r.title === "string" &&
+        typeof r.content === "string" &&
+        typeof r.language === "string" &&
+        typeof r.createdAt === "string"
     );
 }
 

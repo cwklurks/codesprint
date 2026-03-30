@@ -8,6 +8,7 @@ import {
     SurfaceStyle,
     SyntaxHighlightingMode,
     ThemePreset,
+    SnippetLength,
     THEME_PRESETS,
     STORAGE_KEY,
     computeCaretHeight,
@@ -29,6 +30,12 @@ type PreferencesContextValue = {
     setDebugGapBuffer: (enabled: boolean) => void;
     setSpacedRepetitionEnabled: (enabled: boolean) => void;
     setAdaptiveDifficultyEnabled: (enabled: boolean) => void;
+    // NEW - AI drill preferences
+    setAIDrillsEnabled: (enabled: boolean) => void;
+    setAIProvider: (provider: "claude" | "openai") => void;
+    setAIMaxDrillsPerDay: (limit: number) => void;
+    setAIAutoGenerate: (enabled: boolean) => void;
+    setAIDrillLengthPreference: (preference: SnippetLength | "auto") => void;
 };
 
 const LIVE_STATS_MIGRATION_KEY = "codesprint-live-stats-default-v1";
@@ -203,6 +210,28 @@ export function PreferencesProvider({
         setPreferences((prev) => ({ ...prev, adaptiveDifficultyEnabled: enabled }));
     }, []);
 
+    // NEW - AI drill preferences setters
+    const setAIDrillsEnabled = useCallback((enabled: boolean) => {
+        setPreferences((prev) => ({ ...prev, aiDrillsEnabled: enabled }));
+    }, []);
+
+    const setAIProvider = useCallback((provider: "claude" | "openai") => {
+        setPreferences((prev) => ({ ...prev, aiProvider: provider }));
+    }, []);
+
+    const setAIMaxDrillsPerDay = useCallback((limit: number) => {
+        const clamped = Math.min(1000, Math.max(1, Math.round(limit)));
+        setPreferences((prev) => ({ ...prev, aiMaxDrillsPerDay: clamped }));
+    }, []);
+
+    const setAIAutoGenerate = useCallback((enabled: boolean) => {
+        setPreferences((prev) => ({ ...prev, aiAutoGenerate: enabled }));
+    }, []);
+
+    const setAIDrillLengthPreference = useCallback((preference: SnippetLength | "auto") => {
+        setPreferences((prev) => ({ ...prev, aiDrillLengthPreference: preference }));
+    }, []);
+
     useEffect(() => {
         if (typeof document === "undefined") return;
         document.documentElement.setAttribute(
@@ -227,6 +256,12 @@ export function PreferencesProvider({
             setDebugGapBuffer,
             setSpacedRepetitionEnabled,
             setAdaptiveDifficultyEnabled,
+            // NEW - AI drill preferences
+            setAIDrillsEnabled,
+            setAIProvider,
+            setAIMaxDrillsPerDay,
+            setAIAutoGenerate,
+            setAIDrillLengthPreference,
         }),
         [
             preferences,
@@ -243,6 +278,12 @@ export function PreferencesProvider({
             setDebugGapBuffer,
             setSpacedRepetitionEnabled,
             setAdaptiveDifficultyEnabled,
+            // NEW - AI drill preferences
+            setAIDrillsEnabled,
+            setAIProvider,
+            setAIMaxDrillsPerDay,
+            setAIAutoGenerate,
+            setAIDrillLengthPreference,
         ]
     );
 
@@ -281,4 +322,4 @@ export const THEME_OPTIONS: Array<{ value: ThemePreset; label: string }> = [
 ];
 
 export { DEFAULT_PREFERENCES, THEME_PRESETS } from "@/lib/preferences-core";
-export type { ThemePreset, SurfaceStyle, InterfaceMode, PreferencesState, SyntaxHighlightingMode } from "@/lib/preferences-core";
+export type { ThemePreset, SurfaceStyle, InterfaceMode, PreferencesState, SyntaxHighlightingMode, SnippetLength } from "@/lib/preferences-core";
