@@ -36,7 +36,7 @@ export function useAIDrills(
 ): UseAIDrillsReturn {
     const [state, setState] = useState<AIDrillState>({ status: "idle" });
     const currentDrillRef = useRef<DrillResponse | null>(null);
-    const currentDrillMetaRef = useRef<{ provider: AIProvider; costUsd: number; tokensUsed: number } | null>(null);
+    const currentDrillMetaRef = useRef<{ provider: AIProvider; costUsd: number; tokensUsed: number; model: string } | null>(null);
     const currentRequestRef = useRef<DrillRequest | null>(null);
 
     const canGenerate = preferences.aiDrillsEnabled && getActiveApiKey() !== null;
@@ -98,6 +98,7 @@ export function useAIDrills(
                 provider,
                 costUsd: data.costUsd,
                 tokensUsed: data.tokensUsed,
+                model: data.model,
             };
 
             setState({
@@ -136,7 +137,7 @@ export function useAIDrills(
                 source: "ai",
                 aiMetadata: {
                     provider: meta.provider,
-                    model: meta.provider === "claude" ? "claude-3-haiku" : "gpt-4o-mini",
+                    model: meta.model,
                     reasoning: drill.reasoning,
                     focusAreas: drill.focusAreas,
                     weakPatternsInput: request.targetTokenCategories,
@@ -161,7 +162,7 @@ export function useAIDrills(
             currentRequestRef.current = null;
 
             return snippet;
-        } catch (_error) {
+        } catch {
             // Error surfaced via state
             setState({ status: "error", error: "Failed to save drill", code: "SAVE_ERROR" });
             return null;

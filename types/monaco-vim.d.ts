@@ -1,7 +1,21 @@
 declare module "monaco-vim" {
-    export type VimModeController = {
-        dispose: () => void;
-    };
+    import type { editor } from "monaco-editor";
 
-    export function initVimMode(editor: unknown, statusNode?: HTMLElement | null): VimModeController;
+    interface VimMode {
+        /** Disposes the vim mode and cleans up resources */
+        dispose(): void;
+    }
+
+    /**
+     * Initializes Vim mode for a Monaco Editor instance.
+     * @param editor - The Monaco editor instance
+     * @param statusBarNode - DOM node for the status bar (optional)
+     * @returns VimMode instance with dispose method
+     */
+    export function initVimMode(
+        editor: editor.IStandaloneCodeEditor,
+        statusBarNode?: HTMLElement | null
+    ): VimMode;
+
+    export type { VimMode };
 }

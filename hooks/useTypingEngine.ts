@@ -25,6 +25,8 @@ type UseTypingEngineProps = {
     onFinish?: () => void;
 };
 
+import { MS_PER_MINUTE, WORD_LENGTH_CHARS } from "@/lib/constants";
+
 export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const { preferences } = usePreferences();
     const INDENT_WIDTH = 4;
@@ -108,20 +110,20 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
             const { cursorIndex, totalKeystrokes, wrongCharsSize, lastKeystrokes } = statsRef.current;
 
-            const minutes = elapsed / 60000;
-            const rawWpm = Math.round((totalKeystrokes / 5) / minutes);
+            const minutes = elapsed / MS_PER_MINUTE;
+            const rawWpm = Math.round((totalKeystrokes / WORD_LENGTH_CHARS) / minutes);
             // Approximate net wpm for history (using simple correct chars count for smoothness in graph)
             // For the live stat we use the strict "perfect word" logic, but for history graph 
             // a smoother approximation (cursor - errors) is often preferred to avoid jagged drops.
             // However, to be consistent, we should ideally use the same logic. 
             // But calculating perfect words inside this interval without access to full state/snippet is hard.
             // Let's stick to the previous approximation for the graph for now, or use correctKeystrokes.
-            const netWpm = Math.max(0, Math.round(((cursorIndex - wrongCharsSize) / 5) / minutes));
+            const netWpm = Math.max(0, Math.round(((cursorIndex - wrongCharsSize) / WORD_LENGTH_CHARS) / minutes));
 
             // Burst: Instantaneous Raw WPM over the last second
             // We track lastKeystrokes in the ref
             const keystrokesDelta = totalKeystrokes - lastKeystrokes;
-            const burst = Math.round((keystrokesDelta / 5) * 60);
+            const burst = Math.round((keystrokesDelta / WORD_LENGTH_CHARS) * 60);
 
             // Update lastKeystrokes for next tick
             statsRef.current.lastKeystrokes = totalKeystrokes;

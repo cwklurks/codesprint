@@ -111,9 +111,9 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
     const isPreview = ai.state.status === "preview";
     const isError = ai.state.status === "error";
 
-    const drill = isPreview ? (ai.state as { status: "preview"; drill: { title: string; content: string; explanation: string; focusAreas: string[]; estimatedDifficulty: "easy" | "medium" | "hard"; }; costUsd: number; provider: "claude" | "openai"; }).drill : null;
+    const drill = isPreview ? (ai.state as { status: "preview"; drill: { title: string; content: string; explanation: string; focusAreas: string[]; estimatedDifficulty: "easy" | "medium" | "hard"; }; costUsd: number; provider: "claude" | "openai" | "fireworks"; }).drill : null;
     const cost = isPreview ? (ai.state as { status: "preview"; costUsd: number; }).costUsd : 0;
-    const provider = isPreview ? (ai.state as { status: "preview"; provider: "claude" | "openai"; }).provider : null;
+    const provider = isPreview ? (ai.state as { status: "preview"; provider: "claude" | "openai" | "fireworks"; }).provider : null;
 
     const lineCount = drill ? drill.content.split("\n").length : 0;
 
@@ -230,7 +230,7 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                                 </Badge>
                                 <Text>{lineCount} lines</Text>
                                 <Text>~${cost.toFixed(3)}</Text>
-                                <Text>{provider === "claude" ? "claude-3-haiku" : "gpt-4o-mini"}</Text>
+                                <Text>{provider === "claude" ? "claude-haiku-4-5" : provider === "fireworks" ? "llama-v3p1-70b" : "gpt-4o-mini"}</Text>
                             </HStack>
                         )}
 

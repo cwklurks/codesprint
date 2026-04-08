@@ -25,10 +25,10 @@ export default function LiveStats({ wpm, accuracy, label = "Live WPM" }: LiveSta
                 <Text>Accuracy</Text>
             </Flex>
             <Flex justify="space-between" align="baseline">
-                <Text fontSize="2xl" fontWeight={700}>
+                <Text fontSize="2xl" fontWeight={700} aria-live="polite" aria-label="Words per minute">
                     {wpm == null ? "—" : Math.max(0, Math.round(wpm))}
                 </Text>
-                <Text fontSize="2xl" fontWeight={700}>
+                <Text fontSize="2xl" fontWeight={700} aria-live="polite" aria-label="Accuracy percentage">
                     {(accuracy * 100).toFixed(0)}%
                 </Text>
             </Flex>

@@ -71,7 +71,7 @@ export type PreferencesState = {
     adaptiveDifficultyEnabled: boolean;
     // NEW - AI drill preferences
     aiDrillsEnabled: boolean;
-    aiProvider: "claude" | "openai";
+    aiProvider: "claude" | "openai" | "fireworks";
     aiMaxDrillsPerDay: number;
     aiAutoGenerate: boolean;
     aiDrillLengthPreference: SnippetLength | "auto";
@@ -479,8 +479,8 @@ export function sanitizePreferences(value: unknown): PreferencesState {
                 ? source.aiDrillsEnabled
                 : DEFAULT_PREFERENCES.aiDrillsEnabled,
         aiProvider:
-            source.aiProvider === "openai"
-                ? "openai"
+            source.aiProvider === "claude" || source.aiProvider === "openai" || source.aiProvider === "fireworks"
+                ? source.aiProvider
                 : DEFAULT_PREFERENCES.aiProvider,
         aiMaxDrillsPerDay:
             typeof source.aiMaxDrillsPerDay === "number" && source.aiMaxDrillsPerDay >= 1 && source.aiMaxDrillsPerDay <= 1000

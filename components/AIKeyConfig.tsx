@@ -22,11 +22,13 @@ export function AIKeyConfig() {
 
     const [claudeKey, setClaudeKey] = useState("");
     const [openaiKey, setOpenaiKey] = useState("");
+    const [fireworksKey, setFireworksKey] = useState("");
     const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
     const [testError, setTestError] = useState<string | null>(null);
 
     const hasClaudeKey = hasApiKey("claude");
     const hasOpenaiKey = hasApiKey("openai");
+    const hasFireworksKey = hasApiKey("fireworks");
     const activeProvider = preferences.aiProvider;
 
     const handleSaveClaude = useCallback(() => {
@@ -44,6 +46,14 @@ export function AIKeyConfig() {
             setTestStatus("idle");
         }
     }, [openaiKey]);
+
+    const handleSaveFireworks = useCallback(() => {
+        if (fireworksKey.trim()) {
+            storeApiKey("fireworks", fireworksKey.trim());
+            setFireworksKey("");
+            setTestStatus("idle");
+        }
+    }, [fireworksKey]);
 
     const handleClear = useCallback((provider: AIProvider) => {
         clearApiKey(provider);
@@ -244,6 +254,61 @@ export function AIKeyConfig() {
                 )}
             </Box>
 
+            {/* Fireworks */}
+            <Box mb={4}>
+                <Flex align="center" justify="space-between" mb={2}>
+                    <Text fontSize="sm" fontWeight={500}>Fireworks API Key</Text>
+                    <Flex gap={2}>
+                        {hasFireworksKey && (
+                            <Badge size="sm" colorScheme="green">
+                                {activeProvider === "fireworks" ? "Active" : "Available"}
+                            </Badge>
+                        )}
+                    </Flex>
+                </Flex>
+                {hasFireworksKey ? (
+                    <Flex gap={2}>
+                        <Input
+                            type="password"
+                            value="••••••••••••"
+                            disabled
+                            size="sm"
+                        />
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleClear("fireworks")}
+                        >
+                            Clear
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={activeProvider === "fireworks" ? "solid" : "outline"}
+                            onClick={() => setAIProvider("fireworks")}
+                        >
+                            Use
+                        </Button>
+                    </Flex>
+                ) : (
+                    <Flex gap={2}>
+                        <Input
+                            type="password"
+                            placeholder="fw-..."
+                            value={fireworksKey}
+                            onChange={(e) => setFireworksKey(e.target.value)}
+                            size="sm"
+                        />
+                        <Button
+                            size="sm"
+                            onClick={handleSaveFireworks}
+                            disabled={!fireworksKey.trim()}
+                        >
+                            Save
+                        </Button>
+                    </Flex>
+                )}
+            </Box>
+
             {/* Test Connection */}
             <Flex gap={2} mb={4} align="center">
                 <Button
@@ -251,7 +316,7 @@ export function AIKeyConfig() {
                     variant="outline"
                     onClick={handleTest}
                     loading={testStatus === "testing"}
-                    disabled={!hasClaudeKey && !hasOpenaiKey}
+                    disabled={!hasClaudeKey && !hasOpenaiKey && !hasFireworksKey}
                 >
                     Test Connection
                 </Button>
@@ -292,7 +357,7 @@ export function AIKeyConfig() {
                     size="sm"
                     variant={preferences.aiDrillsEnabled ? "solid" : "outline"}
                     onClick={() => setAIDrillsEnabled(!preferences.aiDrillsEnabled)}
-                    disabled={!hasClaudeKey && !hasOpenaiKey}
+                    disabled={!hasClaudeKey && !hasOpenaiKey && !hasFireworksKey}
                 >
                     {preferences.aiDrillsEnabled ? "On" : "Off"}
                 </Button>

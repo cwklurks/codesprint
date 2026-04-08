@@ -56,7 +56,7 @@ export type CustomSnippetRecord = {
     source?: "user" | "ai";
     // NEW - AI-specific metadata (only when source === "ai")
     aiMetadata?: {
-        provider: "claude" | "openai";
+        provider: "claude" | "openai" | "fireworks";
         model: string;
         reasoning: string;           // why this drill was generated
         focusAreas: string[];        // token categories targeted

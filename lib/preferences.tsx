@@ -32,7 +32,7 @@ type PreferencesContextValue = {
     setAdaptiveDifficultyEnabled: (enabled: boolean) => void;
     // NEW - AI drill preferences
     setAIDrillsEnabled: (enabled: boolean) => void;
-    setAIProvider: (provider: "claude" | "openai") => void;
+    setAIProvider: (provider: "claude" | "openai" | "fireworks") => void;
     setAIMaxDrillsPerDay: (limit: number) => void;
     setAIAutoGenerate: (enabled: boolean) => void;
     setAIDrillLengthPreference: (preference: SnippetLength | "auto") => void;
@@ -215,7 +215,7 @@ export function PreferencesProvider({
         setPreferences((prev) => ({ ...prev, aiDrillsEnabled: enabled }));
     }, []);
 
-    const setAIProvider = useCallback((provider: "claude" | "openai") => {
+    const setAIProvider = useCallback((provider: "claude" | "openai" | "fireworks") => {
         setPreferences((prev) => ({ ...prev, aiProvider: provider }));
     }, []);
 

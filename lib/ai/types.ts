@@ -34,7 +34,7 @@ export type DrillResponse = {
 };
 
 export type GeneratedDrill = DrillResponse & {
-    provider: "claude" | "openai";
+    provider: "claude" | "openai" | "fireworks";
     model: string;
     tokensUsed: number;
     costUsd: number;
@@ -48,7 +48,7 @@ export type GenerateApiRequest = DrillRequest;
 
 export type GenerateApiResponse = {
     snippet: DrillResponse;
-    provider: "claude" | "openai";
+    provider: "claude" | "openai" | "fireworks";
     model: string;
     tokensUsed: number;
     costUsd: number;
@@ -83,7 +83,7 @@ export interface RateLimitCheckResult {
 // ---------------------------------------------------------------------------
 
 export type AIMetadata = {
-    provider: "claude" | "openai";
+    provider: "claude" | "openai" | "fireworks";
     model: string;
     reasoning: string;           // why this drill was generated
     focusAreas: string[];        // token categories targeted

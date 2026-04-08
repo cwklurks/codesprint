@@ -5,7 +5,7 @@
 
 const KEY_PREFIX = "codesprint-ai-key-";
 
-export type AIProvider = "claude" | "openai";
+export type AIProvider = "claude" | "openai" | "fireworks";
 
 /**
  * Store an API key for a provider
@@ -41,11 +41,12 @@ export function hasApiKey(provider: AIProvider): boolean {
 
 /**
  * Get the active provider based on which key is available
- * Prefers Claude if both are available
+ * Prefers Claude, then OpenAI, then Fireworks
  */
 export function getActiveProvider(): AIProvider | null {
     if (hasApiKey("claude")) return "claude";
     if (hasApiKey("openai")) return "openai";
+    if (hasApiKey("fireworks")) return "fireworks";
     return null;
 }
 
@@ -63,6 +64,7 @@ export function getActiveApiKey(): string | null {
  */
 export function detectProviderFromKey(key: string): AIProvider | null {
     if (key.startsWith("sk-ant-")) return "claude";
+    if (key.startsWith("fw-")) return "fireworks";
     if (key.startsWith("sk-") || key.startsWith("sk-proj-")) return "openai";
     return null;
 }

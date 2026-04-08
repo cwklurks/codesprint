@@ -2,10 +2,17 @@
 
 import { Box } from "@chakra-ui/react";
 import Editor, { type OnMount } from "@monaco-editor/react";
-import { initVimMode } from "monaco-vim";
+import { initVimMode, type VimMode } from "monaco-vim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import { getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
+import {
+    CARET_BLINK_TIMEOUT_MS,
+    HEIGHT_BUFFER_LINES,
+    LINE_HEIGHT_MULTIPLIER,
+    MAX_EDITOR_HEIGHT,
+    MIN_EDITOR_HEIGHT,
+} from "@/lib/constants";
 import { THEME_PRESETS, usePreferences, type SurfaceStyle } from "@/lib/preferences";
 
 type MonacoModule = typeof import("monaco-editor");
@@ -22,8 +29,6 @@ type CodePanelProps = {
     syntaxHighlighting: "full" | "partial" | "none";
 };
 
-const LINE_HEIGHT_MULTIPLIER = 1.55;
-const HEIGHT_BUFFER_LINES = 4;
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
 
 export default function CodePanel({
@@ -48,14 +53,13 @@ export default function CodePanel({
     const caretBlinkTimeoutRef = useRef<number | null>(null);
     const [editorReadyToken, setEditorReadyToken] = useState(0);
     const caretUpdatePendingRef = useRef(false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vimModeRef = useRef<any>(null);
+    const vimModeRef = useRef<VimMode | null>(null);
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
 
     const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
     const estimatedHeight = useMemo(() => {
         const lines = content.split("\n").length + HEIGHT_BUFFER_LINES;
-        return Math.min(720, Math.max(320, lines * derivedLineHeight));
+        return Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_EDITOR_HEIGHT, lines * derivedLineHeight));
     }, [content, derivedLineHeight]);
     const snippetKey = useMemo(() => `${language}-${content.length}-${content.slice(0, 16)}`, [language, content]);
     const totalLines = useMemo(() => {
@@ -86,7 +90,7 @@ export default function CodePanel({
         caretBlinkTimeoutRef.current = window.setTimeout(() => {
             caretNode.classList.remove("cs-caret-active");
             caretBlinkTimeoutRef.current = null;
-        }, 650);
+        }, CARET_BLINK_TIMEOUT_MS);
     }, []);
 
     const ensureCaretNode = useCallback(() => {

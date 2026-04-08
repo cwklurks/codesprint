@@ -12,7 +12,7 @@ const mockLocalStorage = {
 
 vi.stubGlobal("window", { localStorage: mockLocalStorage });
 
-import { getLeaderboard, saveScore, clearLeaderboard } from "../leaderboard";
+import { getLeaderboard } from "../leaderboard";
 
 describe("getLeaderboard", () => {
     beforeEach(() => {

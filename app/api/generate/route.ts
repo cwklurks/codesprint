@@ -10,6 +10,7 @@ import { z } from "zod";
 import { buildPrompt, drillResponseSchema } from "@/lib/ai/prompt-builder";
 import { validateDrillResponse } from "@/lib/ai/response-parser";
 import type { DrillRequest, GenerateApiResponse, GenerateApiError } from "@/lib/ai/types";
+import { detectProviderFromKey } from "@/lib/ai/key-storage";
 
 const drillRequestSchema = z.object({
     language: z.enum(["javascript", "python", "java", "cpp"]),
@@ -53,6 +54,13 @@ export async function POST(request: Request) {
         return Response.json(error, { status: 401 });
     }
     const apiKey = authHeader.slice(7);
+    if (apiKey.length < 20) {
+        const error: GenerateApiError = {
+            error: "Invalid API key",
+            code: "INVALID_KEY",
+        };
+        return Response.json(error, { status: 400 });
+    }
 
     // 3. Parse + validate request body
     let body: unknown;
@@ -78,9 +86,14 @@ export async function POST(request: Request) {
     const drillRequest = parseResult.data;
 
     // 4. Determine provider from key prefix
-    const provider = apiKey.startsWith("sk-ant-")
-        ? "claude"
-        : "openai";
+    const provider = detectProviderFromKey(apiKey);
+    if (!provider) {
+        const error: GenerateApiError = {
+            error: "Unrecognized API key format",
+            code: "INVALID_KEY_FORMAT",
+        };
+        return Response.json(error, { status: 400 });
+    }
 
     // 5. Build prompt
     const { systemPrompt, userPrompt } = buildPrompt(drillRequest);
@@ -90,6 +103,8 @@ export async function POST(request: Request) {
         // Create provider with API key
         const model = provider === "claude"
             ? createAnthropic({ apiKey })("claude-haiku-4-5-20251001")
+            : provider === "fireworks"
+            ? createOpenAI({ apiKey, baseURL: "https://api.fireworks.ai/inference/v1" })("accounts/fireworks/models/llama-v3p1-70b-instruct")
             : createOpenAI({ apiKey })("gpt-4o-mini");
 
         const result = await generateText({
@@ -121,7 +136,11 @@ export async function POST(request: Request) {
         const response: GenerateApiResponse = {
             snippet: drillResponse,
             provider,
-            model: provider === "claude" ? "claude-3-haiku" : "gpt-4o-mini",
+            model: provider === "claude"
+                ? "claude-haiku-4-5"
+                : provider === "fireworks"
+                ? "llama-v3p1-70b-instruct"
+                : "gpt-4o-mini",
             tokensUsed: result.usage?.totalTokens ?? 0,
             costUsd: estimateCost(result.usage?.totalTokens ?? 0, provider),
         };
@@ -162,6 +181,10 @@ function estimateCost(totalTokens: number, provider: string): number {
     if (provider === "claude") {
         // Haiku: avg ~$3/M tokens (input + output blended)
         return (totalTokens * 3) / 1_000_000;
+    }
+    if (provider === "fireworks") {
+        // Llama 3.1 70B: ~$0.9/M tokens
+        return (totalTokens * 0.9) / 1_000_000;
     }
     // GPT-4o-mini: avg ~$0.375/M tokens (input + output blended)
     return (totalTokens * 0.375) / 1_000_000;
