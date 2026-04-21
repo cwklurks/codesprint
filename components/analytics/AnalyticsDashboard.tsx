@@ -13,6 +13,7 @@ import {
     type PersonalAverages,
 } from "@/lib/analytics/aggregations";
 import type { SupportedLanguage } from "@/lib/snippets";
+import WeakPatternDashboard from "@/components/analytics/WeakPatternDashboard";
 
 type AnalyticsDashboardProps = {
     onClose?: () => void;
@@ -585,6 +586,14 @@ export default function AnalyticsDashboard(_props: AnalyticsDashboardProps) {
                                     </Text>
                                 )}
                             </Box>
+                        </Box>
+
+                        {/* Weak Pattern Trends */}
+                        <Box>
+                            <Text fontWeight="bold" mb={3}>
+                                Syntax Category Trends
+                            </Text>
+                            <WeakPatternDashboard timeRange={timeRange} />
                         </Box>
                     </>
                 )}
