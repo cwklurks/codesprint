@@ -33,8 +33,7 @@ describe("aggregateCategoryErrorRates", () => {
         mockSessions.length = 0;
     });
 
-    it("returns all zero categories when no sessions have error data", () => {
-        mockSessions.push(makeSession({ errors: undefined, snippetContent: undefined }));
+    it("returns all zero categories when called with no sessions", () => {
         const rates = aggregateCategoryErrorRates([]);
         expect(rates.keyword.errors).toBe(0);
         expect(rates.keyword.totalChars).toBe(0);
@@ -79,6 +78,25 @@ describe("aggregateCategoryErrorRates", () => {
         const rates = aggregateCategoryErrorRates([s1, s2]);
         expect(rates.keyword.errors).toBe(2);
         expect(rates.keyword.totalChars).toBe(4);  // "if" * 2 sessions
+    });
+
+    it("counts totalChars for perfect sessions (errors=[]) so improvement is detectable", () => {
+        const content = "const x = 1;";
+        const perfectSession = makeSession({
+            language: "javascript",
+            snippetContent: content,
+            errors: [], // perfect session
+        });
+        const errorSession = makeSession({
+            language: "javascript",
+            snippetContent: content,
+            errors: [{ expected: "c", got: "x", index: 0 }],
+        });
+        const rates = aggregateCategoryErrorRates([perfectSession, errorSession]);
+        // Both sessions tokenized: keyword chars appear twice (5 * 2 = 10)
+        expect(rates.keyword.totalChars).toBe(10);
+        expect(rates.keyword.errors).toBe(1);
+        expect(rates.keyword.errorRate).toBeCloseTo(1 / 10, 3);
     });
 
     it("skips sessions missing errors or snippetContent", () => {

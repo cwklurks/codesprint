@@ -44,7 +44,7 @@ export function aggregateWeakPatternTrends(
 
 const ALL_CATEGORIES: TokenCategory[] = [
     "keyword", "operator", "delimiter", "identifier",
-    "literal", "string", "comment", "whitespace",
+    "literal", "whitespace", "comment", "string",
 ];
 
 function emptyRates(): Record<TokenCategory, CategoryRate> {
@@ -55,27 +55,22 @@ function emptyRates(): Record<TokenCategory, CategoryRate> {
     return out;
 }
 
-type CategoryMapCacheKey = string; // `${language}::${snippetContentHash}`
-function hashContent(content: string): string {
-    let hash = 0;
-    for (let i = 0; i < content.length; i++) {
-        hash = ((hash << 5) - hash + content.charCodeAt(i)) | 0;
-    }
-    return `${content.length}:${hash}`;
-}
-
 export function aggregateCategoryErrorRates(
     sessions: readonly SessionRecord[],
 ): Record<TokenCategory, CategoryRate> {
     const rates = emptyRates();
-    const cache = new Map<CategoryMapCacheKey, { map: TokenCategory[]; length: number }>();
+    const cache = new Map<string, { map: TokenCategory[]; length: number }>();
 
     for (const session of sessions) {
-        const errors = session.errors;
         const content = session.snippetContent;
-        if (!errors || !content || errors.length === 0) continue;
+        if (!content) continue;
+        // `errors` may be undefined (old records) or [] (perfect session).
+        // We skip old records entirely (no error-tracking data), but perfect
+        // sessions count toward totalChars so improvement is detectable.
+        const errors = session.errors;
+        if (errors === undefined) continue;
 
-        const key: CategoryMapCacheKey = `${session.language}::${hashContent(content)}`;
+        const key = `${session.language}::${session.snippetId}`;
         let entry = cache.get(key);
         if (!entry) {
             const tokens = tokenize(content, session.language);
@@ -84,7 +79,6 @@ export function aggregateCategoryErrorRates(
             cache.set(key, entry);
         }
 
-        // Total-chars accumulates once per session (weighted by how often each category appears)
         for (let i = 0; i < entry.length; i++) {
             rates[entry.map[i]].totalChars += 1;
         }
