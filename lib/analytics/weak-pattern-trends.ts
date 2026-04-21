@@ -49,7 +49,10 @@ export function aggregateWeakPatternTrends(
 
     const now = Date.now();
     const DAY_MS = 24 * 60 * 60 * 1000;
-    const windowDays = range === "day" ? 1 : range === "week" ? 7 : range === "month" ? 30 : Infinity;
+    // "all" clamps to a 365-day window so the previous period is well-defined
+    // (Infinity would make both windows `-Infinity`, producing a garbage
+    // period-over-period delta where every category reads as "declining").
+    const windowDays = range === "day" ? 1 : range === "week" ? 7 : range === "month" ? 30 : 365;
 
     const currentStart = now - windowDays * DAY_MS;
     const previousStart = now - 2 * windowDays * DAY_MS;
