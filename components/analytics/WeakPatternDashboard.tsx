@@ -176,14 +176,10 @@ export default function WeakPatternDashboard({
                 templateColumns={{ base: "repeat(2, 1fr)", md: "repeat(4, 1fr)" }}
                 gap={3}
             >
-                {summary.trends
-                    .filter((t) => t.samples > 0 && summary.timeSeries.some((s) => s.category === t.category))
-                    .map((t) => {
-                        const series = summary.timeSeries.find((s) => s.category === t.category)!;
-                        return (
-                            <CategoryCard key={t.category} trend={t} series={series} />
-                        );
-                    })}
+                {summary.trends.map((t) => {
+                    const series = summary.timeSeries.find((s) => s.category === t.category)!;
+                    return <CategoryCard key={t.category} trend={t} series={series} />;
+                })}
             </Grid>
         </Stack>
     );
