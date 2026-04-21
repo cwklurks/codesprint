@@ -45,8 +45,7 @@ export function aggregateWeakPatternTrends(
     range: TimeRange = "month",
     language?: SupportedLanguage,
 ): WeakPatternTrendsSummary {
-    const raw = getSessions(language ? { language } : undefined);
-    const all = language ? raw.filter((s) => s.language === language) : raw;
+    const all = getSessions(language ? { language } : undefined);
 
     const now = Date.now();
     const DAY_MS = 24 * 60 * 60 * 1000;

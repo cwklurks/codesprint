@@ -3,9 +3,14 @@ import type { SessionRecord } from "@/lib/storage/session-history";
 
 const mockSessions: SessionRecord[] = [];
 vi.mock("@/lib/storage/session-history", () => ({
-    getSessions: vi.fn(() => [...mockSessions]),
+    getSessions: vi.fn((filters?: { language?: string }) => {
+        let result = [...mockSessions];
+        if (filters?.language) result = result.filter((s) => s.language === filters.language);
+        return result;
+    }),
 }));
 
+import { getSessions } from "@/lib/storage/session-history";
 import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries, selectTopMovers, aggregateWeakPatternTrends } from "../weak-pattern-trends";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
@@ -316,5 +321,6 @@ describe("aggregateWeakPatternTrends (end-to-end)", () => {
         );
         const summary = aggregateWeakPatternTrends("all", "python");
         expect(summary.totalSessions).toBe(1);
+        expect(vi.mocked(getSessions)).toHaveBeenCalledWith({ language: "python" });
     });
 });
