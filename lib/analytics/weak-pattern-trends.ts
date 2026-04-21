@@ -96,3 +96,34 @@ export function aggregateCategoryErrorRates(
 
     return rates;
 }
+
+const MIN_SAMPLES_FOR_TREND = 10;
+const STABLE_THRESHOLD_PP = 2;
+
+export function computeCategoryTrend(
+    current: CategoryRate,
+    previous: CategoryRate,
+    samples: number,
+): CategoryTrend {
+    const deltaPp = (current.errorRate - previous.errorRate) * 100;
+
+    let status: CategoryTrend["status"];
+    if (samples < MIN_SAMPLES_FOR_TREND) {
+        status = "stable";
+    } else if (deltaPp < -STABLE_THRESHOLD_PP) {
+        status = "improving";
+    } else if (deltaPp > STABLE_THRESHOLD_PP) {
+        status = "declining";
+    } else {
+        status = "stable";
+    }
+
+    return {
+        category: current.category,
+        currentRate: current.errorRate,
+        previousRate: previous.errorRate,
+        deltaPercentagePoints: deltaPp,
+        status,
+        samples,
+    };
+}

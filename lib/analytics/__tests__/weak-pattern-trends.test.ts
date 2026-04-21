@@ -6,7 +6,7 @@ vi.mock("@/lib/storage/session-history", () => ({
     getSessions: vi.fn(() => [...mockSessions]),
 }));
 
-import { aggregateCategoryErrorRates } from "../weak-pattern-trends";
+import { aggregateCategoryErrorRates, computeCategoryTrend } from "../weak-pattern-trends";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
@@ -108,5 +108,38 @@ describe("aggregateCategoryErrorRates", () => {
         const rates = aggregateCategoryErrorRates([s1, s2]);
         expect(rates.keyword.errors).toBe(0);
         expect(rates.keyword.totalChars).toBe(0);
+    });
+});
+
+describe("computeCategoryTrend", () => {
+    it("flags improving category when current error rate drops more than 2pp", () => {
+        const current = { category: "operator" as const, errors: 5, totalChars: 100, errorRate: 0.05 };
+        const previous = { category: "operator" as const, errors: 12, totalChars: 100, errorRate: 0.12 };
+        const trend = computeCategoryTrend(current, previous, 50);
+        expect(trend.status).toBe("improving");
+        expect(trend.deltaPercentagePoints).toBeCloseTo(-7, 2);
+    });
+
+    it("flags declining category when current error rate climbs more than 2pp", () => {
+        const current = { category: "keyword" as const, errors: 10, totalChars: 100, errorRate: 0.10 };
+        const previous = { category: "keyword" as const, errors: 5, totalChars: 100, errorRate: 0.05 };
+        const trend = computeCategoryTrend(current, previous, 50);
+        expect(trend.status).toBe("declining");
+        expect(trend.deltaPercentagePoints).toBeCloseTo(5, 2);
+    });
+
+    it("flags stable when delta is within 2pp threshold", () => {
+        const current = { category: "identifier" as const, errors: 10, totalChars: 100, errorRate: 0.10 };
+        const previous = { category: "identifier" as const, errors: 11, totalChars: 100, errorRate: 0.11 };
+        const trend = computeCategoryTrend(current, previous, 50);
+        expect(trend.status).toBe("stable");
+    });
+
+    it("forces stable when samples under threshold (10 sessions)", () => {
+        const current = { category: "operator" as const, errors: 0, totalChars: 100, errorRate: 0 };
+        const previous = { category: "operator" as const, errors: 20, totalChars: 100, errorRate: 0.20 };
+        const trend = computeCategoryTrend(current, previous, 5);
+        expect(trend.status).toBe("stable");
+        expect(trend.samples).toBe(5);
     });
 });
