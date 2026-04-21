@@ -4,6 +4,7 @@ import type { TokenCategory } from "@/lib/tokenizer";
 import type { SupportedLanguage } from "@/lib/snippets";
 import type { TimeRange } from "@/lib/analytics/aggregations";
 import { tokenize, buildCategoryMap } from "@/lib/tokenizer";
+import { getSessions } from "@/lib/storage/session-history";
 
 export type CategoryRate = {
     category: TokenCategory;
@@ -35,17 +36,54 @@ export type WeakPatternTrendsSummary = {
     topDeclining: CategoryTrend[];
 };
 
+export const ALL_CATEGORIES: TokenCategory[] = [
+    "keyword", "operator", "delimiter", "identifier",
+    "literal", "whitespace", "comment", "string",
+];
+
 export function aggregateWeakPatternTrends(
     range: TimeRange = "month",
     language?: SupportedLanguage,
 ): WeakPatternTrendsSummary {
-    throw new Error("not implemented");
-}
+    const raw = getSessions(language ? { language } : undefined);
+    const all = language ? raw.filter((s) => s.language === language) : raw;
 
-const ALL_CATEGORIES: TokenCategory[] = [
-    "keyword", "operator", "delimiter", "identifier",
-    "literal", "whitespace", "comment", "string",
-];
+    const now = Date.now();
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const windowDays = range === "day" ? 1 : range === "week" ? 7 : range === "month" ? 30 : Infinity;
+
+    const currentStart = now - windowDays * DAY_MS;
+    const previousStart = now - 2 * windowDays * DAY_MS;
+
+    const current = all.filter((s) => new Date(s.date).getTime() >= currentStart);
+    const previous = all.filter((s) => {
+        const t = new Date(s.date).getTime();
+        return t >= previousStart && t < currentStart;
+    });
+
+    const sessionsWithErrorData = current.filter(
+        (s) => s.errors !== undefined && s.snippetContent !== undefined,
+    ).length;
+
+    const currentRates = aggregateCategoryErrorRates(current);
+    const previousRates = aggregateCategoryErrorRates(previous);
+
+    const trends: CategoryTrend[] = ALL_CATEGORIES.map((c) =>
+        computeCategoryTrend(currentRates[c], previousRates[c], sessionsWithErrorData),
+    );
+
+    const timeSeries = buildCategoryTimeSeries(current);
+    const { topImproving, topDeclining } = selectTopMovers(trends);
+
+    return {
+        sessionsWithErrorData,
+        totalSessions: current.length,
+        trends,
+        timeSeries,
+        topImproving,
+        topDeclining,
+    };
+}
 
 function emptyRates(): Record<TokenCategory, CategoryRate> {
     const out = {} as Record<TokenCategory, CategoryRate>;

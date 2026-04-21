@@ -6,7 +6,7 @@ vi.mock("@/lib/storage/session-history", () => ({
     getSessions: vi.fn(() => [...mockSessions]),
 }));
 
-import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries, selectTopMovers } from "../weak-pattern-trends";
+import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries, selectTopMovers, aggregateWeakPatternTrends } from "../weak-pattern-trends";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
@@ -246,5 +246,75 @@ describe("selectTopMovers", () => {
         const { topImproving, topDeclining } = selectTopMovers(trends);
         expect(topImproving).toEqual([]);
         expect(topDeclining).toEqual([]);
+    });
+});
+
+describe("aggregateWeakPatternTrends (end-to-end)", () => {
+    beforeEach(() => {
+        mockSessions.length = 0;
+    });
+
+    it("reports zero sessions when no error data exists", () => {
+        mockSessions.push(makeSession({ errors: undefined, snippetContent: undefined }));
+        const summary = aggregateWeakPatternTrends("month");
+        expect(summary.sessionsWithErrorData).toBe(0);
+        expect(summary.totalSessions).toBe(1);
+        expect(summary.topImproving).toEqual([]);
+        expect(summary.topDeclining).toEqual([]);
+    });
+
+    it("classifies keyword as improving when current window has fewer keyword errors than prior window", () => {
+        const now = Date.now();
+        const DAY = 24 * 60 * 60 * 1000;
+        const content = "const x = 1;";
+
+        // 15 previous-window sessions (45-30 days ago), 3 keyword errors each
+        for (let i = 0; i < 15; i++) {
+            mockSessions.push(
+                makeSession({
+                    date: new Date(now - (45 - i) * DAY).toISOString(),
+                    language: "javascript",
+                    snippetContent: content,
+                    errors: [
+                        { expected: "c", got: "x", index: 0 },
+                        { expected: "o", got: "x", index: 1 },
+                        { expected: "n", got: "x", index: 2 },
+                    ],
+                }),
+            );
+        }
+
+        // 15 current-window sessions (last 30 days), 0 keyword errors each
+        for (let i = 0; i < 15; i++) {
+            mockSessions.push(
+                makeSession({
+                    date: new Date(now - (29 - i) * DAY).toISOString(),
+                    language: "javascript",
+                    snippetContent: content,
+                    errors: [],
+                }),
+            );
+        }
+
+        const summary = aggregateWeakPatternTrends("month");
+        expect(summary.sessionsWithErrorData).toBeGreaterThan(0);
+        expect(summary.topImproving.some((t) => t.category === "keyword")).toBe(true);
+    });
+
+    it("filters by language when language filter provided", () => {
+        mockSessions.push(
+            makeSession({
+                language: "javascript",
+                snippetContent: "const x = 1;",
+                errors: [{ expected: "c", got: "x", index: 0 }],
+            }),
+            makeSession({
+                language: "python",
+                snippetContent: "def f(): pass",
+                errors: [{ expected: "d", got: "x", index: 0 }],
+            }),
+        );
+        const summary = aggregateWeakPatternTrends("all", "python");
+        expect(summary.totalSessions).toBe(1);
     });
 });
