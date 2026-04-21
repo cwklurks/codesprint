@@ -6,7 +6,7 @@ vi.mock("@/lib/storage/session-history", () => ({
     getSessions: vi.fn(() => [...mockSessions]),
 }));
 
-import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries } from "../weak-pattern-trends";
+import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries, selectTopMovers } from "../weak-pattern-trends";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
@@ -195,5 +195,56 @@ describe("buildCategoryTimeSeries", () => {
         const series = buildCategoryTimeSeries([]);
         expect(series).toHaveLength(8);
         for (const s of series) expect(s.points).toEqual([]);
+    });
+});
+
+describe("selectTopMovers", () => {
+    function makeTrend(
+        category: import("@/lib/tokenizer").TokenCategory,
+        deltaPp: number,
+        status: "improving" | "declining" | "stable",
+    ): import("../weak-pattern-trends").CategoryTrend {
+        return {
+            category,
+            currentRate: 0.05,
+            previousRate: 0.05 + deltaPp / 100,
+            deltaPercentagePoints: deltaPp,
+            status,
+            samples: 20,
+        };
+    }
+
+    it("returns top 3 improving sorted by largest drop first", () => {
+        const trends = [
+            makeTrend("keyword", -8, "improving"),
+            makeTrend("operator", -3, "improving"),
+            makeTrend("delimiter", -10, "improving"),
+            makeTrend("identifier", -5, "improving"),
+            makeTrend("string", -1, "stable"),
+        ];
+        const { topImproving, topDeclining } = selectTopMovers(trends);
+        expect(topImproving.map((t) => t.category)).toEqual(["delimiter", "keyword", "identifier"]);
+        expect(topDeclining).toEqual([]);
+    });
+
+    it("returns top 3 declining sorted by largest climb first", () => {
+        const trends = [
+            makeTrend("keyword", 8, "declining"),
+            makeTrend("operator", 3, "declining"),
+            makeTrend("delimiter", 12, "declining"),
+            makeTrend("identifier", 5, "declining"),
+        ];
+        const { topDeclining } = selectTopMovers(trends);
+        expect(topDeclining.map((t) => t.category)).toEqual(["delimiter", "keyword", "identifier"]);
+    });
+
+    it("ignores stable trends in both lists", () => {
+        const trends = [
+            makeTrend("keyword", 0.5, "stable"),
+            makeTrend("operator", -0.3, "stable"),
+        ];
+        const { topImproving, topDeclining } = selectTopMovers(trends);
+        expect(topImproving).toEqual([]);
+        expect(topDeclining).toEqual([]);
     });
 });

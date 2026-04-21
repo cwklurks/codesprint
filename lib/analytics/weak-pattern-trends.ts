@@ -164,3 +164,22 @@ export function buildCategoryTimeSeries(
 
     return ALL_CATEGORIES.map((c) => seriesByCategory[c]);
 }
+
+const TOP_MOVERS = 3;
+
+export function selectTopMovers(trends: readonly CategoryTrend[]): {
+    topImproving: CategoryTrend[];
+    topDeclining: CategoryTrend[];
+} {
+    const improving = trends
+        .filter((t) => t.status === "improving")
+        .sort((a, b) => a.deltaPercentagePoints - b.deltaPercentagePoints)
+        .slice(0, TOP_MOVERS);
+
+    const declining = trends
+        .filter((t) => t.status === "declining")
+        .sort((a, b) => b.deltaPercentagePoints - a.deltaPercentagePoints)
+        .slice(0, TOP_MOVERS);
+
+    return { topImproving: improving, topDeclining: declining };
+}
