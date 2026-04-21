@@ -175,7 +175,7 @@ npm start
 
 - **Custom Renderer** — Migrating from Monaco to a WebGL/Canvas text renderer for zero DOM overhead (Gap Buffer implementation in progress).
 - **Tree-sitter Integration** — Semantic typing that lets you skip whitespace and formatting irrelevant to code logic.
-- **Advanced Analytics** — Pattern weakness identification across sessions.
+- **Advanced Analytics** — Cross-session syntax category trend view with top-movers panels and sparklines (accessible via `A` / header icon). ✓ Shipped.
 
 ## License
 
