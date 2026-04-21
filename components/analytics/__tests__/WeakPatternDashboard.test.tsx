@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ChakraProvider, defaultSystem } from "@chakra-ui/react";
 import type { ReactNode } from "react";
+import "@testing-library/jest-dom/vitest";
 
 vi.mock("@/lib/analytics/weak-pattern-trends", () => ({
     aggregateWeakPatternTrends: vi.fn(),
