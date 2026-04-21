@@ -4,7 +4,10 @@
       "Bash(wc:*)",
       "Bash(bunx playwright:*)",
       "Bash(./node_modules/.bin/vitest run:*)",
-      "Bash(git -C /Users/connork/code/TS/hackerthihng/codesprint show main:hooks/useAchievements.ts)"
+      "Bash(git -C /Users/connork/code/TS/hackerthihng/codesprint show main:hooks/useAchievements.ts)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(./node_modules/.bin/tsc --noEmit --pretty)",
+      "Bash(./node_modules/.bin/next build:*)"
     ]
   }
 }
