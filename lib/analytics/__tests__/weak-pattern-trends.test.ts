@@ -324,33 +324,31 @@ describe("aggregateWeakPatternTrends (end-to-end)", () => {
         expect(vi.mocked(getSessions)).toHaveBeenCalledWith({ language: "python" });
     });
 
-    it("does not classify every category as declining for range='all' when previous window is empty", () => {
-        // Regression test: an earlier bug used `windowDays = Infinity` for "all",
-        // which made the previous-window filter impossible (`t >= -Infinity && t < -Infinity`).
-        // That produced a `previous` array of 0 sessions → previousRate = 0 for every
-        // category → every category with any current errors got deltaPp > 0 →
-        // everything classified as "declining". The fix clamps to a 365-day window.
+    it("forces all trends to stable when previous window has no sessions", () => {
+        // Regression: when the user has less than 2×windowDays of history, the
+        // previous window is empty. Without the min-samples guard, every category
+        // with any current errors compares against previousRate=0 and reads as
+        // "declining". Fix: samples = min(current, previous) so MIN_SAMPLES
+        // forces "stable" when either window is thin.
         const now = Date.now();
         const DAY = 24 * 60 * 60 * 1000;
         const content = "const x = 1;";
 
-        // Seed a handful of recent sessions with errors scattered across categories.
+        // 15 recent sessions with real errors, NOTHING in the previous window.
         for (let i = 0; i < 15; i++) {
             mockSessions.push(
                 makeSession({
                     date: new Date(now - i * DAY).toISOString(),
                     language: "javascript",
                     snippetContent: content,
-                    errors: [{ expected: "c", got: "x", index: 0 }], // keyword only
+                    errors: [{ expected: "c", got: "x", index: 0 }], // keyword
                 }),
             );
         }
 
-        const summary = aggregateWeakPatternTrends("all");
-        // Only keyword has errors; other categories must not all be spuriously declining.
-        const decliningCount = summary.trends.filter((t) => t.status === "declining").length;
-        expect(decliningCount).toBeLessThan(ALL_CATEGORIES_LENGTH);
+        const summary = aggregateWeakPatternTrends("month");
+        expect(summary.topDeclining).toEqual([]);
+        expect(summary.topImproving).toEqual([]);
+        expect(summary.trends.every((t) => t.status === "stable")).toBe(true);
     });
 });
-
-const ALL_CATEGORIES_LENGTH = 8;

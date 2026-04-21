@@ -63,15 +63,23 @@ export function aggregateWeakPatternTrends(
         return t >= previousStart && t < currentStart;
     });
 
-    const sessionsWithErrorData = current.filter(
-        (s) => s.errors !== undefined && s.snippetContent !== undefined,
-    ).length;
+    const countWithErrorData = (list: SessionRecord[]) =>
+        list.filter((s) => s.errors !== undefined && s.snippetContent !== undefined).length;
+    const sessionsWithErrorData = countWithErrorData(current);
+    const previousSessionsWithErrorData = countWithErrorData(previous);
 
     const currentRates = aggregateCategoryErrorRates(current);
     const previousRates = aggregateCategoryErrorRates(previous);
 
+    // Trend classification requires BOTH windows to have data. When previous
+    // window is empty (new user, or "all" range with < 2×windowDays of history),
+    // every category would otherwise compare against previousRate=0 and read
+    // as "declining". Use the smaller of the two as the sample count so the
+    // MIN_SAMPLES gate forces "stable" in that case.
+    const comparableSamples = Math.min(sessionsWithErrorData, previousSessionsWithErrorData);
+
     const trends: CategoryTrend[] = ALL_CATEGORIES.map((c) =>
-        computeCategoryTrend(currentRates[c], previousRates[c], sessionsWithErrorData),
+        computeCategoryTrend(currentRates[c], previousRates[c], comparableSamples),
     );
 
     const timeSeries = buildCategoryTimeSeries(current);
