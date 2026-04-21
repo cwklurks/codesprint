@@ -127,3 +127,40 @@ export function computeCategoryTrend(
         samples,
     };
 }
+
+function formatDateKey(date: Date): string {
+    return date.toISOString().split("T")[0];
+}
+
+export function buildCategoryTimeSeries(
+    sessions: readonly SessionRecord[],
+): CategoryTimeSeries[] {
+    const byDate = new Map<string, SessionRecord[]>();
+    for (const s of sessions) {
+        const key = formatDateKey(new Date(s.date));
+        const arr = byDate.get(key);
+        if (arr) arr.push(s);
+        else byDate.set(key, [s]);
+    }
+
+    const sortedDates = Array.from(byDate.keys()).sort();
+
+    const seriesByCategory: Record<TokenCategory, CategoryTimeSeries> = {} as Record<TokenCategory, CategoryTimeSeries>;
+    for (const c of ALL_CATEGORIES) {
+        seriesByCategory[c] = { category: c, points: [] };
+    }
+
+    for (const date of sortedDates) {
+        const daySessions = byDate.get(date) ?? [];
+        const rates = aggregateCategoryErrorRates(daySessions);
+        for (const c of ALL_CATEGORIES) {
+            seriesByCategory[c].points.push({
+                date,
+                errorRate: rates[c].errorRate,
+                samples: daySessions.length,
+            });
+        }
+    }
+
+    return ALL_CATEGORIES.map((c) => seriesByCategory[c]);
+}

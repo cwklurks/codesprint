@@ -6,7 +6,7 @@ vi.mock("@/lib/storage/session-history", () => ({
     getSessions: vi.fn(() => [...mockSessions]),
 }));
 
-import { aggregateCategoryErrorRates, computeCategoryTrend } from "../weak-pattern-trends";
+import { aggregateCategoryErrorRates, computeCategoryTrend, buildCategoryTimeSeries } from "../weak-pattern-trends";
 
 function makeSession(overrides: Partial<SessionRecord> = {}): SessionRecord {
     return {
@@ -155,5 +155,45 @@ describe("computeCategoryTrend", () => {
         const previous = { category: "operator" as const, errors: 2, totalChars: 100, errorRate: 0.02 };
         const trend = computeCategoryTrend(current, previous, 50);
         expect(trend.status).toBe("stable");
+    });
+});
+
+describe("buildCategoryTimeSeries", () => {
+    it("returns one series per category with one point per calendar day", () => {
+        const sessions = [
+            makeSession({
+                date: "2026-04-01T10:00:00Z",
+                language: "javascript",
+                snippetContent: "const x = 1;",
+                errors: [{ expected: "c", got: "x", index: 0 }], // keyword
+            }),
+            makeSession({
+                date: "2026-04-01T11:00:00Z",
+                language: "javascript",
+                snippetContent: "const x = 1;",
+                errors: [{ expected: "=", got: "x", index: 8 }], // operator
+            }),
+            makeSession({
+                date: "2026-04-02T10:00:00Z",
+                language: "javascript",
+                snippetContent: "const x = 1;",
+                errors: [], // perfect session
+            }),
+        ];
+        const series = buildCategoryTimeSeries(sessions);
+        const keywordSeries = series.find((s) => s.category === "keyword");
+        expect(keywordSeries).toBeDefined();
+        expect(keywordSeries!.points).toHaveLength(2);
+        expect(keywordSeries!.points[0].date).toBe("2026-04-01");
+        // Day 1: 2 sessions, each "const" = 5 keyword chars → 10 total, 1 error on keyword
+        expect(keywordSeries!.points[0].errorRate).toBeCloseTo(1 / 10, 3);
+        expect(keywordSeries!.points[1].date).toBe("2026-04-02");
+        expect(keywordSeries!.points[1].errorRate).toBe(0);
+    });
+
+    it("returns 8 empty series when no sessions", () => {
+        const series = buildCategoryTimeSeries([]);
+        expect(series).toHaveLength(8);
+        for (const s of series) expect(s.points).toEqual([]);
     });
 });
