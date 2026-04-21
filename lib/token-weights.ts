@@ -42,8 +42,26 @@ const LANGUAGE_OVERRIDES: Partial<Record<SupportedLanguage, Partial<TokenWeights
 };
 
 // ---------------------------------------------------------------------------
+// Precomputed per-language weights (avoids spread on every call)
+// ---------------------------------------------------------------------------
+
+const CACHED_WEIGHTS: Record<string, TokenWeights> = {};
+for (const lang of ["javascript", "python", "java", "cpp"] as SupportedLanguage[]) {
+    const overrides = LANGUAGE_OVERRIDES[lang];
+    CACHED_WEIGHTS[lang] = overrides ? { ...DEFAULT_WEIGHTS, ...overrides } : DEFAULT_WEIGHTS;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Internal cached version — returns the SAME object every time.
+ * Safe when callers don't mutate the result.
+ */
+export function getCachedWeights(language: SupportedLanguage): TokenWeights {
+    return CACHED_WEIGHTS[language] ?? DEFAULT_WEIGHTS;
+}
 
 export function getWeights(language: SupportedLanguage): TokenWeights {
     const overrides = LANGUAGE_OVERRIDES[language];
@@ -52,5 +70,5 @@ export function getWeights(language: SupportedLanguage): TokenWeights {
 }
 
 export function getWeight(language: SupportedLanguage, category: TokenCategory): number {
-    return getWeights(language)[category];
+    return getCachedWeights(language)[category];
 }
