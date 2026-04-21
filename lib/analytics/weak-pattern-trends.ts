@@ -16,7 +16,7 @@ export type CategoryTrend = {
     currentRate: number;
     previousRate: number;
     deltaPercentagePoints: number;
-    status: "improving" | "regressing" | "stable";
+    status: "improving" | "declining" | "stable";
     samples: number;
 };
 
@@ -31,7 +31,7 @@ export type WeakPatternTrendsSummary = {
     trends: CategoryTrend[];
     timeSeries: CategoryTimeSeries[];
     topImproving: CategoryTrend[];
-    topRegressing: CategoryTrend[];
+    topDeclining: CategoryTrend[];
 };
 
 export function aggregateWeakPatternTrends(
