@@ -142,4 +142,18 @@ describe("computeCategoryTrend", () => {
         expect(trend.status).toBe("stable");
         expect(trend.samples).toBe(5);
     });
+
+    it("is stable at exactly -2pp (boundary is exclusive)", () => {
+        const current = { category: "operator" as const, errors: 2, totalChars: 100, errorRate: 0.02 };
+        const previous = { category: "operator" as const, errors: 4, totalChars: 100, errorRate: 0.04 };
+        const trend = computeCategoryTrend(current, previous, 50);
+        expect(trend.status).toBe("stable");
+    });
+
+    it("is stable at exactly +2pp (boundary is exclusive)", () => {
+        const current = { category: "operator" as const, errors: 4, totalChars: 100, errorRate: 0.04 };
+        const previous = { category: "operator" as const, errors: 2, totalChars: 100, errorRate: 0.02 };
+        const trend = computeCategoryTrend(current, previous, 50);
+        expect(trend.status).toBe("stable");
+    });
 });
