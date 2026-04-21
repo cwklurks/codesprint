@@ -49,10 +49,11 @@ export function aggregateWeakPatternTrends(
 
     const now = Date.now();
     const DAY_MS = 24 * 60 * 60 * 1000;
-    // "all" clamps to a 365-day window so the previous period is well-defined
-    // (Infinity would make both windows `-Infinity`, producing a garbage
-    // period-over-period delta where every category reads as "declining").
-    const windowDays = range === "day" ? 1 : range === "week" ? 7 : range === "month" ? 30 : 365;
+    // "all" uses Infinity so the current window is truly all-time. The previous
+    // window collapses to empty in that case — the min-samples guard below
+    // forces every trend to "stable", so the dashboard shows real all-time error
+    // rates without claiming any trend direction.
+    const windowDays = range === "day" ? 1 : range === "week" ? 7 : range === "month" ? 30 : Infinity;
 
     const currentStart = now - windowDays * DAY_MS;
     const previousStart = now - 2 * windowDays * DAY_MS;
@@ -103,6 +104,14 @@ function emptyRates(): Record<TokenCategory, CategoryRate> {
     return out;
 }
 
+function hashContent(content: string): string {
+    let hash = 0;
+    for (let i = 0; i < content.length; i++) {
+        hash = ((hash << 5) - hash + content.charCodeAt(i)) | 0;
+    }
+    return `${content.length}:${hash}`;
+}
+
 export function aggregateCategoryErrorRates(
     sessions: readonly SessionRecord[],
 ): Record<TokenCategory, CategoryRate> {
@@ -118,7 +127,11 @@ export function aggregateCategoryErrorRates(
         const errors = session.errors;
         if (errors === undefined) continue;
 
-        const key = `${session.language}::${session.snippetId}`;
+        // Key by content hash, not snippetId — a snippet's content can change
+        // across sync:leetcode runs (or AI drill variations) while the id stays
+        // the same. Caching by id would serve a stale category map and
+        // misclassify errors. Hash collision risk is ~0 at realistic scale.
+        const key = `${session.language}::${hashContent(content)}`;
         let entry = cache.get(key);
         if (!entry) {
             const tokens = tokenize(content, session.language);
@@ -183,8 +196,16 @@ function formatDateKey(date: Date): string {
 export function buildCategoryTimeSeries(
     sessions: readonly SessionRecord[],
 ): CategoryTimeSeries[] {
+    // Legacy sessions (errors or snippetContent missing) can't contribute to
+    // category analysis. Days containing ONLY legacy sessions would otherwise
+    // emit a fake "0% error rate" point, which reads as a perfect day instead
+    // of a no-data day. Filter them out before grouping.
+    const analyzable = sessions.filter(
+        (s) => s.errors !== undefined && s.snippetContent !== undefined,
+    );
+
     const byDate = new Map<string, SessionRecord[]>();
-    for (const s of sessions) {
+    for (const s of analyzable) {
         const key = formatDateKey(new Date(s.date));
         const arr = byDate.get(key);
         if (arr) arr.push(s);
