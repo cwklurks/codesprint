@@ -179,7 +179,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                         <Flex align="center" gap={4} flexWrap="wrap">
                             <Link href="/" aria-label="CodeSprint home">
                                 <Text fontWeight={700} fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="0.3px">
-                                    codesprint<span style={{ color: "var(--accent)" }}>.dev</span>
+                                    codesprint
                                 </Text>
                             </Link>
                         </Flex>
