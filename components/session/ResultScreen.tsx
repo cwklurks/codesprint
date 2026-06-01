@@ -3,6 +3,7 @@
 import { Flex, Stack, Text } from "@chakra-ui/react";
 import { m } from "framer-motion";
 import ResultCard from "@/components/ResultCard";
+import { DailyShareBlock } from "@/components/daily/DailyShareBlock";
 import { getResultCardMotion } from "@/lib/motion-config";
 import type { SupportedLanguage, SnippetLength } from "@/lib/snippets";
 import type { ErrorEntry, HistoryEntry } from "@/hooks/useTypingEngine";
@@ -61,6 +62,12 @@ export interface ResultScreenProps {
     priorBestWpm?: number;
     /** Whether the just-finished run set a new personal best */
     isNewBest?: boolean;
+    /** Present when the finished run was the Daily Challenge; drives the share block */
+    daily?: {
+        dateStr: string;
+        dayNumber: number;
+        streak: number;
+    };
 }
 
 /**
@@ -93,6 +100,7 @@ export function ResultScreen({
     isAIDrill,
     priorBestWpm,
     isNewBest,
+    daily,
 }: ResultScreenProps) {
     const resultCardMotion = getResultCardMotion(prefersReducedMotion);
 
@@ -130,6 +138,29 @@ export function ResultScreen({
                     priorBestWpm={priorBestWpm}
                     isNewBest={isNewBest}
                 />
+
+                {daily && (
+                    <Flex direction="column" align="center" gap={3}>
+                        <Flex align="center" gap={1.5}>
+                            <Text fontSize="lg" lineHeight={1}>🔥</Text>
+                            <Text fontSize="lg" fontWeight={700} color="var(--accent)">
+                                {daily.streak}
+                            </Text>
+                            <Text fontSize="sm" color="var(--text-subtle)">
+                                day{daily.streak === 1 ? "" : "s"} streak
+                            </Text>
+                        </Flex>
+                        <DailyShareBlock
+                            dateStr={daily.dateStr}
+                            dayNumber={daily.dayNumber}
+                            wpm={Math.round(wpm)}
+                            accuracy={accuracy}
+                            patternScore={patternScore}
+                            streak={daily.streak}
+                            language={language}
+                        />
+                    </Flex>
+                )}
 
                 {(xpGained !== undefined && xpGained > 0) && (
                     <Text fontSize="md" fontWeight={600} color="var(--accent)">

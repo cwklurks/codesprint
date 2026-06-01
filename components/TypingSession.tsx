@@ -14,6 +14,7 @@ import { SessionControlBar } from "@/components/session/SessionControlBar";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { CountdownOverlay } from "@/components/session/CountdownOverlay";
 import { ResultScreen } from "@/components/session/ResultScreen";
+import { DailyChallengeCard } from "@/components/daily/DailyChallengeCard";
 
 import { usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
@@ -30,6 +31,7 @@ import { useSessionControls } from "@/hooks/useSessionControls";
 import { useAchievements } from "@/hooks/useAchievements";
 import { useSpacedRepetition } from "@/hooks/useSpacedRepetition";
 import { useAdaptiveDifficulty } from "@/hooks/useAdaptiveDifficulty";
+import { useDaily } from "@/hooks/useDaily";
 import type { SupportedLanguage, Difficulty, SnippetLength, Snippet } from "@/lib/snippets";
 import type { DifficultyTransition } from "@/lib/adaptive";
 
@@ -48,6 +50,12 @@ export default function TypingSession() {
     const engineResetRef = useRef<() => void>(() => {});
     // Store SR recommendation function in a ref to break hook ordering dependency
     const srRecommendationRef = useRef<(availableIds: string[], currentId: string) => string | null>(() => null);
+    // Tracks whether the in-flight run is the Daily Challenge so the finish
+    // handler can record it. A ref so it survives start -> finish without re-render.
+    const isDailyRunRef = useRef(false);
+    // Set when a daily start is requested but the snippet has not propagated yet;
+    // an effect fires engine.start() once the daily snippet is active.
+    const pendingDailyStartRef = useRef(false);
 
     // Preferences
     const {
@@ -129,9 +137,15 @@ export default function TypingSession() {
     // Adaptive Difficulty
     const adaptive = useAdaptiveDifficulty(controls.language, preferences.adaptiveDifficultyEnabled);
 
+    // Daily CodeSprint (date-seeded snippet, streak, share)
+    const daily = useDaily();
+    // Whether the just-finished run was the daily; surfaces the share block on the result.
+    const [finishedDaily, setFinishedDaily] = useState(false);
+
     // Extract stable method refs to avoid callback identity churn
     const srUpdateMastery = sr.updateMastery;
     const adaptiveUpdateSkillModel = adaptive.updateSkillModel;
+    const dailyRecord = daily.record;
 
     // Session finished callback for SR + adaptive updates
     const handleSessionFinished = useCallback((sessionData: {
@@ -143,6 +157,17 @@ export default function TypingSession() {
         difficulty: Difficulty;
         lengthCategory: SnippetLength;
     }) => {
+        // Daily run: record it (idempotent per day) and flag the result screen.
+        if (isDailyRunRef.current) {
+            dailyRecord({
+                wpm: sessionData.wpm,
+                accuracy: sessionData.accuracy,
+                patternScore: sessionData.patternScore,
+            });
+            setFinishedDaily(true);
+        } else {
+            setFinishedDaily(false);
+        }
         srUpdateMastery({
             snippetId: sessionData.snippetId,
             language: sessionData.language,
@@ -158,7 +183,7 @@ export default function TypingSession() {
             accuracy: sessionData.accuracy,
             difficulty: sessionData.difficulty,
         }).then(setDifficultyTransition);
-    }, [srUpdateMastery, adaptiveUpdateSkillModel, preferences.adaptiveDifficultyEnabled]);
+    }, [srUpdateMastery, adaptiveUpdateSkillModel, preferences.adaptiveDifficultyEnabled, dailyRecord]);
 
     // Session Lifecycle (auto-advance, score saving)
     const lifecycle = useSessionLifecycle({
@@ -189,6 +214,7 @@ export default function TypingSession() {
         engineHandleKeyDown: engine.handleKeyDown,
         onReset: engine.reset,
         onNextProblem: () => {
+            isDailyRunRef.current = false;
             lifecycle.clearAutoAdvance();
             controls.handleNextProblem();
         },
@@ -227,12 +253,40 @@ export default function TypingSession() {
 
     // Handlers
     const handleStart = useCallback(() => {
+        isDailyRunRef.current = false;
         focus.enableEditorFocus();
         engine.start();
         focus.focusEditor();
     }, [focus, engine]);
 
+    // Start (or re-practice) today's Daily Challenge. setSnippet updates state
+    // asynchronously, so defer engine.start() until the daily snippet is active.
+    const handleStartDaily = useCallback(() => {
+        if (!daily.dailySnippet) return;
+        isDailyRunRef.current = true;
+        controls.setSnippet(daily.dailySnippet);
+        if (controls.snippet.id === daily.dailySnippet.id) {
+            focus.enableEditorFocus();
+            engine.start();
+            focus.focusEditor();
+        } else {
+            pendingDailyStartRef.current = true;
+        }
+    }, [daily.dailySnippet, controls, focus, engine]);
+
+    // Fire the deferred daily start once the daily snippet has become active.
+    useEffect(() => {
+        if (!pendingDailyStartRef.current) return;
+        if (!daily.dailySnippet) return;
+        if (controls.snippet.id !== daily.dailySnippet.id) return;
+        pendingDailyStartRef.current = false;
+        focus.enableEditorFocus();
+        engine.start();
+        focus.focusEditor();
+    }, [controls.snippet.id, daily.dailySnippet, focus, engine]);
+
     const handleNextProblem = useCallback(() => {
+        isDailyRunRef.current = false;
         focus.enableEditorFocus();
         lifecycle.clearAutoAdvance();
         controls.handleNextProblem();
@@ -241,6 +295,7 @@ export default function TypingSession() {
     useEffect(() => {
         if (engine.phase !== "finished") {
             setDifficultyTransition(undefined);
+            setFinishedDaily(false);
         }
     }, [engine.phase]);
 
@@ -279,6 +334,21 @@ export default function TypingSession() {
                                     dueCount={sr.dueCount}
                                     suggestedDifficulty={adaptive.suggestedDifficulty}
                                     onOpenAIDrill={() => setIsDrillPanelOpen(true)}
+                                />
+                            )}
+
+                            {/* Daily Challenge (idle only) */}
+                            {engine.phase === "idle" && (
+                                <DailyChallengeCard
+                                    dateStr={daily.today}
+                                    dayNumber={daily.dayNumber}
+                                    streak={daily.streak}
+                                    completed={daily.completed}
+                                    language={daily.dailySnippet?.language ?? controls.language}
+                                    available={daily.dailySnippet !== null}
+                                    todaysResult={daily.completed ? daily.progress.best : undefined}
+                                    onStart={handleStartDaily}
+                                    disabled={controlsDisabled}
                                 />
                             )}
 
@@ -374,6 +444,15 @@ export default function TypingSession() {
                         isAIDrill={controls.snippet.problemId.startsWith("ai-drill-")}
                         priorBestWpm={lifecycle.priorBestWpm}
                         isNewBest={lifecycle.isNewBest}
+                        daily={
+                            finishedDaily
+                                ? {
+                                      dateStr: daily.today,
+                                      dayNumber: daily.dayNumber,
+                                      streak: daily.streak,
+                                  }
+                                : undefined
+                        }
                     />
                 )}
             </AnimatePresence>
