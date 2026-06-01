@@ -132,7 +132,7 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                             <Text fontSize="lg" fontWeight={600}>
                                 AI Drill
                             </Text>
-                            <Badge size="sm" colorScheme="accent" ml="auto">
+                            <Badge size="sm" bg="var(--accent)" color="var(--bg)" ml="auto">
                                 {ai.remainingToday} remaining today
                             </Badge>
                         </HStack>
@@ -159,7 +159,7 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                                 <Text color="red.500" mb={4}>
                                     {(ai.state as { status: "error"; error: string; }).error}
                                 </Text>
-                                <Button onClick={handleRetry} colorScheme="accent">
+                                <Button onClick={handleRetry} bg="var(--accent)" color="var(--bg)" _hover={{ bg: "var(--accent)", opacity: 0.9 }}>
                                     Try Again
                                 </Button>
                             </Box>
@@ -225,7 +225,7 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                         {/* Metadata */}
                         {isPreview && drill && (
                             <HStack gap={4} fontSize="xs" color="gray.500" justify="center" width="100%">
-                                <Badge size="sm" colorScheme={drill.estimatedDifficulty === "easy" ? "green" : drill.estimatedDifficulty === "medium" ? "yellow" : "red"}>
+                                <Badge size="sm" colorPalette={drill.estimatedDifficulty === "easy" ? "green" : drill.estimatedDifficulty === "medium" ? "yellow" : "red"}>
                                     {drill.estimatedDifficulty}
                                 </Badge>
                                 <Text>{lineCount} lines</Text>

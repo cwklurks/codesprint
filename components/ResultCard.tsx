@@ -294,14 +294,15 @@ export default function ResultCard({
                 </MotionBox>
 
                 {/* Detailed Stats */}
-                <MotionBox w="100%" maxW="560px" mx="auto" mt={6}>
+                <MotionBox w="100%" maxW="720px" mx="auto" mt={6}>
                     <Box
                         display="grid"
-                        gridTemplateColumns="repeat(3, minmax(0, 1fr))"
-                        columnGap={{ base: 4, md: 8 }}
+                        gridTemplateColumns={{ base: "repeat(2, minmax(0, 1fr))", md: "repeat(4, minmax(0, 1fr))" }}
+                        columnGap={{ base: 4, md: 6 }}
                         rowGap={4}
                     >
                         <StatBox label="Raw" value={Math.round(rawWpm).toString()} />
+                        <StatBox label="Accuracy" value={`${Math.round(accuracy * 100)}%`} />
                         <StatBox label="Characters" value={`${(contentLength ?? 0) - errors}/${errors}`} helper="correct/uncorrected" />
                         <StatBox label="Time" value={formatDuration(timeMs)} />
                     </Box>

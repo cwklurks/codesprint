@@ -112,7 +112,7 @@ export function AIKeyConfig() {
                 <Text fontSize="sm" fontWeight={600}>
                     AI Drills
                 </Text>
-                <Badge colorScheme={preferences.aiDrillsEnabled ? "green" : "gray"}>
+                <Badge colorPalette={preferences.aiDrillsEnabled ? "green" : "gray"}>
                     {preferences.aiDrillsEnabled ? "Enabled" : "Disabled"}
                 </Badge>
             </Flex>
@@ -150,7 +150,7 @@ export function AIKeyConfig() {
                     <Text fontSize="sm" fontWeight={500}>Claude API Key</Text>
                     <Flex gap={2}>
                         {hasClaudeKey && (
-                            <Badge size="sm" colorScheme="green">
+                            <Badge size="sm" colorPalette="green">
                                 {activeProvider === "claude" ? "Active" : "Available"}
                             </Badge>
                         )}
@@ -205,7 +205,7 @@ export function AIKeyConfig() {
                     <Text fontSize="sm" fontWeight={500}>OpenAI API Key</Text>
                     <Flex gap={2}>
                         {hasOpenaiKey && (
-                            <Badge size="sm" colorScheme="green">
+                            <Badge size="sm" colorPalette="green">
                                 {activeProvider === "openai" ? "Active" : "Available"}
                             </Badge>
                         )}
@@ -260,7 +260,7 @@ export function AIKeyConfig() {
                     <Text fontSize="sm" fontWeight={500}>Fireworks API Key</Text>
                     <Flex gap={2}>
                         {hasFireworksKey && (
-                            <Badge size="sm" colorScheme="green">
+                            <Badge size="sm" colorPalette="green">
                                 {activeProvider === "fireworks" ? "Active" : "Available"}
                             </Badge>
                         )}
@@ -321,10 +321,10 @@ export function AIKeyConfig() {
                     Test Connection
                 </Button>
                 {testStatus === "success" && (
-                    <Badge colorScheme="green" size="sm">Connected</Badge>
+                    <Badge colorPalette="green" size="sm">Connected</Badge>
                 )}
                 {testStatus === "error" && (
-                    <Badge colorScheme="red" size="sm">Failed</Badge>
+                    <Badge colorPalette="red" size="sm">Failed</Badge>
                 )}
             </Flex>
             {testStatus === "error" && testError && (

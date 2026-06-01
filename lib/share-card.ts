@@ -78,9 +78,13 @@ const FONT = "system-ui, -apple-system, sans-serif";
 
 export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement("canvas");
-    canvas.width = CARD_WIDTH;
-    canvas.height = CARD_HEIGHT;
+    // Render at device pixel ratio (capped at 2x) so the card is crisp on retina
+    // and in social embeds; all drawing stays in logical CARD_WIDTH x CARD_HEIGHT space.
+    const dpr = Math.min((typeof window !== "undefined" && window.devicePixelRatio) || 1, 2);
+    canvas.width = CARD_WIDTH * dpr;
+    canvas.height = CARD_HEIGHT * dpr;
     const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
     const colors = getThemeColors();
 
     // Background
