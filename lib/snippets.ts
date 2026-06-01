@@ -3,6 +3,7 @@
 // import leetcodeDataset from "@/data/leetcode-snippets.json";
 
 import type { Token } from "./tokenizer";
+import { isSkeletal } from "./snippet-filter";
 
 export type SupportedLanguage = "javascript" | "python" | "java" | "cpp";
 export type SnippetLength = "short" | "medium" | "long";
@@ -75,41 +76,6 @@ const LENGTH_ORDER: Record<SnippetLength, number> = {
 };
 
 const PYTHON_PANDAS_SIGNATURE_PATTERN = /^import pandas as pd\s*\n\s*def [a-zA-Z_]\w*\([^)]*\)\s*->\s*pd\.DataFrame:\s*\n$/;
-
-function isSkeletal(content: string, language: SupportedLanguage): boolean {
-    const lines = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-    let substantiveLines = 0;
-
-    if (language === "javascript") {
-        for (const line of lines) {
-            if (
-                !line.match(/^var .* = function\s*\(.*\)\s*{\s*$/) &&
-                !line.match(/.*\.prototype\..* = function\s*\(.*\)\s*{\s*$/) &&
-                !line.match(/^class /) &&
-                !line.match(/^constructor/) &&
-                !line.match(/^[}\]];?$/)
-            ) {
-                substantiveLines++;
-            }
-        }
-    } else if (language === "python") {
-        for (const line of lines) {
-            if (
-                !line.match(/^def .*:$/) &&
-                !line.match(/^class /) &&
-                !line.match(/^@/) &&
-                !line.match(/^pass$/)
-            ) {
-                substantiveLines++;
-            }
-        }
-    } else {
-        // Default to keeping it if we don't know the language well enough
-        return false;
-    }
-
-    return substantiveLines < 1;
-}
 
 const CURATED_SNIPPETS: Snippet[] = [
     defineSnippet({
@@ -627,6 +593,7 @@ function defineSnippet(def: SnippetDefinition): Snippet {
 
 function buildProblems(snippets: Snippet[]): Problem[] {
     const byProblem = new Map<string, Problem>();
+    const lengthSets = new Map<string, Set<SnippetLength>>();
     for (const snippet of snippets) {
         const existing = byProblem.get(snippet.problemId);
         if (!existing) {
@@ -637,12 +604,18 @@ function buildProblems(snippets: Snippet[]): Problem[] {
                 language: snippet.language,
                 availableLengths: [snippet.lengthCategory],
             });
-        } else if (!existing.availableLengths.includes(snippet.lengthCategory)) {
-            existing.availableLengths.push(snippet.lengthCategory);
-            existing.availableLengths.sort((a, b) => LENGTH_ORDER[a] - LENGTH_ORDER[b]);
+            lengthSets.set(snippet.problemId, new Set([snippet.lengthCategory]));
+        } else {
+            const seen = lengthSets.get(snippet.problemId)!;
+            if (!seen.has(snippet.lengthCategory)) {
+                seen.add(snippet.lengthCategory);
+                existing.availableLengths = [...seen].toSorted(
+                    (a, b) => LENGTH_ORDER[a] - LENGTH_ORDER[b],
+                );
+            }
         }
     }
-    return Array.from(byProblem.values()).sort((a, b) => a.title.localeCompare(b.title));
+    return [...byProblem.values()].toSorted((a, b) => a.title.localeCompare(b.title));
 }
 
 export function buildProblemsFromSnippets(snippets: Snippet[]): Problem[] {

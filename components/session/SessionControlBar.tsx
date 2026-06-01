@@ -10,7 +10,7 @@ import {
     TooltipPositioner,
     TooltipContent,
 } from "@chakra-ui/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { getPillButtonStyles, getStartButtonStyles, SESSION_CSS_VARS } from "@/lib/session-styles";
 import { getControlsMotion, getStartButtonMotion } from "@/lib/motion-config";
 import type { SupportedLanguage } from "@/lib/snippets";
@@ -107,19 +107,11 @@ export function SessionControlBar({
     const rateLimit = checkRateLimit(preferences.aiMaxDrillsPerDay);
 
     return (
-        <motion.div
+        <m.div
+            className="session-control-bar"
             style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: "8px",
-                padding: "6px 12px",
-                borderRadius: "8px",
                 background: panelGlass,
-                backdropFilter: "blur(12px)",
                 border: `1px solid ${border}`,
-                boxShadow: "var(--shadow)",
-                flexWrap: "wrap",
             }}
             {...controlsMotion}
             layout
@@ -227,13 +219,13 @@ export function SessionControlBar({
             {/* Start Button (only visible in idle phase) */}
             <AnimatePresence>
                 {phase === "idle" && (
-                    <motion.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
+                    <m.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
                         <Button onClick={onStart} {...startButtonStyles}>
                             Start
                         </Button>
-                    </motion.div>
+                    </m.div>
                 )}
             </AnimatePresence>
-        </motion.div>
+        </m.div>
     );
 }

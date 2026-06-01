@@ -11,7 +11,8 @@
     "test": "./node_modules/.bin/vitest run",
     "test:watch": "./node_modules/.bin/vitest",
     "test:e2e": "./node_modules/.bin/playwright test",
-    "sync:leetcode": "bun scripts/sync-leetcode.ts && bun run build:snippets"
+    "sync:leetcode": "bun scripts/sync-leetcode.ts && bun run build:snippets",
+    "sync:algorithms": "bun scripts/sync-algorithms.ts && bun run build:snippets"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",

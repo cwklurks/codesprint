@@ -146,6 +146,31 @@ main {
     animation: cs-caret-error 0.35s ease-out;
 }
 
+/* Positive per-keystroke feedback: a brief GPU-only "thump" on a correct
+   forward advance. Overshoots ~1px in the caret's travel direction (rightward)
+   and settles. Kept under 120ms so it never throttles fast typists. The keyframe
+   composes the caret position vars so it does not fight the base transform. */
+.cs-caret.cs-caret-thump {
+    animation: cs-caret-thump 0.09s ease-out;
+}
+
+@keyframes cs-caret-thump {
+    0% {
+        transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
+        opacity: 1;
+    }
+
+    45% {
+        transform: translate3d(calc(var(--caret-x, 0px) + 1px), var(--caret-y, 0px), 0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
+        opacity: 1;
+    }
+}
+
 @keyframes cs-caret-blink {
 
     0%,
@@ -170,6 +195,28 @@ main {
 
     100% {
         box-shadow: 0 0 0 color-mix(in srgb, var(--error) 0%, transparent);
+    }
+}
+
+/* Honor the OS "reduce motion" setting. The Framer animations already respect it
+   via lib/motion.ts; these raw CSS animations are the one gap. */
+@media (prefers-reduced-motion: reduce) {
+    .cs-caret {
+        animation: none;
+        opacity: 0.92;
+    }
+
+    .cs-caret.cs-caret-error {
+        animation: none;
+    }
+
+    .cs-caret.cs-caret-thump {
+        animation: none;
+    }
+
+    .app-header,
+    .hero-panel {
+        transition: none;
     }
 }
 
@@ -228,4 +275,28 @@ body.cs-focus-active .hero-panel {
 /* Hide Next.js dev badge */
 nextjs-portal {
     display: none !important;
+}
+
+/* Session control bar (extracted from inline styles for perf) */
+.session-control-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow);
+    flex-wrap: wrap;
+}
+
+.analytics-range-select {
+    padding: 6px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
 }

@@ -5,6 +5,9 @@
  * Designed for sharing on social media, Discord, etc.
  */
 
+import { computePercentile } from "./percentile";
+import { bestDelta } from "./personal-best";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -22,6 +25,10 @@ export type ShareCardData = {
     timeMs: number;
     /** WPM history for sparkline */
     history: { time: number; wpm: number }[];
+    /** Best WPM across all prior runs, excluding the current run (optional, back-compatible) */
+    bestWpm?: number;
+    /** Whether this run set a new personal best (optional, back-compatible) */
+    isNewBest?: boolean;
 };
 
 type ThemeColors = {
@@ -69,17 +76,6 @@ const CARD_HEIGHT = 800;
 const PADDING = 48;
 const FONT = "system-ui, -apple-system, sans-serif";
 
-function computePercentile(wpm: number): number {
-    // Rough percentile estimate based on typical typing speed distribution
-    if (wpm >= 120) return 99;
-    if (wpm >= 100) return 95;
-    if (wpm >= 80) return 85;
-    if (wpm >= 60) return 70;
-    if (wpm >= 40) return 45;
-    if (wpm >= 30) return 25;
-    return 10;
-}
-
 export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement("canvas");
     canvas.width = CARD_WIDTH;
@@ -119,6 +115,26 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     ctx.fillStyle = colors.textSubtle;
     ctx.font = `bold 18px ${FONT}`;
     ctx.fillText("WPM", CARD_WIDTH / 2, heroY + 40);
+
+    // New-best marker beneath the WPM hero
+    if (data.isNewBest) {
+        const markerText = bestDelta(data.wpm, data.bestWpm) > 0
+            ? `★ NEW BEST  +${bestDelta(data.wpm, data.bestWpm)}`
+            : "★ NEW BEST";
+        ctx.textAlign = "center";
+        ctx.font = `bold 18px ${FONT}`;
+        const textW = ctx.measureText(markerText).width;
+        const padX = 16;
+        const badgeW = textW + padX * 2;
+        const badgeH = 30;
+        const badgeX = CARD_WIDTH / 2 - badgeW / 2;
+        const badgeY = heroY + 54;
+        ctx.fillStyle = colors.accent;
+        roundRect(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
+        ctx.fill();
+        ctx.fillStyle = colors.bg;
+        ctx.fillText(markerText, CARD_WIDTH / 2, badgeY + 21);
+    }
 
     // Right: Syntax score (patternScore) or accuracy label
     const syntaxVal = data.patternScore !== undefined

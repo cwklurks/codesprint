@@ -16,7 +16,7 @@ import {
 } from "@chakra-ui/react";
 import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
 import { ReactNode, useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { LazyMotion, domAnimation, m } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import { SPRING_SMOOTH, usePrefersReducedMotion } from "@/lib/motion";
 import { PreferencesProvider } from "@/lib/preferences";
@@ -98,7 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
     return (
         <PreferencesProvider>
-            <>
+            <LazyMotion features={domAnimation} strict>
                 <Flex direction="column" minH="100dvh" background="var(--bg-gradient)" color="var(--text)">
                     <Header
                         onOpenPreferences={() => setActiveModal("preferences")}
@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         unlockedIds={progressSummary?.unlockedIds ?? new Set()}
                     />
                 )}
-            </>
+            </LazyMotion>
         </PreferencesProvider>
     );
 }
@@ -168,7 +168,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
             backdropFilter="blur(18px)"
             borderBottom="1px solid var(--header-border)"
         >
-            <motion.div {...headerMotion}>
+            <m.div {...headerMotion}>
                 <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2.5, md: 3 }}>
                     <Flex
                         direction={{ base: "column", md: "row" }}
@@ -318,7 +318,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                         </Flex>
                     </Flex>
                 </Container>
-            </motion.div>
+            </m.div>
         </Box>
     );
 }

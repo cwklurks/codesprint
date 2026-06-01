@@ -456,6 +456,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                     </Button>
                                     <input
                                         ref={fileInputRef}
+                                        aria-label="Import preferences JSON file"
                                         type="file"
                                         accept=".json"
                                         onChange={handleImport}

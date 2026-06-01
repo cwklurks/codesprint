@@ -63,7 +63,7 @@ function pushRecent(history: string[], nextValue: string, limit: number): string
 function pickPreferredProblemId(problemOptions: Problem[], representativeByProblem: Map<string, Snippet>): string {
     if (problemOptions.length === 0) return "";
 
-    const sorted = [...problemOptions].sort((a, b) => {
+    const sorted = problemOptions.toSorted((a, b) => {
         const snippetA = representativeByProblem.get(a.id);
         const snippetB = representativeByProblem.get(b.id);
         const scoreA = snippetA ? getSnippetVarietyScore(snippetA) : Number.NEGATIVE_INFINITY;

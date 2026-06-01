@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { getCountdownOverlayMotion, getCountdownNumberMotion } from "@/lib/motion-config";
 
 export interface CountdownOverlayProps {
@@ -27,7 +27,7 @@ export function CountdownOverlay({
     return (
         <AnimatePresence mode="wait">
             {isActive && countdownValue !== null && (
-                <motion.div
+                <m.div
                     key="countdown-overlay"
                     {...overlayMotion}
                     style={{
@@ -41,7 +41,7 @@ export function CountdownOverlay({
                     }}
                 >
                     <AnimatePresence mode="wait">
-                        <motion.span
+                        <m.span
                             key={countdownValue}
                             {...numberMotion}
                             style={{
@@ -52,9 +52,9 @@ export function CountdownOverlay({
                             }}
                         >
                             {countdownValue === 0 ? "Go" : countdownValue}
-                        </motion.span>
+                        </m.span>
                     </AnimatePresence>
-                </motion.div>
+                </m.div>
             )}
         </AnimatePresence>
     );

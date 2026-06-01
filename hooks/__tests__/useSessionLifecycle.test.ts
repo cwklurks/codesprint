@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 // Mock leaderboard before importing the hook
 vi.mock("@/lib/leaderboard", () => ({
@@ -8,14 +8,22 @@ vi.mock("@/lib/leaderboard", () => ({
 
 vi.mock("@/lib/storage/session-history", () => ({
     createSessionAsync: vi.fn().mockResolvedValue(undefined),
+    getSessionStatsAsync: vi.fn().mockResolvedValue({
+        totalSessions: 0,
+        averageWpm: 0,
+        averageAccuracy: 0,
+        bestWpm: 0,
+        totalTimeMs: 0,
+    }),
 }));
 
 import { useSessionLifecycle, type UseSessionLifecycleProps } from "../useSessionLifecycle";
 import { saveScore } from "@/lib/leaderboard";
-import { createSessionAsync } from "@/lib/storage/session-history";
+import { createSessionAsync, getSessionStatsAsync } from "@/lib/storage/session-history";
 
 const mockSaveScore = vi.mocked(saveScore);
 const mockCreateSessionAsync = vi.mocked(createSessionAsync);
+const mockGetSessionStatsAsync = vi.mocked(getSessionStatsAsync);
 
 describe("useSessionLifecycle", () => {
     const mockResetEngine = vi.fn();
@@ -156,7 +164,7 @@ describe("useSessionLifecycle", () => {
         expect(result.current.autoAdvanceDeadline).toBeNull();
     });
 
-    it("calls createSessionAsync when phase becomes finished", () => {
+    it("calls createSessionAsync when phase becomes finished", async () => {
         const { rerender } = renderHook(
             (props) => useSessionLifecycle(props),
             { initialProps: defaultProps }
@@ -164,7 +172,9 @@ describe("useSessionLifecycle", () => {
 
         rerender({ ...defaultProps, phase: "finished" });
 
-        expect(mockCreateSessionAsync).toHaveBeenCalledOnce();
+        // The current run is now persisted only after the prior-best read
+        // resolves, so the write lands on a later microtask.
+        await waitFor(() => expect(mockCreateSessionAsync).toHaveBeenCalledOnce());
         expect(mockCreateSessionAsync).toHaveBeenCalledWith({
             snippetId: defaultProps.snippetId,
             language: defaultProps.language,
@@ -185,7 +195,7 @@ describe("useSessionLifecycle", () => {
         });
     });
 
-    it("records AI drill status when provided", () => {
+    it("records AI drill status when provided", async () => {
         const { rerender } = renderHook(
             (props) => useSessionLifecycle(props),
             { initialProps: { ...defaultProps, isAIDrill: true } }
@@ -193,10 +203,10 @@ describe("useSessionLifecycle", () => {
 
         rerender({ ...defaultProps, isAIDrill: true, phase: "finished" });
 
-        expect(mockCreateSessionAsync).toHaveBeenCalledWith(expect.objectContaining({
+        await waitFor(() => expect(mockCreateSessionAsync).toHaveBeenCalledWith(expect.objectContaining({
             snippetId: defaultProps.snippetId,
             isAIDrill: true,
-        }));
+        })));
     });
 
     it("passes correct metrics to saveScore", () => {
@@ -223,5 +233,43 @@ describe("useSessionLifecycle", () => {
             language: defaultProps.language,
             snippetId: defaultProps.snippetId,
         });
+    });
+
+    it("captures the prior best and flags a new best, reading stats before persisting the run", async () => {
+        mockGetSessionStatsAsync.mockResolvedValueOnce({
+            totalSessions: 3,
+            averageWpm: 60,
+            averageAccuracy: 0.9,
+            bestWpm: 70,
+            totalTimeMs: 90000,
+        });
+
+        const { result, rerender } = renderHook(
+            (props) => useSessionLifecycle(props),
+            { initialProps: defaultProps } // adjustedWpm: 80 beats prior best 70
+        );
+
+        rerender({ ...defaultProps, phase: "finished" });
+
+        await waitFor(() => expect(result.current.isNewBest).toBe(true));
+        expect(result.current.priorBestWpm).toBe(70);
+        // Prior best must be read before the current run is persisted.
+        expect(mockGetSessionStatsAsync).toHaveBeenCalled();
+        const statsOrder = mockGetSessionStatsAsync.mock.invocationCallOrder[0];
+        const createOrder = mockCreateSessionAsync.mock.invocationCallOrder[0];
+        expect(statsOrder).toBeLessThan(createOrder);
+    });
+
+    it("treats the first ever run as a new best when there is no prior history", async () => {
+        // Default mock returns totalSessions: 0 -> prior best is undefined.
+        const { result, rerender } = renderHook(
+            (props) => useSessionLifecycle(props),
+            { initialProps: defaultProps }
+        );
+
+        rerender({ ...defaultProps, phase: "finished" });
+
+        await waitFor(() => expect(result.current.isNewBest).toBe(true));
+        expect(result.current.priorBestWpm).toBeUndefined();
     });
 });

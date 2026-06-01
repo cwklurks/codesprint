@@ -91,7 +91,7 @@ export default function LeaderboardModal({ isOpen, onOpenChange }: LeaderboardMo
                         <Flex align="center" gap={2} mr="auto">
                             <Text fontSize="sm" color="var(--text-subtle)">Clear all history?</Text>
                             <Button variant="solid" bg="var(--error)" color="white" size="sm" onClick={handleClear}>
-                                Yes
+                                Clear history
                             </Button>
                             <Button variant="ghost" color="var(--text-subtle)" size="sm" onClick={() => setConfirmingClear(false)}>
                                 Cancel

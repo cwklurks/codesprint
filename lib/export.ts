@@ -42,7 +42,7 @@ export async function exportSessions(format: ExportFormat = "json"): Promise<str
     ]);
 
     // Sort by date descending
-    const sortedSessions = [...sessions].sort(
+    const sortedSessions = sessions.toSorted(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
 

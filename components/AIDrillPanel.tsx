@@ -19,7 +19,7 @@ import {
     type IconProps as ChakraIconProps,
     chakra,
 } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { useAIDrills } from "@/hooks/useAIDrills";
 import { AILoadingSkeleton } from "@/components/AILoadingSkeleton";
 import type { Snippet, SupportedLanguage } from "@/lib/snippets";
@@ -32,7 +32,7 @@ interface AIDrillPanelProps {
     language: SupportedLanguage;
 }
 
-const MotionBox = motion(Box);
+const MotionBox = m(Box);
 
 function ZapIcon(props: ChakraIconProps) {
     return (

@@ -83,7 +83,7 @@ function groupByDate(sessions: SessionRecord[]): Map<string, SessionRecord[]> {
 function calculateRecentTrend(sessions: SessionRecord[]): "improving" | "declining" | "stable" {
     if (sessions.length < 3) return "stable";
 
-    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sorted = sessions.toSorted((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const midpoint = Math.floor(sorted.length / 2);
     const firstHalf = sorted.slice(0, midpoint);
     const secondHalf = sorted.slice(midpoint);
@@ -308,7 +308,7 @@ export function getSnippetPerformance(snippetId: string): {
     const totalAccuracy = sessions.reduce((sum, s) => sum + s.accuracy, 0);
     const bestWpm = sessions.reduce((max, s) => (s.wpm > max ? s.wpm : max), 0);
 
-    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sorted = sessions.toSorted((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const improvement =
         sorted.length >= 2 ? ((sorted[sorted.length - 1].wpm - sorted[0].wpm) / sorted[0].wpm) * 100 : 0;
 
@@ -329,7 +329,7 @@ export function getProgressOverTime(
 
     if (sessions.length === 0) return [];
 
-    const sorted = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sorted = sessions.toSorted((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const grouped = groupByDate(sorted);
 
     const result: { date: string; cumulativeAvgWpm: number; cumulativeSessions: number }[] = [];

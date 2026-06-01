@@ -17,10 +17,9 @@ export default function EmotionCacheProvider({ children }: PropsWithChildren) {
     }, []);
 
     useServerInsertedHTML(() => (
-        <style
-            data-emotion={`${cache.key} ${Object.keys(cache.inserted).join(" ")}`}
-            dangerouslySetInnerHTML={{ __html: Object.values(cache.inserted).join(" ") }}
-        />
+        <style data-emotion={`${cache.key} ${Object.keys(cache.inserted).join(" ")}`}>
+            {Object.values(cache.inserted).join(" ")}
+        </style>
     ));
 
     return <CacheProvider value={cache}>{children}</CacheProvider>;

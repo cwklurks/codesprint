@@ -67,9 +67,10 @@ export function useSpacedRepetition(
         setIsLoading(true);
         try {
             const all = await idbGetAll<IdbMasteryRecord>(STORES.mastery);
-            const languageRecords = all
-                .filter((r) => r.language === language)
-                .map(idbToSrRecord);
+            const languageRecords: MasteryRecord[] = [];
+            for (const r of all) {
+                if (r.language === language) languageRecords.push(idbToSrRecord(r));
+            }
 
             setRecords(languageRecords);
 

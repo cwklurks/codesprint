@@ -59,7 +59,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 /**
  * Aggregate weak patterns across multiple sessions
  */
-export async function aggregateWeakPatternsAcrossSessions(
+async function aggregateWeakPatternsAcrossSessions(
     sessions: SessionRecord[],
     language: SupportedLanguage,
 ): Promise<WeakPattern[]> {
@@ -175,22 +175,20 @@ export async function buildDrillRequest(
     language: SupportedLanguage,
     preferences: PreferencesState,
 ): Promise<DrillRequest> {
-    // 1. Get recent sessions with error data
-    const sessions = await getSessionsAsync({ language, limit: 10 });
-    const weakPatterns = await aggregateWeakPatternsAcrossSessions(sessions, language);
+    // Fetch independent inputs concurrently
+    const [sessions, skillModel, recentDrills] = await Promise.all([
+        getSessionsAsync({ language, limit: 10 }),
+        getSkillModel(language),
+        getRecentAIDrills(language, 10),
+    ]);
 
-    // 2. Get adaptive difficulty state
-    const skillModel = await getSkillModel(language);
+    const weakPatterns = await aggregateWeakPatternsAcrossSessions(sessions, language);
     const difficulty: Difficulty = (skillModel?.currentDifficulty as Difficulty) ?? "easy";
 
-    // 3. Determine length
     const lengthCategory: SnippetLength =
         preferences.aiDrillLengthPreference === "auto" || !preferences.aiDrillLengthPreference
             ? inferLengthFromSkill(skillModel)
             : preferences.aiDrillLengthPreference;
-
-    // 4. Get recent AI drill titles for dedup
-    const recentDrills = await getRecentAIDrills(language, 10);
 
     return {
         language,
