@@ -13,6 +13,7 @@
 
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isSkeletal } from "../lib/snippet-filter";
 
 type SupportedLanguage = "javascript" | "python" | "java" | "cpp";
 type SnippetLength = "short" | "medium" | "long";
@@ -64,6 +65,7 @@ type DatasetSnippet = {
 
 const DATA_DIR = "data";
 const INPUT_FILE = join(DATA_DIR, "leetcode-snippets.json");
+const ALGORITHMS_FILE = join(DATA_DIR, "algorithms-snippets.json");
 const OUTPUT_FILE = join(DATA_DIR, "snippets-processed.json");
 const LANGUAGES: SupportedLanguage[] = ["javascript", "python", "java", "cpp"];
 
@@ -71,40 +73,6 @@ const LENGTH_THRESHOLDS = {
     short: 10,
     medium: 30,
 } as const;
-
-function isSkeletal(content: string, language: SupportedLanguage): boolean {
-    const lines = content.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-    let substantiveLines = 0;
-
-    if (language === "javascript") {
-        for (const line of lines) {
-            if (
-                !line.match(/^var .* = function\s*\(.*\)\s*{\s*$/) &&
-                !line.match(/.*\.prototype\..* = function\s*\(.*\)\s*{\s*$/) &&
-                !line.match(/^class /) &&
-                !line.match(/^constructor/) &&
-                !line.match(/^[}\]];?$/)
-            ) {
-                substantiveLines++;
-            }
-        }
-    } else if (language === "python") {
-        for (const line of lines) {
-            if (
-                !line.match(/^def .*:$/) &&
-                !line.match(/^class /) &&
-                !line.match(/^@/) &&
-                !line.match(/^pass$/)
-            ) {
-                substantiveLines++;
-            }
-        }
-    } else {
-        return false;
-    }
-
-    return substantiveLines < 1;
-}
 
 function stripComments(content: string, language: SupportedLanguage): string {
     if (language === "python") {
@@ -342,10 +310,19 @@ async function main() {
     
     const startTime = performance.now();
     
-    // Read raw data
-    const rawData = await readFile(INPUT_FILE, "utf-8");
-    const dataset = JSON.parse(rawData);
-    console.log(`Loaded ${dataset.length} raw snippets from ${INPUT_FILE}`);
+    // Read raw data: LeetCode starter code plus (optionally) real snippets
+    // synced from TheAlgorithms via scripts/sync-algorithms.ts.
+    const leetcode = JSON.parse(await readFile(INPUT_FILE, "utf-8"));
+    let algorithms: unknown[] = [];
+    try {
+        algorithms = JSON.parse(await readFile(ALGORITHMS_FILE, "utf-8"));
+    } catch {
+        // Optional source; run `bun run sync:algorithms` to populate it.
+    }
+    const dataset = [...leetcode, ...(Array.isArray(algorithms) ? algorithms : [])];
+    console.log(
+        `Loaded ${leetcode.length} LeetCode + ${Array.isArray(algorithms) ? algorithms.length : 0} algorithm snippets (${dataset.length} total)`,
+    );
     
     // Normalize
     const normalized = normalizeDataset(dataset);
