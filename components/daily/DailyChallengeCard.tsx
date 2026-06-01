@@ -53,14 +53,9 @@ export function DailyChallengeCard({
                 flexDirection={{ base: "column", md: "row" }}
             >
                 <Box>
-                    <Flex align="center" gap={2}>
-                        <Text fontSize="xl" lineHeight={1}>
-                            🗓️
-                        </Text>
-                        <Text fontSize="lg" fontWeight={700} color="var(--text)">
-                            Daily Challenge #{dayNumber}
-                        </Text>
-                    </Flex>
+                    <Text fontSize="lg" fontWeight={700} color="var(--text)">
+                        Daily Challenge #{dayNumber}
+                    </Text>
                     <Text fontSize="sm" color="var(--text-subtle)" mt={1}>
                         {completed
                             ? "Done for today. Same snippet for everyone."
