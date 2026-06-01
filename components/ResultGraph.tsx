@@ -186,9 +186,9 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
                     left={`${(getX(processedData[hoverIndex].time) / graphWidth) * 100}%`}
                     top="0"
                     transform="translate(-50%, -110%)"
-                    bg="#111"
-                    border="1px solid #333"
-                    color="#eee"
+                    bg="var(--terminal-bg)"
+                    border="1px solid var(--border)"
+                    color="var(--text)"
                     p={2}
                     borderRadius="md"
                     fontSize="xs"
@@ -198,7 +198,7 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
                     zIndex={20}
                     minW="120px"
                 >
-                    <Text fontWeight="bold" mb={1} borderBottom="1px solid #333" pb={1}>
+                    <Text fontWeight="bold" mb={1} borderBottom="1px solid var(--border)" pb={1}>
                         Time: {processedData[hoverIndex].time}s
                     </Text>
                     <Stack gap={1}>

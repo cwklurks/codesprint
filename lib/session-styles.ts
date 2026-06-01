@@ -54,8 +54,9 @@ export function getPillButtonStyles(active: boolean, isTerminalMode: boolean): P
         bg: "transparent",
         color: active ? accent : textSubtle,
         border: "none",
+        borderBottom: active ? `2px solid ${accent}` : "2px solid transparent",
         fontWeight: active ? 500 : 400,
-        transition: "color 0.15s ease",
+        transition: "color 0.15s ease, border-color 0.15s ease",
         _hover: { bg: "transparent", color: accent },
         _active: { bg: "transparent" },
     };

@@ -37,4 +37,10 @@ describe("ResultCard honesty", () => {
         expect(container.textContent).not.toContain("correct/incorrect");
         expect(container.textContent).toContain("Most Mistaken (all attempts)");
     });
+
+    it("surfaces Accuracy on the on-screen stat row (matching the share card)", () => {
+        const { container } = render(<ResultCard {...baseProps} accuracy={0.97} errorLog={[]} />);
+        expect(container.textContent).toContain("Accuracy");
+        expect(container.textContent).toContain("97%");
+    });
 });

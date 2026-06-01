@@ -522,7 +522,9 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         setPublishedMetrics(metrics);
     }, []);
 
-    // Interval-based metrics publishing (every 1.5s during running phase)
+    // Interval-based metrics publishing during running phase. ~200ms so the
+    // live WPM climbs continuously instead of lurching every 1.5s; computeMetrics
+    // is cheap arithmetic and patternScore is memoized per snippet.
     useEffect(() => {
         if (phase !== "running") return;
 
@@ -531,7 +533,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
         const intervalId = setInterval(() => {
             calculateAndPublishMetrics();
-        }, 1500);
+        }, 200);
 
         return () => clearInterval(intervalId);
     }, [phase, calculateAndPublishMetrics]);
