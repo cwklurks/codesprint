@@ -63,8 +63,10 @@ export function useKeyboardShortcuts({
     const vimPreviewTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
+        const timeoutRef = vimPreviewTimeoutRef;
         return () => {
-            if (vimPreviewTimeoutRef.current !== null) window.clearTimeout(vimPreviewTimeoutRef.current);
+            const id = timeoutRef.current;
+            if (id !== null) window.clearTimeout(id);
         };
     }, []);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useReducedMotion } from "framer-motion";
-import type { MotionValue, Transition, Variants } from "framer-motion";
+import type { Transition, Variants } from "framer-motion";
 
 export const MOTION_EASE = {
     out: [0.16, 1, 0.3, 1] as const,
@@ -23,13 +23,6 @@ export const SPRING_SMOOTH: Transition = {
     mass: 0.9,
 };
 
-export const SPRING_SNAPPY: Transition = {
-    type: "spring",
-    stiffness: 360,
-    damping: 32,
-    mass: 0.85,
-};
-
 export const FADE_IN_UP: Variants = {
     hidden: { opacity: 0, y: 12 },
     visible: { opacity: 1, y: 0 },
@@ -41,17 +34,6 @@ export const POP_IN: Variants = {
     visible: { opacity: 1, scale: 1 },
     exit: { opacity: 0, scale: 0.95 },
 };
-
-export const STAGGER = {
-    container: 0.06,
-    item: 0.04,
-};
-
-export function animateSpring(value: MotionValue<number>, to: number, transition: Transition = SPRING_SMOOTH) {
-    value.stop();
-    value.set(to);
-    return transition;
-}
 
 export function usePrefersReducedMotion() {
     return useReducedMotion();

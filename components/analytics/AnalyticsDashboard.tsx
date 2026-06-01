@@ -454,18 +454,10 @@ export default function AnalyticsDashboard() {
                         </Text>
                     </Box>
                     <select
+                        aria-label="Time range"
+                        className="analytics-range-select"
                         value={timeRange}
                         onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                        style={{
-                            padding: "6px 12px",
-                            fontSize: "14px",
-                            borderRadius: "6px",
-                            border: "1px solid var(--border)",
-                            background: "var(--surface)",
-                            color: "var(--text)",
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                        }}
                     >
                         {TIME_RANGE_OPTIONS.map((option) => (
                             <option key={option.value} value={option.value} style={{ background: "var(--bg)", color: "var(--text)" }}>

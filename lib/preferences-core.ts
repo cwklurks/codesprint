@@ -500,3 +500,22 @@ export function sanitizePreferences(value: unknown): PreferencesState {
     };
 }
 
+export const THEME_OPTIONS: ReadonlyArray<{ value: ThemePreset; label: string }> = [
+    { value: "midnight", label: "Midnight" },
+    { value: "vaporwave", label: "Vaporwave" },
+    { value: "solarized", label: "Solarized" },
+    { value: "dracula", label: "Dracula" },
+    { value: "monokai", label: "Monokai" },
+    { value: "gruvbox", label: "Gruvbox" },
+    { value: "nord", label: "Nord" },
+    { value: "oneDark", label: "One Dark" },
+    { value: "8008", label: "8008" },
+    { value: "arch", label: "Arch" },
+    { value: "bento", label: "Bento" },
+    { value: "bliss", label: "Bliss" },
+    { value: "botanical", label: "Botanical" },
+    { value: "carbon", label: "Carbon" },
+    { value: "serika", label: "Serika" },
+    { value: "miamiNights", label: "Miami Nights" },
+    { value: "terra", label: "Terra" },
+];

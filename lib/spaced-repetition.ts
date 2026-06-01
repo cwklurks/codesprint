@@ -126,7 +126,7 @@ export function sortByReviewPriority(
   today?: string,
 ): MasteryRecord[] {
   const t = today ?? getToday();
-  return [...records].sort((a, b) => {
+  return records.toSorted((a, b) => {
     const aOverdue = isOverdue(a, t);
     const bOverdue = isOverdue(b, t);
 

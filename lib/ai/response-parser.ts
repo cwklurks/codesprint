@@ -105,6 +105,7 @@ function validateLineCount(drill: DrillResponse, lengthCategory: "short" | "medi
 function validateImports(content: string, language: SupportedLanguage): ValidationResult {
     const violations: string[] = [];
     const allowlist = getStdlibAllowlist(language);
+    const allowlistSet = new Set(allowlist);
     const lines = content.split("\n");
 
     for (const line of lines) {
@@ -114,7 +115,7 @@ function validateImports(content: string, language: SupportedLanguage): Validati
             const match = trimmed.match(/^(?:from\s+(\w+)|import\s+(\w+))/);
             if (match) {
                 const moduleName = match[1] ?? match[2];
-                if (!allowlist.includes(moduleName)) {
+                if (!allowlistSet.has(moduleName)) {
                     violations.push(moduleName);
                 }
             }
@@ -129,7 +130,7 @@ function validateImports(content: string, language: SupportedLanguage): Validati
         } else if (language === "cpp") {
             const match = trimmed.match(/^#include\s*<(\w+)>/);
             if (match) {
-                if (!allowlist.includes(match[1])) {
+                if (!allowlistSet.has(match[1])) {
                     violations.push(match[1]);
                 }
             }

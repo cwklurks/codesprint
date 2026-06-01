@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderWithProviders as render, screen } from "@/test-utils/render";
+import { screen } from "@testing-library/react";
+import { renderWithProviders as render } from "@/test-utils/render";
 import { ErrorBoundary } from "../ErrorBoundary";
 
 const ThrowError = ({ shouldThrow }: { shouldThrow: boolean }) => {

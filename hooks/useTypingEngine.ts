@@ -50,7 +50,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     }, []);
 
     const [startTime, setStartTime] = useState<number | null>(null);
-    const [now, setNow] = useState<number>(Date.now());
+    const [now, setNow] = useState<number>(() => Date.now());
     const [lastErrorAt, setLastErrorAt] = useState<number | null>(null);
     const [errorLog, setErrorLog] = useState<ErrorEntry[]>([]);
     const [totalTypedChars, setTotalTypedChars] = useState(0);

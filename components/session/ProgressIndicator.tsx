@@ -1,7 +1,7 @@
 "use client";
 
 import { Box } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { SESSION_CSS_VARS, MONO_FONT_STACK } from "@/lib/session-styles";
 
 export interface ProgressIndicatorProps {
@@ -67,7 +67,7 @@ export function ProgressIndicator({
     // Standard mode: animated gradient progress bar
     return (
         <Box borderRadius="full" bg={surface} h="6px" overflow="hidden" w="100%" maxW="360px">
-            <motion.div
+            <m.div
                 initial={false}
                 animate={{ scaleX: progress }}
                 transition={

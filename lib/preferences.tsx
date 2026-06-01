@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+    createContext,
+    use,
+    useEffect,
+    useMemo,
+    useSyncExternalStore,
+    type ReactNode,
+} from "react";
 import {
     DEFAULT_PREFERENCES,
     InterfaceMode,
@@ -30,7 +37,6 @@ type PreferencesContextValue = {
     setDebugGapBuffer: (enabled: boolean) => void;
     setSpacedRepetitionEnabled: (enabled: boolean) => void;
     setAdaptiveDifficultyEnabled: (enabled: boolean) => void;
-    // NEW - AI drill preferences
     setAIDrillsEnabled: (enabled: boolean) => void;
     setAIProvider: (provider: "claude" | "openai" | "fireworks") => void;
     setAIMaxDrillsPerDay: (limit: number) => void;
@@ -41,6 +47,9 @@ type PreferencesContextValue = {
 const LIVE_STATS_MIGRATION_KEY = "codesprint-live-stats-default-v1";
 const COUNTDOWN_MIGRATION_KEY = "codesprint-countdown-default-v1";
 const VIM_MODE_MIGRATION_KEY = "codesprint-vim-mode-default-v1";
+const PREFERENCES_CHANGE_EVENT = "codesprint-preferences-change";
+
+const SERVER_SNAPSHOT = JSON.stringify(DEFAULT_PREFERENCES);
 
 const PreferencesContext = createContext<PreferencesContextValue | undefined>(undefined);
 
@@ -90,201 +99,176 @@ function applyTheme(preferences: PreferencesState) {
     root.style.setProperty("--editor-font-size", `${preferences.fontSize}px`);
 }
 
-export function PreferencesProvider({
-    children,
-}: {
-    children: ReactNode;
-}) {
-    const [preferences, setPreferences] = useState<PreferencesState>(
-        DEFAULT_PREFERENCES
-    );
-    const [hydrated, setHydrated] = useState(false);
+function subscribe(callback: () => void) {
+    if (typeof window === "undefined") return () => {};
+    const handler = () => callback();
+    window.addEventListener("storage", handler);
+    window.addEventListener(PREFERENCES_CHANGE_EVENT, handler);
+    return () => {
+        window.removeEventListener("storage", handler);
+        window.removeEventListener(PREFERENCES_CHANGE_EVENT, handler);
+    };
+}
 
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        try {
-            const stored = window.localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored) as unknown;
-                setPreferences(sanitizePreferences(parsed));
-            }
-        } catch (err) {
-            console.warn("Failed to load preferences", err);
-        } finally {
-            setHydrated(true);
+function getSnapshot(): string {
+    if (typeof window === "undefined") return SERVER_SNAPSHOT;
+    try {
+        return window.localStorage.getItem(STORAGE_KEY) ?? SERVER_SNAPSHOT;
+    } catch {
+        return SERVER_SNAPSHOT;
+    }
+}
+
+function getServerSnapshot(): string {
+    return SERVER_SNAPSHOT;
+}
+
+function readCurrent(): PreferencesState {
+    if (typeof window === "undefined") return DEFAULT_PREFERENCES;
+    try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        return stored ? sanitizePreferences(JSON.parse(stored)) : DEFAULT_PREFERENCES;
+    } catch {
+        return DEFAULT_PREFERENCES;
+    }
+}
+
+function writePreferences(updater: (prev: PreferencesState) => PreferencesState) {
+    if (typeof window === "undefined") return;
+    const prev = readCurrent();
+    const next = updater(prev);
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch (err) {
+        console.warn("Failed to persist preferences", err);
+        return;
+    }
+    window.dispatchEvent(new Event(PREFERENCES_CHANGE_EVENT));
+}
+
+function runMigrations() {
+    if (typeof window === "undefined") return;
+    const storage = window.localStorage;
+    let current = readCurrent();
+    let mutated = false;
+
+    if (!storage.getItem(LIVE_STATS_MIGRATION_KEY)) {
+        storage.setItem(LIVE_STATS_MIGRATION_KEY, "1");
+        if (!current.showLiveStatsDuringRun) {
+            current = { ...current, showLiveStatsDuringRun: true };
+            mutated = true;
         }
+    }
+    if (!storage.getItem(COUNTDOWN_MIGRATION_KEY)) {
+        storage.setItem(COUNTDOWN_MIGRATION_KEY, "1");
+        if (current.countdownEnabled === true) {
+            current = { ...current, countdownEnabled: false };
+            mutated = true;
+        }
+    }
+    if (!storage.getItem(VIM_MODE_MIGRATION_KEY)) {
+        storage.setItem(VIM_MODE_MIGRATION_KEY, "1");
+        if (current.vimMode === true) {
+            current = { ...current, vimMode: false };
+            mutated = true;
+        }
+    }
+
+    if (mutated) {
+        try {
+            storage.setItem(STORAGE_KEY, JSON.stringify(current));
+        } catch (err) {
+            console.warn("Failed to persist migrated preferences", err);
+            return;
+        }
+        window.dispatchEvent(new Event(PREFERENCES_CHANGE_EVENT));
+    }
+}
+
+const setTheme = (theme: ThemePreset) => writePreferences((prev) => ({ ...prev, theme }));
+const setFontSize = (size: number) =>
+    writePreferences((prev) => ({ ...prev, fontSize: Math.min(36, Math.max(16, Math.round(size))) }));
+const setCaretWidth = (width: number) =>
+    writePreferences((prev) => ({ ...prev, caretWidth: Math.min(6, Math.max(2, Number(width))) }));
+const setCountdownEnabled = (countdownEnabled: boolean) =>
+    writePreferences((prev) => ({ ...prev, countdownEnabled }));
+const setSurfaceStyle = (surfaceStyle: SurfaceStyle) =>
+    writePreferences((prev) => ({ ...prev, surfaceStyle }));
+const setShowLiveStatsDuringRun = (showLiveStatsDuringRun: boolean) =>
+    writePreferences((prev) => ({ ...prev, showLiveStatsDuringRun }));
+const setInterfaceMode = (interfaceMode: InterfaceMode) =>
+    writePreferences((prev) => ({ ...prev, interfaceMode }));
+const setRequireTabForIndent = (requireTabForIndent: boolean) =>
+    writePreferences((prev) => ({ ...prev, requireTabForIndent }));
+const setSyntaxHighlighting = (syntaxHighlighting: SyntaxHighlightingMode) =>
+    writePreferences((prev) => ({ ...prev, syntaxHighlighting }));
+const setVimMode = (vimMode: boolean) =>
+    writePreferences((prev) => ({ ...prev, vimMode }));
+const setDebugGapBuffer = (debugGapBuffer: boolean) =>
+    writePreferences((prev) => ({ ...prev, debugGapBuffer }));
+const setSpacedRepetitionEnabled = (spacedRepetitionEnabled: boolean) =>
+    writePreferences((prev) => ({ ...prev, spacedRepetitionEnabled }));
+const setAdaptiveDifficultyEnabled = (adaptiveDifficultyEnabled: boolean) =>
+    writePreferences((prev) => ({ ...prev, adaptiveDifficultyEnabled }));
+const setAIDrillsEnabled = (aiDrillsEnabled: boolean) =>
+    writePreferences((prev) => ({ ...prev, aiDrillsEnabled }));
+const setAIProvider = (aiProvider: "claude" | "openai" | "fireworks") =>
+    writePreferences((prev) => ({ ...prev, aiProvider }));
+const setAIMaxDrillsPerDay = (limit: number) =>
+    writePreferences((prev) => ({ ...prev, aiMaxDrillsPerDay: Math.min(1000, Math.max(1, Math.round(limit))) }));
+const setAIAutoGenerate = (aiAutoGenerate: boolean) =>
+    writePreferences((prev) => ({ ...prev, aiAutoGenerate }));
+const setAIDrillLengthPreference = (aiDrillLengthPreference: SnippetLength | "auto") =>
+    writePreferences((prev) => ({ ...prev, aiDrillLengthPreference }));
+
+const PREFERENCE_SETTERS = {
+    setTheme,
+    setFontSize,
+    setCaretWidth,
+    setCountdownEnabled,
+    setSurfaceStyle,
+    setShowLiveStatsDuringRun,
+    setInterfaceMode,
+    setRequireTabForIndent,
+    setSyntaxHighlighting,
+    setVimMode,
+    setDebugGapBuffer,
+    setSpacedRepetitionEnabled,
+    setAdaptiveDifficultyEnabled,
+    setAIDrillsEnabled,
+    setAIProvider,
+    setAIMaxDrillsPerDay,
+    setAIAutoGenerate,
+    setAIDrillLengthPreference,
+} as const;
+
+export function PreferencesProvider({ children }: { children: ReactNode }) {
+    const storedJson = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+    const preferences = useMemo<PreferencesState>(() => {
+        try {
+            return sanitizePreferences(JSON.parse(storedJson));
+        } catch {
+            return DEFAULT_PREFERENCES;
+        }
+    }, [storedJson]);
+
+    useEffect(() => {
+        runMigrations();
     }, []);
-
-    useEffect(() => {
-        if (!hydrated || typeof window === "undefined") return;
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-    }, [preferences, hydrated]);
-
-    useEffect(() => {
-        if (!hydrated || typeof window === "undefined") return;
-        const storage = window.localStorage;
-
-        setPreferences((prev) => {
-            try {
-                let next = prev;
-                if (!storage.getItem(LIVE_STATS_MIGRATION_KEY)) {
-                    storage.setItem(LIVE_STATS_MIGRATION_KEY, "1");
-                    if (!next.showLiveStatsDuringRun) {
-                        next = { ...next, showLiveStatsDuringRun: true };
-                    }
-                }
-                if (!storage.getItem(COUNTDOWN_MIGRATION_KEY)) {
-                    storage.setItem(COUNTDOWN_MIGRATION_KEY, "1");
-                    if (next.countdownEnabled === true) {
-                        next = { ...next, countdownEnabled: false };
-                    }
-                }
-                if (!storage.getItem(VIM_MODE_MIGRATION_KEY)) {
-                    storage.setItem(VIM_MODE_MIGRATION_KEY, "1");
-                    if (next.vimMode === true) {
-                        next = { ...next, vimMode: false };
-                    }
-                }
-                return next;
-            } catch {
-                return prev;
-            }
-        });
-    }, [hydrated]);
 
     useEffect(() => {
         applyTheme(preferences);
     }, [preferences]);
 
-    const setTheme = useCallback((theme: ThemePreset) => {
-        setPreferences((prev) => ({ ...prev, theme }));
-    }, []);
-
-    const setFontSize = useCallback((size: number) => {
-        const clamped = Math.min(36, Math.max(16, Math.round(size)));
-        setPreferences((prev) => ({ ...prev, fontSize: clamped }));
-    }, []);
-
-    const setCaretWidth = useCallback((width: number) => {
-        const clamped = Math.min(6, Math.max(2, Number(width)));
-        setPreferences((prev) => ({ ...prev, caretWidth: clamped }));
-    }, []);
-
-    const setCountdownEnabled = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, countdownEnabled: enabled }));
-    }, []);
-
-    const setSurfaceStyle = useCallback((style: SurfaceStyle) => {
-        setPreferences((prev) => ({ ...prev, surfaceStyle: style }));
-    }, []);
-
-    const setShowLiveStatsDuringRun = useCallback((show: boolean) => {
-        setPreferences((prev) => ({ ...prev, showLiveStatsDuringRun: show }));
-    }, []);
-
-    const setInterfaceMode = useCallback((mode: InterfaceMode) => {
-        setPreferences((prev) => ({ ...prev, interfaceMode: mode }));
-    }, []);
-
-    const setRequireTabForIndent = useCallback((require: boolean) => {
-        setPreferences((prev) => ({ ...prev, requireTabForIndent: require }));
-    }, []);
-
-    const setSyntaxHighlighting = useCallback((mode: SyntaxHighlightingMode) => {
-        setPreferences((prev) => ({ ...prev, syntaxHighlighting: mode }));
-    }, []);
-
-    const setVimMode = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, vimMode: enabled }));
-    }, []);
-
-    const setDebugGapBuffer = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, debugGapBuffer: enabled }));
-    }, []);
-
-    const setSpacedRepetitionEnabled = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, spacedRepetitionEnabled: enabled }));
-    }, []);
-
-    const setAdaptiveDifficultyEnabled = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, adaptiveDifficultyEnabled: enabled }));
-    }, []);
-
-    // NEW - AI drill preferences setters
-    const setAIDrillsEnabled = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, aiDrillsEnabled: enabled }));
-    }, []);
-
-    const setAIProvider = useCallback((provider: "claude" | "openai" | "fireworks") => {
-        setPreferences((prev) => ({ ...prev, aiProvider: provider }));
-    }, []);
-
-    const setAIMaxDrillsPerDay = useCallback((limit: number) => {
-        const clamped = Math.min(1000, Math.max(1, Math.round(limit)));
-        setPreferences((prev) => ({ ...prev, aiMaxDrillsPerDay: clamped }));
-    }, []);
-
-    const setAIAutoGenerate = useCallback((enabled: boolean) => {
-        setPreferences((prev) => ({ ...prev, aiAutoGenerate: enabled }));
-    }, []);
-
-    const setAIDrillLengthPreference = useCallback((preference: SnippetLength | "auto") => {
-        setPreferences((prev) => ({ ...prev, aiDrillLengthPreference: preference }));
-    }, []);
-
     useEffect(() => {
         if (typeof document === "undefined") return;
-        document.documentElement.setAttribute(
-            "data-interface",
-            preferences.interfaceMode
-        );
+        document.documentElement.setAttribute("data-interface", preferences.interfaceMode);
     }, [preferences.interfaceMode]);
 
     const value = useMemo<PreferencesContextValue>(
-        () => ({
-            preferences,
-            setTheme,
-            setFontSize,
-            setCaretWidth,
-            setCountdownEnabled,
-            setSurfaceStyle,
-            setShowLiveStatsDuringRun,
-            setInterfaceMode,
-            setRequireTabForIndent,
-            setSyntaxHighlighting,
-            setVimMode,
-            setDebugGapBuffer,
-            setSpacedRepetitionEnabled,
-            setAdaptiveDifficultyEnabled,
-            // NEW - AI drill preferences
-            setAIDrillsEnabled,
-            setAIProvider,
-            setAIMaxDrillsPerDay,
-            setAIAutoGenerate,
-            setAIDrillLengthPreference,
-        }),
-        [
-            preferences,
-            setTheme,
-            setFontSize,
-            setCaretWidth,
-            setCountdownEnabled,
-            setSurfaceStyle,
-            setShowLiveStatsDuringRun,
-            setInterfaceMode,
-            setRequireTabForIndent,
-            setSyntaxHighlighting,
-            setVimMode,
-            setDebugGapBuffer,
-            setSpacedRepetitionEnabled,
-            setAdaptiveDifficultyEnabled,
-            // NEW - AI drill preferences
-            setAIDrillsEnabled,
-            setAIProvider,
-            setAIMaxDrillsPerDay,
-            setAIAutoGenerate,
-            setAIDrillLengthPreference,
-        ]
+        () => ({ preferences, ...PREFERENCE_SETTERS }),
+        [preferences],
     );
 
     return (
@@ -295,31 +279,17 @@ export function PreferencesProvider({
 }
 
 export function usePreferences() {
-    const context = useContext(PreferencesContext);
-    if (!context)
-        throw new Error("usePreferences must be used within PreferencesProvider");
+    const context = use(PreferencesContext);
+    if (!context) throw new Error("usePreferences must be used within PreferencesProvider");
     return context;
 }
 
-export const THEME_OPTIONS: Array<{ value: ThemePreset; label: string }> = [
-    { value: "midnight", label: "Midnight" },
-    { value: "vaporwave", label: "Vaporwave" },
-    { value: "solarized", label: "Solarized" },
-    { value: "dracula", label: "Dracula" },
-    { value: "monokai", label: "Monokai" },
-    { value: "gruvbox", label: "Gruvbox" },
-    { value: "nord", label: "Nord" },
-    { value: "oneDark", label: "One Dark" },
-    { value: "8008", label: "8008" },
-    { value: "arch", label: "Arch" },
-    { value: "bento", label: "Bento" },
-    { value: "bliss", label: "Bliss" },
-    { value: "botanical", label: "Botanical" },
-    { value: "carbon", label: "Carbon" },
-    { value: "serika", label: "Serika" },
-    { value: "miamiNights", label: "Miami Nights" },
-    { value: "terra", label: "Terra" },
-];
-
 export { DEFAULT_PREFERENCES, THEME_PRESETS } from "@/lib/preferences-core";
-export type { ThemePreset, SurfaceStyle, InterfaceMode, PreferencesState, SyntaxHighlightingMode, SnippetLength } from "@/lib/preferences-core";
+export type {
+    ThemePreset,
+    SurfaceStyle,
+    InterfaceMode,
+    PreferencesState,
+    SyntaxHighlightingMode,
+    SnippetLength,
+} from "@/lib/preferences-core";

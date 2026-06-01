@@ -42,7 +42,7 @@ export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
                     <DrawerBody>
                         <Stack gap={6} mt={4}>
                             <Text color="var(--text-subtle)" fontSize="sm">
-                                Stay on the keys—every action has a gesture.
+                                Stay on the keys, every action has a gesture.
                             </Text>
                             <Stack gap={4}>
                                 {KEYBOARD_SHORTCUTS.map((shortcut) => (

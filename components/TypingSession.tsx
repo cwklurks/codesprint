@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Box, Stack } from "@chakra-ui/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
 
 import GapBufferVisualizer from "@/components/GapBufferVisualizer";
@@ -253,7 +253,7 @@ export default function TypingSession() {
         <Box position="relative" minH="400px">
             <AnimatePresence mode="wait">
                 {engine.phase !== "finished" ? (
-                    <motion.div
+                    <m.div
                         key="session"
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -285,7 +285,7 @@ export default function TypingSession() {
                             {/* Main Panel Area */}
                             <Stack w="100%" gap={layoutGap} align="center">
                                 <Box w="100%" position="relative">
-                                    <motion.div
+                                    <m.div
                                         ref={panelContainerRef}
                                         key={`${controls.snippet.id}-${controls.language}-${controls.lengthPreference}`}
                                         {...panelMotion}
@@ -334,7 +334,7 @@ export default function TypingSession() {
                                                 />
                                             )}
                                         </Box>
-                                    </motion.div>
+                                    </m.div>
 
                                     {/* Countdown Overlay */}
                                     <CountdownOverlay
@@ -345,7 +345,7 @@ export default function TypingSession() {
                                 </Box>
                             </Stack>
                         </Box>
-                    </motion.div>
+                    </m.div>
                 ) : (
                     /* Result Screen */
                     <ResultScreen
@@ -372,6 +372,8 @@ export default function TypingSession() {
                         newlyUnlocked={achievements.newlyUnlocked}
                         difficultyTransition={preferences.adaptiveDifficultyEnabled ? difficultyTransition : undefined}
                         isAIDrill={controls.snippet.problemId.startsWith("ai-drill-")}
+                        priorBestWpm={lifecycle.priorBestWpm}
+                        isNewBest={lifecycle.isNewBest}
                     />
                 )}
             </AnimatePresence>

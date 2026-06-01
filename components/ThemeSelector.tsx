@@ -1,7 +1,8 @@
 "use client";
 
 import { Box, Flex, Grid, Text } from "@chakra-ui/react";
-import { THEME_OPTIONS, THEME_PRESETS, usePreferences } from "@/lib/preferences";
+import { THEME_OPTIONS, THEME_PRESETS } from "@/lib/preferences-core";
+import { usePreferences } from "@/lib/preferences";
 
 export function ThemeSelector() {
     const { preferences, setTheme } = usePreferences();

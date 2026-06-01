@@ -46,10 +46,10 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
             const customSnippets = await idbGetAll<CustomSnippetRecord>(STORES.customSnippets);
             
             // Filter to accepted AI drills and convert to Snippet type
-            const aiDrills = customSnippets
-                .filter(isAcceptedAIDrill)
-                .map(toSnippet);
-            
+            const aiDrills: Snippet[] = [];
+            for (const cs of customSnippets) {
+                if (isAcceptedAIDrill(cs)) aiDrills.push(toSnippet(cs));
+            }
             return aiDrills;
         } catch (error) {
             console.error("Failed to load AI drills:", error);
@@ -102,12 +102,9 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
             const otherLanguages = LANGUAGES.filter(lang => lang !== currentLanguage);
 
             const loadInBackground = async () => {
-                for (const lang of otherLanguages) {
-                    if (!mounted) return;
-                    await loadLanguage(lang);
-                    if (!mounted) return;
-                    rebuildSnippets();
-                }
+                await Promise.all(otherLanguages.map((lang) => loadLanguage(lang)));
+                if (!mounted) return;
+                rebuildSnippets();
             };
 
             if (typeof requestIdleCallback !== "undefined") {
