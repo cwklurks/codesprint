@@ -78,6 +78,25 @@ export function withMonacoAlpha(color: string, alpha: number): string {
     return normalized;
 }
 
+/**
+ * Decide whether the caret should fire its positive "thump" feedback.
+ *
+ * Fires only when the cursor advanced FORWARD and the character just consumed
+ * (the one immediately before the new position) was typed correctly. Backspaces,
+ * no-ops, and advances that landed on a flagged-wrong char get no reward.
+ */
+export function shouldThumpCaret(
+    prevCursorChar: number,
+    nextCursorChar: number,
+    wrongChars: Set<number>,
+): boolean {
+    if (nextCursorChar <= prevCursorChar) {
+        return false;
+    }
+    const consumedIndex = nextCursorChar - 1;
+    return !wrongChars.has(consumedIndex);
+}
+
 export function getPreviewIndex(content: string, caretIndex: number, previewChars = 12): number {
     let index = Math.max(0, Math.min(caretIndex, content.length));
     let remaining = Math.max(0, previewChars);

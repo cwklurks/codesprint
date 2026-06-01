@@ -5,9 +5,11 @@ import Editor, { type OnMount } from "@monaco-editor/react";
 import { initVimMode, type VimMode } from "monaco-vim";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
-import { getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
+import { getPreviewIndex, hexToRgb, shouldThumpCaret, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
+import { minAlphaForContrast } from "@/lib/contrast";
 import {
     CARET_BLINK_TIMEOUT_MS,
+    CARET_THUMP_TIMEOUT_MS,
     HEIGHT_BUFFER_LINES,
     LINE_HEIGHT_MULTIPLIER,
     MAX_EDITOR_HEIGHT,
@@ -51,6 +53,8 @@ export default function CodePanel({
     const caretPositionRef = useRef<Monaco.Position | null>(null);
     const caretAnimFrameRef = useRef<number | null>(null);
     const caretBlinkTimeoutRef = useRef<number | null>(null);
+    const caretThumpTimeoutRef = useRef<number | null>(null);
+    const prevCursorRef = useRef<number>(cursorChar);
     const [editorReadyToken, setEditorReadyToken] = useState(0);
     const caretUpdatePendingRef = useRef(false);
     const vimModeRef = useRef<VimMode | null>(null);
@@ -61,7 +65,7 @@ export default function CodePanel({
         const lines = content.split("\n").length + HEIGHT_BUFFER_LINES;
         return Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_EDITOR_HEIGHT, lines * derivedLineHeight));
     }, [content, derivedLineHeight]);
-    const snippetKey = useMemo(() => `${language}-${content.length}-${content.slice(0, 16)}`, [language, content]);
+    const snippetKey = `${language}-${content.length}-${content.slice(0, 16)}`;
     const totalLines = useMemo(() => {
         if (!content) return 1;
         return content.split(LINE_BREAK_REGEX).length;
@@ -159,8 +163,11 @@ export default function CodePanel({
         const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
         const isLight = luminance > 128;
 
-        // Helper to apply 25% opacity to a color for the "untyped" state
-        const fade = (color: string) => withMonacoAlpha(color, 0.25);
+        // Fade untyped (read-ahead) text to a muted state, but derive the alpha
+        // per-theme so the composite over the theme bg clears the WCAG 3:1 floor.
+        // A flat 0.25 left it near-invisible on low-contrast themes.
+        const untypedAlpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
+        const fade = (color: string) => withMonacoAlpha(color, untypedAlpha);
 
         const themeName = `codesprint-${preferences.theme}`;
         try {
@@ -379,6 +386,28 @@ export default function CodePanel({
         }
     }, [caretErrorActive]);
 
+    // Positive per-keystroke feedback: fire a transient GPU-only "thump" when the
+    // cursor advances forward onto a newly-correct char. Caret-only (no per-char
+    // Monaco decorations). The class self-removes so it can re-fire next keystroke.
+    useEffect(() => {
+        const prevCursor = prevCursorRef.current;
+        prevCursorRef.current = cursorChar;
+        if (!shouldThumpCaret(prevCursor, cursorChar, wrongChars)) return;
+        const caretNode = caretNodeRef.current;
+        if (!caretNode) return;
+        // Restart the animation: drop the class, force reflow, re-add it.
+        caretNode.classList.remove("cs-caret-thump");
+        void caretNode.offsetWidth;
+        caretNode.classList.add("cs-caret-thump");
+        if (caretThumpTimeoutRef.current !== null) {
+            window.clearTimeout(caretThumpTimeoutRef.current);
+        }
+        caretThumpTimeoutRef.current = window.setTimeout(() => {
+            caretNode.classList.remove("cs-caret-thump");
+            caretThumpTimeoutRef.current = null;
+        }, CARET_THUMP_TIMEOUT_MS);
+    }, [cursorChar, wrongChars]);
+
     useEffect(() => {
         ensureCaretNode();
         const editor = editorRef.current;
@@ -443,33 +472,51 @@ export default function CodePanel({
     }, [cursorChar, wrongChars, content, editorReadyToken, ensureCaretNode]);
 
     useEffect(() => {
+        const editorRefCapture = editorRef;
+        const decorationIdsRefCapture = decorationIdsRef;
+        const caretAnimFrameRefCapture = caretAnimFrameRef;
+        const caretBlinkTimeoutRefCapture = caretBlinkTimeoutRef;
+        const caretThumpTimeoutRefCapture = caretThumpTimeoutRef;
+        const caretLayerRefCapture = caretLayerRef;
+        const caretNodeRefCapture = caretNodeRef;
+        const caretPositionRefCapture = caretPositionRef;
+        const caretUpdatePendingRefCapture = caretUpdatePendingRef;
+        const vimModeRefCapture = vimModeRef;
+        const statusNodeRefCapture = statusNodeRef;
         return () => {
-            const editor = editorRef.current;
-            if (editor && decorationIdsRef.current.length) {
-                editor.deltaDecorations(decorationIdsRef.current, []);
-                decorationIdsRef.current = [];
+            const editor = editorRefCapture.current;
+            if (editor && decorationIdsRefCapture.current.length) {
+                editor.deltaDecorations(decorationIdsRefCapture.current, []);
+                decorationIdsRefCapture.current = [];
             }
-            if (caretAnimFrameRef.current !== null) {
-                window.cancelAnimationFrame(caretAnimFrameRef.current);
+            if (caretAnimFrameRefCapture.current !== null) {
+                window.cancelAnimationFrame(caretAnimFrameRefCapture.current);
             }
-            if (caretBlinkTimeoutRef.current !== null) {
-                window.clearTimeout(caretBlinkTimeoutRef.current);
+            if (caretBlinkTimeoutRefCapture.current !== null) {
+                window.clearTimeout(caretBlinkTimeoutRefCapture.current);
             }
-            if (caretLayerRef.current && caretNodeRef.current && caretLayerRef.current.contains(caretNodeRef.current)) {
-                caretLayerRef.current.removeChild(caretNodeRef.current);
+            if (caretThumpTimeoutRefCapture.current !== null) {
+                window.clearTimeout(caretThumpTimeoutRefCapture.current);
             }
-            caretNodeRef.current = null;
-            caretLayerRef.current = null;
-            caretPositionRef.current = null;
-            caretUpdatePendingRef.current = false;
+            if (
+                caretLayerRefCapture.current &&
+                caretNodeRefCapture.current &&
+                caretLayerRefCapture.current.contains(caretNodeRefCapture.current)
+            ) {
+                caretLayerRefCapture.current.removeChild(caretNodeRefCapture.current);
+            }
+            caretNodeRefCapture.current = null;
+            caretLayerRefCapture.current = null;
+            caretPositionRefCapture.current = null;
+            caretUpdatePendingRefCapture.current = false;
 
-            if (vimModeRef.current) {
-                vimModeRef.current.dispose();
-                vimModeRef.current = null;
+            if (vimModeRefCapture.current) {
+                vimModeRefCapture.current.dispose();
+                vimModeRefCapture.current = null;
             }
-            if (statusNodeRef.current && statusNodeRef.current.parentElement) {
-                statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
-                statusNodeRef.current = null;
+            if (statusNodeRefCapture.current && statusNodeRefCapture.current.parentElement) {
+                statusNodeRefCapture.current.parentElement.removeChild(statusNodeRefCapture.current);
+                statusNodeRefCapture.current = null;
             }
         };
     }, []);

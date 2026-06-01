@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { saveScore } from "@/lib/leaderboard";
-import { createSessionAsync } from "@/lib/storage/session-history";
+import { createSessionAsync, getSessionStatsAsync } from "@/lib/storage/session-history";
+import { isNewBest as computeIsNewBest } from "@/lib/personal-best";
 import type { SupportedLanguage, SnippetLength, Difficulty } from "@/lib/snippets";
 import type { HistoryEntry, ErrorEntry } from "@/hooks/useTypingEngine";
 import type { Phase } from "./useFocusManagement";
@@ -47,6 +48,10 @@ export interface UseSessionLifecycleReturn {
     clearAutoAdvance: () => void;
     /** Set auto-advance with a duration in ms */
     setAutoAdvance: (durationMs: number) => void;
+    /** Best WPM across all prior runs, captured BEFORE the current run was persisted (undefined until the current run finishes) */
+    priorBestWpm: number | undefined;
+    /** Whether the just-finished run set a new personal best */
+    isNewBest: boolean;
 }
 
 /**
@@ -74,6 +79,8 @@ export function useSessionLifecycle({
     onSessionFinished,
 }: UseSessionLifecycleProps): UseSessionLifecycleReturn {
     const [autoAdvanceDeadline, setAutoAdvanceDeadline] = useState<number | null>(null);
+    const [priorBestWpm, setPriorBestWpm] = useState<number | undefined>(undefined);
+    const [isNewBest, setIsNewBest] = useState(false);
     const autoAdvanceTimeoutRef = useRef<number | null>(null);
     const hasSavedRef = useRef(false);
 
@@ -105,6 +112,8 @@ export function useSessionLifecycle({
     useEffect(() => {
         if (phase !== "finished") {
             hasSavedRef.current = false;
+            setIsNewBest(false);
+            setPriorBestWpm(undefined);
         }
     }, [phase]);
 
@@ -120,27 +129,43 @@ export function useSessionLifecycle({
             snippetId,
         });
 
-        createSessionAsync({
-            snippetId,
-            language,
-            lengthCategory,
-            difficulty,
-            ...(isAIDrill !== undefined ? { isAIDrill } : {}),
-            wpm: metrics.adjustedWpm,
-            rawWpm: metrics.rawWpm,
-            accuracy: metrics.accuracy,
-            elapsedMs,
-            totalKeystrokes,
-            correctKeystrokes,
-            errorCount,
-            history,
-            patternScore: metrics.patternScore,
-            errors,
-            snippetContentLength: snippetContent?.length,
-            snippetContent,
-        }).catch(() => {
-            // IndexedDB may be unavailable; legacy saveScore above provides fallback
-        });
+        // Capture the prior best BEFORE persisting the current run so the
+        // comparison never includes this run. Await the stats read, then
+        // persist — this guarantees the read completes before the write,
+        // regardless of underlying IndexedDB transaction timing.
+        const currentWpm = metrics.adjustedWpm;
+        getSessionStatsAsync()
+            .then((stats) => {
+                const prior = stats.totalSessions > 0 ? stats.bestWpm : undefined;
+                setPriorBestWpm(prior);
+                setIsNewBest(computeIsNewBest(currentWpm, prior));
+            })
+            .catch(() => {
+                // Stats unavailable; leave PB state at its reset defaults.
+            })
+            .finally(() => {
+                createSessionAsync({
+                    snippetId,
+                    language,
+                    lengthCategory,
+                    difficulty,
+                    ...(isAIDrill !== undefined ? { isAIDrill } : {}),
+                    wpm: metrics.adjustedWpm,
+                    rawWpm: metrics.rawWpm,
+                    accuracy: metrics.accuracy,
+                    elapsedMs,
+                    totalKeystrokes,
+                    correctKeystrokes,
+                    errorCount,
+                    history,
+                    patternScore: metrics.patternScore,
+                    errors,
+                    snippetContentLength: snippetContent?.length,
+                    snippetContent,
+                }).catch(() => {
+                    // IndexedDB may be unavailable; legacy saveScore above provides fallback
+                });
+            });
 
         if (onSessionFinished) {
             onSessionFinished({
@@ -159,5 +184,7 @@ export function useSessionLifecycle({
         autoAdvanceDeadline,
         clearAutoAdvance,
         setAutoAdvance,
+        priorBestWpm,
+        isNewBest,
     };
 }

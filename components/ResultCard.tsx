@@ -3,14 +3,17 @@
 import { Badge, Box, Button, Flex, Stack, Text, chakra } from "@chakra-ui/react";
 import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-const MotionBox = motion(Box);
-const MotionFlex = motion(Flex);
+import { m } from "framer-motion";
+const MotionBox = m(Box);
+const MotionFlex = m(Flex);
 import ResultGraph, { type ResultGraphPoint } from "./ResultGraph";
 import type { Token } from "@/lib/tokenizer";
 import type { WeakPattern } from "@/lib/pattern-analysis";
 import { analyzeWeakPatterns } from "@/lib/pattern-analysis";
 import { renderShareCard, shareCard, downloadCanvas, type ShareCardData } from "@/lib/share-card";
+import { computePercentile } from "@/lib/percentile";
+import { bestDelta } from "@/lib/personal-best";
+import { usePrefersReducedMotion } from "@/lib/motion";
 
 type ErrorEntry = { expected: string; got: string; index: number };
 
@@ -33,6 +36,8 @@ type ResultCardProps = {
     tokens?: Token[];
     contentLength?: number;
     isAIDrill?: boolean;
+    priorBestWpm?: number;
+    isNewBest?: boolean;
 };
 
 function formatDuration(ms: number) {
@@ -69,7 +74,10 @@ export default function ResultCard({
     tokens,
     contentLength,
     isAIDrill,
+    priorBestWpm,
+    isNewBest,
 }: ResultCardProps) {
+    const prefersReducedMotion = usePrefersReducedMotion() ?? false;
     const [countdown, setCountdown] = useState<number | null>(null);
     const [isSharing, setIsSharing] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -113,7 +121,9 @@ export default function ResultCard({
         difficulty,
         timeMs,
         history: history.map((h) => ({ time: h.time, wpm: h.wpm })),
-    }), [wpm, rawWpm, accuracy, patternScore, snippetTitle, snippetId, language, difficulty, timeMs, history]);
+        bestWpm: priorBestWpm,
+        isNewBest,
+    }), [wpm, rawWpm, accuracy, patternScore, snippetTitle, snippetId, language, difficulty, timeMs, history, priorBestWpm, isNewBest]);
 
     const handleShare = useCallback(async () => {
         setIsSharing(true);
@@ -147,16 +157,12 @@ export default function ResultCard({
 
     // Simple normal distribution approximation for WPM percentiles
     // Mean ~40 WPM, SD ~15 for general population.
-    // For a coding app, maybe slightly higher? Let's stick to general for "wow" factor or slightly higher for realism.
-    // Let's use Mean=45, SD=18.
-    const percentile = useMemo(() => {
-        const z = (wpm - 45) / 18;
-        // Approximation of CDF for normal distribution
-        // Using a simple sigmoid-like approximation or error function if available, but simple is fine.
-        // 1 / (1 + exp(-1.7 * z)) is a logistic approximation, close enough for this.
-        const p = 1 / (1 + Math.exp(-1.6 * z));
-        return Math.min(99, Math.max(1, Math.round(p * 100)));
-    }, [wpm]);
+    // Shared with the share card (lib/percentile.ts) so both surfaces agree.
+    const percentile = useMemo(() => computePercentile(wpm), [wpm]);
+
+    const pbDelta = useMemo(() => bestDelta(wpm, priorBestWpm), [wpm, priorBestWpm]);
+    // A subtle "best" line only makes sense when we have a real prior best to beat.
+    const showPriorBest = !isNewBest && priorBestWpm !== undefined && priorBestWpm > 0;
 
     return (
         <MotionBox
@@ -184,7 +190,7 @@ export default function ResultCard({
                             <Text fontSize="4xl" fontWeight={700} color="var(--accent)" lineHeight={1}>
                                 {percentile}%
                             </Text>
-                            <Text fontSize="md" color="var(--text-subtle)" mt={1}>faster than others</Text>
+                            <Text fontSize="md" color="var(--text-subtle)" mt={1}>faster than peers</Text>
                         </Box>
                     </Flex>
                     <Box textAlign="center" px={{ md: 8 }}>
@@ -192,6 +198,41 @@ export default function ResultCard({
                             {Math.round(wpm)}
                         </Text>
                         <Text fontSize="md" color="var(--text-subtle)" mt={1}>wpm</Text>
+                        {isNewBest ? (
+                            <MotionFlex
+                                align="center"
+                                justify="center"
+                                gap={1.5}
+                                mt={3}
+                                mx="auto"
+                                w="fit-content"
+                                px={3}
+                                py={1}
+                                borderRadius="full"
+                                bg="var(--accent)"
+                                color="var(--bg)"
+                                {...(prefersReducedMotion
+                                    ? {}
+                                    : {
+                                          initial: { opacity: 0, scale: 0.8 },
+                                          animate: { opacity: 1, scale: 1 },
+                                          transition: { type: "spring", stiffness: 320, damping: 18, delay: 0.15 },
+                                      })}
+                            >
+                                <Text fontSize="xs" fontWeight={800} letterSpacing="0.08em">
+                                    NEW BEST
+                                </Text>
+                                {pbDelta > 0 && (
+                                    <Text fontSize="xs" fontWeight={800}>
+                                        +{pbDelta}
+                                    </Text>
+                                )}
+                            </MotionFlex>
+                        ) : showPriorBest ? (
+                            <Text fontSize="xs" color="var(--text-subtle)" mt={2}>
+                                best: {Math.round(priorBestWpm!)}
+                            </Text>
+                        ) : null}
                     </Box>
                     <Flex flex={{ md: "1 1 0" }} justify={{ base: "center", md: "flex-start" }}>
                         {patternScore !== undefined ? (
@@ -261,7 +302,7 @@ export default function ResultCard({
                         rowGap={4}
                     >
                         <StatBox label="Raw" value={Math.round(rawWpm).toString()} />
-                        <StatBox label="Characters" value={`${(contentLength ?? 0) - errors}/${errors}`} helper="correct/incorrect" />
+                        <StatBox label="Characters" value={`${(contentLength ?? 0) - errors}/${errors}`} helper="correct/uncorrected" />
                         <StatBox label="Time" value={formatDuration(timeMs)} />
                     </Box>
                 </MotionBox>
@@ -296,7 +337,7 @@ export default function ResultCard({
                 {mostMistaken.length > 0 && (
                     <MotionBox textAlign="center" mt={8}>
                         <Text fontSize="xs" textTransform="uppercase" letterSpacing="0.1em" color="var(--text-subtle)" mb={3}>
-                            Most Mistaken
+                            Most Mistaken (all attempts)
                         </Text>
                         <Flex gap={3} flexWrap="wrap" justify="center">
                             {mostMistaken.map(([char, count]) => (

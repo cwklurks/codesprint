@@ -1,7 +1,7 @@
 "use client";
 
 import { Flex, Stack, Text } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import ResultCard from "@/components/ResultCard";
 import { getResultCardMotion } from "@/lib/motion-config";
 import type { SupportedLanguage, SnippetLength } from "@/lib/snippets";
@@ -57,6 +57,10 @@ export interface ResultScreenProps {
     difficultyTransition?: { newDifficulty: Difficulty; reason: string };
     /** Whether the snippet was AI-generated */
     isAIDrill?: boolean;
+    /** Best WPM across all prior runs, excluding the current run */
+    priorBestWpm?: number;
+    /** Whether the just-finished run set a new personal best */
+    isNewBest?: boolean;
 }
 
 /**
@@ -87,11 +91,13 @@ export function ResultScreen({
     newlyUnlocked,
     difficultyTransition,
     isAIDrill,
+    priorBestWpm,
+    isNewBest,
 }: ResultScreenProps) {
     const resultCardMotion = getResultCardMotion(prefersReducedMotion);
 
     return (
-        <motion.div
+        <m.div
             key="result"
             {...resultCardMotion}
             style={{
@@ -121,6 +127,8 @@ export function ResultScreen({
                     tokens={tokens}
                     contentLength={contentLength}
                     isAIDrill={isAIDrill}
+                    priorBestWpm={priorBestWpm}
+                    isNewBest={isNewBest}
                 />
 
                 {(xpGained !== undefined && xpGained > 0) && (
@@ -155,6 +163,6 @@ export function ResultScreen({
                     </Text>
                 )}
             </Stack>
-        </motion.div>
+        </m.div>
     );
 }
