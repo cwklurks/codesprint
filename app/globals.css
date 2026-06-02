@@ -123,8 +123,13 @@ main {
     border-radius: 999px;
     background: var(--caret);
     transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
-    transition: transform 0.08s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s ease, height 0.1s ease;
-    animation: cs-caret-blink 1.05s steps(1, end) infinite;
+    /* Effortless glide: easeOutQuint covers ~80% of the travel in the first ~45ms
+       then floats softly into place — reads as weightless, never snaps. A CSS
+       transition already redirects mid-flight on the next keystroke (like
+       Monkeytype's cancel-and-retarget), so the target just needs to be written
+       without a frame delay (done synchronously in CodePanel's layout effect). */
+    transition: transform 0.11s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, height 0.1s ease;
+    animation: cs-caret-blink 1.05s ease-in-out infinite;
     will-change: transform, opacity;
     opacity: 0.92;
     pointer-events: none;
@@ -146,41 +151,20 @@ main {
     animation: cs-caret-error 0.35s ease-out;
 }
 
-/* Positive per-keystroke feedback: a brief GPU-only "thump" on a correct
-   forward advance. Overshoots ~1px in the caret's travel direction (rightward)
-   and settles. Kept under 120ms so it never throttles fast typists. The keyframe
-   composes the caret position vars so it does not fight the base transform. */
-.cs-caret.cs-caret-thump {
-    animation: cs-caret-thump 0.09s ease-out;
-}
-
-@keyframes cs-caret-thump {
-    0% {
-        transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
-        opacity: 1;
-    }
-
-    45% {
-        transform: translate3d(calc(var(--caret-x, 0px) + 1px), var(--caret-y, 0px), 0);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translate3d(var(--caret-x, 0px), var(--caret-y, 0px), 0);
-        opacity: 1;
-    }
-}
-
 @keyframes cs-caret-blink {
 
     0%,
-    49% {
+    40% {
         opacity: 1;
     }
 
-    50%,
-    100% {
+    50% {
         opacity: 0;
+    }
+
+    60%,
+    100% {
+        opacity: 1;
     }
 }
 
@@ -204,13 +188,11 @@ main {
     .cs-caret {
         animation: none;
         opacity: 0.92;
+        /* No glide for reduced-motion users — the caret jumps straight to position. */
+        transition: none;
     }
 
     .cs-caret.cs-caret-error {
-        animation: none;
-    }
-
-    .cs-caret.cs-caret-thump {
         animation: none;
     }
 

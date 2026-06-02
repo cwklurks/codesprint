@@ -20,6 +20,7 @@ import { usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
 import { getPanelMotion } from "@/lib/motion-config";
 import { getLayoutGap } from "@/lib/session-styles";
+import { estimateEditorHeight } from "@/lib/code-panel";
 
 import { useTypingEngine } from "@/hooks/useTypingEngine";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
@@ -37,7 +38,9 @@ import type { DifficultyTransition } from "@/lib/adaptive";
 
 const CodePanel = dynamic(() => import("@/components/CodePanel"), {
     ssr: false,
-    loading: () => <Box h="400px" bg="var(--panel)" borderRadius="md" />,
+    // Fill the reserved height (set by the wrapper below) so the panel does not
+    // jump when the chunk hydrates and the real editor takes over.
+    loading: () => <Box h="100%" minH="inherit" bg="var(--panel)" borderRadius="md" />,
 });
 
 export default function TypingSession() {
@@ -383,18 +386,21 @@ export default function TypingSession() {
                                                 </Box>
                                             )}
 
-                                            {/* Code Panel */}
-                                            <CodePanel
-                                                content={controls.snippet.content}
-                                                cursorChar={engine.cursorIndex}
-                                                wrongChars={engine.wrongChars}
-                                                language={controls.language === "javascript" ? "javascript" : controls.language}
-                                                caretErrorActive={engine.caretErrorActive}
-                                                onReady={focus.handleEditorReady}
-                                                fontSize={editorFontSize}
-                                                surfaceStyle={effectiveSurfaceStyle}
-                                                syntaxHighlighting={preferences.syntaxHighlighting}
-                                            />
+                                            {/* Code Panel — reserve the editor's real height so the
+                                                dynamic-import loading placeholder does not cause a mount-time jump. */}
+                                            <Box w="100%" minH={`${estimateEditorHeight(controls.snippet.content, editorFontSize)}px`}>
+                                                <CodePanel
+                                                    content={controls.snippet.content}
+                                                    cursorChar={engine.cursorIndex}
+                                                    wrongChars={engine.wrongChars}
+                                                    language={controls.language === "javascript" ? "javascript" : controls.language}
+                                                    caretErrorActive={engine.caretErrorActive}
+                                                    onReady={focus.handleEditorReady}
+                                                    fontSize={editorFontSize}
+                                                    surfaceStyle={effectiveSurfaceStyle}
+                                                    syntaxHighlighting={preferences.syntaxHighlighting}
+                                                />
+                                            </Box>
 
                                             {/* Debug Gap Buffer */}
                                             {preferences.debugGapBuffer && (

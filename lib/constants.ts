@@ -22,10 +22,6 @@ export const MIN_EDITOR_HEIGHT = 320;
 /** Caret blink timeout duration in milliseconds */
 export const CARET_BLINK_TIMEOUT_MS = 650;
 
-/** Caret "thump" feedback duration in milliseconds. Must stay under 120ms so it
- *  never throttles fast typists; matches the cs-caret-thump keyframe length. */
-export const CARET_THUMP_TIMEOUT_MS = 90;
-
 // =============================================================================
 // Scoring Constants
 // =============================================================================
