@@ -78,23 +78,20 @@ export function withMonacoAlpha(color: string, alpha: number): string {
     return normalized;
 }
 
+import { HEIGHT_BUFFER_LINES, LINE_HEIGHT_MULTIPLIER, MIN_EDITOR_HEIGHT } from "./constants";
+
 /**
- * Decide whether the caret should fire its positive "thump" feedback.
+ * Estimate the editor's rendered height for a snippet so callers can reserve the
+ * matching layout space ahead of the dynamic CodePanel mount (no mount-time jump).
  *
- * Fires only when the cursor advanced FORWARD and the character just consumed
- * (the one immediately before the new position) was typed correctly. Backspaces,
- * no-ops, and advances that landed on a flagged-wrong char get no reward.
+ * There is intentionally NO maximum cap: the editor renders at full content height
+ * so Monaco never scrolls internally. The page (useAutoScroll) is then the single
+ * smooth scroll authority that follows the caret, matching Monkeytype's line-follow.
  */
-export function shouldThumpCaret(
-    prevCursorChar: number,
-    nextCursorChar: number,
-    wrongChars: Set<number>,
-): boolean {
-    if (nextCursorChar <= prevCursorChar) {
-        return false;
-    }
-    const consumedIndex = nextCursorChar - 1;
-    return !wrongChars.has(consumedIndex);
+export function estimateEditorHeight(content: string, fontSize: number): number {
+    const lineHeight = Math.round(fontSize * LINE_HEIGHT_MULTIPLIER);
+    const lines = content.split("\n").length + HEIGHT_BUFFER_LINES;
+    return Math.max(MIN_EDITOR_HEIGHT, lines * lineHeight);
 }
 
 export function getPreviewIndex(content: string, caretIndex: number, previewChars = 12): number {

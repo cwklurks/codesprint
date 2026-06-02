@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    estimateEditorHeight,
     getPreviewIndex,
     hexToRgb,
     normalizeHexColor,
@@ -43,6 +44,25 @@ describe("withMonacoAlpha", () => {
     it("replaces any existing alpha channel", () => {
         expect(withMonacoAlpha("#ffffff80", 0.5)).toBe("#ffffff80");
         expect(withMonacoAlpha("rgba(24, 24, 26, 0.9)", 0.25)).toBe("#18181a40");
+    });
+});
+
+describe("estimateEditorHeight", () => {
+    it("floors short snippets at the minimum height", () => {
+        // (1 line + 4 buffer) * round(14 * 1.55=22) = 110 -> clamped up to MIN 320
+        expect(estimateEditorHeight("one line", 14)).toBe(320);
+    });
+
+    it("grows past the old 720px cap for long snippets (no max clamp)", () => {
+        const content = Array.from({ length: 50 }, (_, i) => `line ${i}`).join("\n");
+        // (50 + 4) * 22 = 1188, well above the former 720 cap
+        expect(estimateEditorHeight(content, 14)).toBe(1188);
+    });
+
+    it("scales line height with font size", () => {
+        const content = Array.from({ length: 40 }, () => "x").join("\n");
+        // round(20 * 1.55) = 31; (40 + 4) * 31 = 1364
+        expect(estimateEditorHeight(content, 20)).toBe(1364);
     });
 });
 

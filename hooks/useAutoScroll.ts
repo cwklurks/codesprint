@@ -31,7 +31,9 @@ export function useAutoScroll({ cursorIndex, phase, containerRef, enabled = true
             const rect = (caret ?? container).getBoundingClientRect();
             const viewportHeight = window.innerHeight;
             const scrollElement = document.scrollingElement ?? document.documentElement ?? document.body;
-            const targetTop = window.scrollY + rect.top - viewportHeight / 2 + rect.height / 2;
+            // Seat the active line at ~42% of the viewport — matches the running follow
+            // target so the run starts centered and stays there (no initial re-settle).
+            const targetTop = window.scrollY + rect.top - viewportHeight * 0.42;
             const maxTop =
                 scrollElement && viewportHeight
                     ? Math.max(0, scrollElement.scrollHeight - viewportHeight)
@@ -102,27 +104,32 @@ export function useAutoScroll({ cursorIndex, phase, containerRef, enabled = true
             const rect = caret.getBoundingClientRect();
             const viewportHeight = window.innerHeight;
             const behavior: ScrollBehavior = prefersReducedMotion ? "auto" : "smooth";
-            const topBand = viewportHeight * 0.2;
-            const bottomBand = viewportHeight * 0.75;
             const scrollElement = document.scrollingElement ?? document.documentElement ?? document.body;
 
-            if (rect.bottom > bottomBand) {
-                const delta = rect.bottom - bottomBand + 32;
+            // Keep the active line centered at ~42% of the viewport so it holds a steady
+            // height and the code flows up underneath it (Monkeytype-style follow), with
+            // read-ahead visible below. A ~1-line dead-band absorbs the per-line caret hop
+            // so we re-center smoothly instead of micro-scrolling on every keystroke.
+            const targetTop = viewportHeight * 0.42;
+            const deadband = Math.max(20, rect.height);
+
+            if (rect.top > targetTop + deadband) {
+                const delta = rect.top - targetTop;
                 const maxDown =
                     scrollElement && viewportHeight
                         ? Math.max(0, scrollElement.scrollHeight - viewportHeight - window.scrollY)
                         : delta;
                 const applied = Math.min(delta, maxDown);
-                if (applied !== 0) {
+                if (applied > 0.5) {
                     window.scrollBy({ top: applied, behavior });
                 }
                 return;
             }
 
-            if (rect.top < topBand && window.scrollY > 0) {
+            if (rect.top < targetTop - deadband && window.scrollY > 0) {
                 const maxUp = -window.scrollY;
-                const delta = Math.max(maxUp, rect.top - topBand - 32);
-                if (delta !== 0) {
+                const delta = Math.max(maxUp, rect.top - targetTop);
+                if (delta < -0.5) {
                     window.scrollBy({ top: delta, behavior });
                 }
             }

@@ -3,18 +3,15 @@
 import { Box } from "@chakra-ui/react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import { initVimMode, type VimMode } from "monaco-vim";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
-import { getPreviewIndex, hexToRgb, shouldThumpCaret, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
+import { estimateEditorHeight, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
 import { minAlphaForContrast } from "@/lib/contrast";
 import {
     CARET_BLINK_TIMEOUT_MS,
-    CARET_THUMP_TIMEOUT_MS,
-    HEIGHT_BUFFER_LINES,
     LINE_HEIGHT_MULTIPLIER,
-    MAX_EDITOR_HEIGHT,
-    MIN_EDITOR_HEIGHT,
 } from "@/lib/constants";
+import { usePrefersReducedMotion } from "@/lib/motion";
 import { THEME_PRESETS, usePreferences, type SurfaceStyle } from "@/lib/preferences";
 
 type MonacoModule = typeof import("monaco-editor");
@@ -45,6 +42,7 @@ export default function CodePanel({
     syntaxHighlighting,
 }: CodePanelProps) {
     const { preferences } = usePreferences();
+    const prefersReducedMotion = usePrefersReducedMotion();
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
     const monacoRef = useRef<MonacoModule | null>(null);
     const decorationIdsRef = useRef<string[]>([]);
@@ -53,18 +51,15 @@ export default function CodePanel({
     const caretPositionRef = useRef<Monaco.Position | null>(null);
     const caretAnimFrameRef = useRef<number | null>(null);
     const caretBlinkTimeoutRef = useRef<number | null>(null);
-    const caretThumpTimeoutRef = useRef<number | null>(null);
-    const prevCursorRef = useRef<number>(cursorChar);
     const [editorReadyToken, setEditorReadyToken] = useState(0);
     const caretUpdatePendingRef = useRef(false);
     const vimModeRef = useRef<VimMode | null>(null);
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
 
     const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
-    const estimatedHeight = useMemo(() => {
-        const lines = content.split("\n").length + HEIGHT_BUFFER_LINES;
-        return Math.min(MAX_EDITOR_HEIGHT, Math.max(MIN_EDITOR_HEIGHT, lines * derivedLineHeight));
-    }, [content, derivedLineHeight]);
+    // Full content height, uncapped: the editor never scrolls internally, so the
+    // page is the single smooth scroll authority that follows the caret.
+    const estimatedHeight = useMemo(() => estimateEditorHeight(content, fontSize), [content, fontSize]);
     const snippetKey = `${language}-${content.length}-${content.slice(0, 16)}`;
     const totalLines = useMemo(() => {
         if (!content) return 1;
@@ -125,6 +120,37 @@ export default function CodePanel({
         caretLayerRef.current = overlayLayer;
     }, [derivedLineHeight]);
 
+    // Write the caret's pixel position from Monaco geometry. SYNCHRONOUS so it can run
+    // inside a layout effect (before paint) on each keystroke — this removes the ~1-2
+    // frame input-to-move latency (useEffect -> rAF) that made the glide feel laggy.
+    // getScrolledVisiblePosition is pure model+scroll math (no re-render required), so
+    // it returns correct coords when read here. The CSS transition then glides from the
+    // caret's current (possibly mid-flight) position to the new one, like Monkeytype.
+    const renderCaretNow = useCallback(() => {
+        if (typeof window === "undefined") return;
+        ensureCaretNode();
+        const editor = editorRef.current;
+        const caretNode = caretNodeRef.current;
+        const position = caretPositionRef.current;
+        if (!caretNode || !editor || !position) {
+            caretNode?.classList.add("cs-caret-hidden");
+            return;
+        }
+        const coords = editor.getScrolledVisiblePosition(position);
+        if (!coords) {
+            caretNode.classList.add("cs-caret-hidden");
+            return;
+        }
+        caretNode.classList.remove("cs-caret-hidden");
+        const x = Math.max(0, coords.left);
+        const y = coords.top;
+        caretNode.style.setProperty("--caret-x", `${Math.round(x)}px`);
+        caretNode.style.setProperty("--caret-y", `${Math.round(y)}px`);
+        caretNode.style.setProperty("--caret-height", `${Math.round(coords.height)}px`);
+    }, [ensureCaretNode]);
+
+    // Coalesced (rAF) variant for high-frequency listeners (scroll / layout / content
+    // size) where writing on every event synchronously would thrash layout.
     const scheduleCaretRender = useCallback(() => {
         if (typeof window === "undefined") return;
         if (caretUpdatePendingRef.current) return;
@@ -132,32 +158,15 @@ export default function CodePanel({
         ensureCaretNode();
         caretAnimFrameRef.current = window.requestAnimationFrame(() => {
             caretUpdatePendingRef.current = false;
-            const editor = editorRef.current;
-            const caretNode = caretNodeRef.current;
-            const position = caretPositionRef.current;
-            if (!caretNode || !editor || !position) {
-                caretNode?.classList.add("cs-caret-hidden");
-                return;
-            }
-            const coords = editor.getScrolledVisiblePosition(position);
-            if (!coords) {
-                caretNode.classList.add("cs-caret-hidden");
-                return;
-            }
-            caretNode.classList.remove("cs-caret-hidden");
-            const x = Math.max(0, coords.left);
-            const y = coords.top;
-            caretNode.style.setProperty("--caret-x", `${Math.round(x)}px`);
-            caretNode.style.setProperty("--caret-y", `${Math.round(y)}px`);
-            caretNode.style.setProperty("--caret-height", `${Math.round(coords.height)}px`);
+            renderCaretNow();
         });
-    }, [ensureCaretNode]);
+    }, [ensureCaretNode, renderCaretNow]);
 
-    // Theme Management
-    useEffect(() => {
-        const monaco = monacoRef.current;
-        if (!monaco) return;
-
+    // Build + apply the per-theme Monaco theme. Extracted from the effect so it can
+    // ALSO run synchronously inside handleMount — applying the real theme before the
+    // first paint avoids a one-frame syntax-token color shimmer on mount and on every
+    // snippet change (the editor remounts per snippet via key={snippetKey}).
+    const applyTheme = useCallback((monaco: MonacoModule) => {
         const theme = THEME_PRESETS[preferences.theme];
         const bgRgb = hexToRgb(theme.bg);
         const luminance = 0.299 * bgRgb[0] + 0.587 * bgRgb[1] + 0.114 * bgRgb[2];
@@ -217,7 +226,14 @@ export default function CodePanel({
             console.error(`Failed to apply Monaco theme "${preferences.theme}"`, error);
             monaco.editor.setTheme(isLight ? "vs" : "vs-dark");
         }
-    }, [preferences.theme, syntaxHighlighting, editorReadyToken]);
+    }, [preferences.theme, syntaxHighlighting]);
+
+    // Re-apply on theme / syntax-highlighting changes and on (re)mount.
+    useEffect(() => {
+        const monaco = monacoRef.current;
+        if (!monaco) return;
+        applyTheme(monaco);
+    }, [applyTheme, editorReadyToken]);
 
     // Vim Mode Management
     useEffect(() => {
@@ -284,6 +300,8 @@ export default function CodePanel({
     const handleMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
+        // Apply the real theme before the first paint to avoid a vs-dark -> theme flash.
+        applyTheme(monaco);
         editor.updateOptions({
             readOnly: true,
             domReadOnly: true,
@@ -297,10 +315,14 @@ export default function CodePanel({
             occurrencesHighlight: "off",
             selectionHighlight: false,
             renderLineHighlight: "none",
-            guides: { indentation: false, highlightActiveIndentation: false },
+            matchBrackets: "never",
+            guides: { indentation: false, highlightActiveIndentation: false, bracketPairs: false },
             cursorBlinking: "solid",
             cursorStyle: "line",
             scrollbar: { vertical: "hidden", horizontal: "hidden", useShadows: false },
+            overviewRulerLanes: 0,
+            overviewRulerBorder: false,
+            hideCursorInOverviewRuler: true,
             glyphMargin: false,
             folding: false,
             lineNumbers: surfaceStyle === "panel" ? "on" : "off",
@@ -351,7 +373,10 @@ export default function CodePanel({
         };
     }, [scheduleCaretRender, ensureCaretNode]);
 
-    useEffect(() => {
+    // Layout effect (not useEffect): write the caret position BEFORE the browser
+    // paints the keystroke, so the glide starts from this frame instead of one or two
+    // frames later. This is the main thing that makes the caret feel effortless.
+    useLayoutEffect(() => {
         ensureCaretNode();
         const editor = editorRef.current;
         const monaco = monacoRef.current;
@@ -362,7 +387,7 @@ export default function CodePanel({
         const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
         const caretPosition = model.getPositionAt(caretIndex);
         caretPositionRef.current = caretPosition;
-        scheduleCaretRender();
+        renderCaretNow();
         triggerCaretActivity();
         if (!caretPosition) return;
 
@@ -375,8 +400,15 @@ export default function CodePanel({
             previewPosition.column,
         );
 
-        editor.revealRangeNearTopIfOutsideViewport(previewRange, monaco.editor.ScrollType.Immediate);
-    }, [cursorChar, content, editorReadyToken, scheduleCaretRender, triggerCaretActivity, ensureCaretNode]);
+        // Glide the reveal so a line change scrolls smoothly with the caret instead
+        // of hard-cutting. ScrollType.Immediate ignores the editor's smoothScrolling
+        // option, so we pass Smooth explicitly (and fall back to Immediate when the
+        // user prefers reduced motion).
+        editor.revealRangeNearTopIfOutsideViewport(
+            previewRange,
+            prefersReducedMotion ? monaco.editor.ScrollType.Immediate : monaco.editor.ScrollType.Smooth,
+        );
+    }, [cursorChar, content, editorReadyToken, renderCaretNow, triggerCaretActivity, ensureCaretNode, prefersReducedMotion]);
 
     // Caret error visual toggle (cheap - no decoration work)
     useEffect(() => {
@@ -385,28 +417,6 @@ export default function CodePanel({
             caretNode.classList.toggle("cs-caret-error", caretErrorActive);
         }
     }, [caretErrorActive]);
-
-    // Positive per-keystroke feedback: fire a transient GPU-only "thump" when the
-    // cursor advances forward onto a newly-correct char. Caret-only (no per-char
-    // Monaco decorations). The class self-removes so it can re-fire next keystroke.
-    useEffect(() => {
-        const prevCursor = prevCursorRef.current;
-        prevCursorRef.current = cursorChar;
-        if (!shouldThumpCaret(prevCursor, cursorChar, wrongChars)) return;
-        const caretNode = caretNodeRef.current;
-        if (!caretNode) return;
-        // Restart the animation: drop the class, force reflow, re-add it.
-        caretNode.classList.remove("cs-caret-thump");
-        void caretNode.offsetWidth;
-        caretNode.classList.add("cs-caret-thump");
-        if (caretThumpTimeoutRef.current !== null) {
-            window.clearTimeout(caretThumpTimeoutRef.current);
-        }
-        caretThumpTimeoutRef.current = window.setTimeout(() => {
-            caretNode.classList.remove("cs-caret-thump");
-            caretThumpTimeoutRef.current = null;
-        }, CARET_THUMP_TIMEOUT_MS);
-    }, [cursorChar, wrongChars]);
 
     useEffect(() => {
         ensureCaretNode();
@@ -476,7 +486,6 @@ export default function CodePanel({
         const decorationIdsRefCapture = decorationIdsRef;
         const caretAnimFrameRefCapture = caretAnimFrameRef;
         const caretBlinkTimeoutRefCapture = caretBlinkTimeoutRef;
-        const caretThumpTimeoutRefCapture = caretThumpTimeoutRef;
         const caretLayerRefCapture = caretLayerRef;
         const caretNodeRefCapture = caretNodeRef;
         const caretPositionRefCapture = caretPositionRef;
@@ -494,9 +503,6 @@ export default function CodePanel({
             }
             if (caretBlinkTimeoutRefCapture.current !== null) {
                 window.clearTimeout(caretBlinkTimeoutRefCapture.current);
-            }
-            if (caretThumpTimeoutRefCapture.current !== null) {
-                window.clearTimeout(caretThumpTimeoutRefCapture.current);
             }
             if (
                 caretLayerRefCapture.current &&

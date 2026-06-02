@@ -387,9 +387,11 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
 
         const expected = snippetRef.current.content[currentIndex];
-        if (expected === undefined) return;
-
+        // Always swallow the key (even past the end of the snippet) so it never reaches
+        // Monaco — otherwise a keystroke after the cursor passes content.length triggers
+        // Monaco's "Cannot edit in read-only editor" message at its hidden cursor.
         swallowEvent();
+        if (expected === undefined) return;
 
         const got = e.key === "Enter" ? "\n" : e.key;
         const ok = normalizeWhitespace(got) === normalizeWhitespace(expected);
