@@ -50,6 +50,21 @@ describe("isSkeletal — Python", () => {
         const content = "def total(values):\n    return sum(values)\n";
         expect(isSkeletal(content, "python")).toBe(false);
     });
+
+    it("flags an imports + signature pandas stub as skeletal", () => {
+        const content = "import pandas as pd\n\ndef foo(df: pd.DataFrame) -> pd.DataFrame:\n";
+        expect(isSkeletal(content, "python")).toBe(true);
+    });
+
+    it("flags an imports + signature + ellipsis body stub as skeletal", () => {
+        const content = "from typing import List\nimport pandas as pd\n\ndef foo(df: pd.DataFrame) -> pd.DataFrame:\n    ...\n";
+        expect(isSkeletal(content, "python")).toBe(true);
+    });
+
+    it("keeps an imports + signature + one real statement as not skeletal", () => {
+        const content = "import pandas as pd\n\ndef foo(df: pd.DataFrame) -> pd.DataFrame:\n    return df.head()\n";
+        expect(isSkeletal(content, "python")).toBe(false);
+    });
 });
 
 describe("isSkeletal — Java", () => {

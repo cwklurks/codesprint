@@ -83,7 +83,11 @@ function isSkeletalBraced(lines: string[]): boolean {
     return substantiveLines < 1;
 }
 
-/** Python: indentation/colon based, so `def`, `class`, decorators and `pass` are scaffolding. */
+/**
+ * Python: indentation/colon based, so `def`, `class`, decorators, `pass`,
+ * import lines, and a bare `...` ellipsis body are all scaffolding. A pandas
+ * stub (`import pandas as pd` + a signature with no body) must read as skeletal.
+ */
 function isSkeletalPython(lines: string[]): boolean {
     let substantiveLines = 0;
     for (const line of lines) {
@@ -91,7 +95,9 @@ function isSkeletalPython(lines: string[]): boolean {
             !line.match(/^def .*:$/) &&
             !line.match(/^class /) &&
             !line.match(/^@/) &&
-            !line.match(/^pass$/)
+            !line.match(/^pass$/) &&
+            !line.match(/^(import|from)\b/) &&
+            !line.match(/^\.\.\.$/)
         ) {
             substantiveLines++;
         }

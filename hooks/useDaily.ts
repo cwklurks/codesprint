@@ -35,7 +35,25 @@ export interface UseDailyReturn {
 export function useDaily(): UseDailyReturn {
     const today = useMemo(() => getLocalDateString(), []);
     const dayNumber = useMemo(() => getDailyNumber(today), [today]);
-    const dailySnippet = useMemo(() => getTodaysDaily(today), [today]);
+    const [dailySnippet, setDailySnippet] = useState<Snippet | null>(null);
+
+    // The daily pool lazy-loads the committed corpora; resolve it after mount.
+    // The cancellation guard keeps a stale/unmounted resolution from setting state.
+    useEffect(() => {
+        let cancelled = false;
+        getTodaysDaily(today)
+            .then((snippet) => {
+                if (!cancelled) setDailySnippet(snippet);
+            })
+            .catch((error) => {
+                // Pool load failed (e.g. a stale chunk after a redeploy). Leave
+                // dailySnippet null and surface it; getDailyPool retries next call.
+                if (!cancelled) console.error("Failed to load today's daily:", error);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [today]);
 
     const [progress, setProgress] = useState<DailyProgress>(() => ({
         streak: {
