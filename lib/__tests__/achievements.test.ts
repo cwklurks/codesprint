@@ -106,23 +106,23 @@ describe("achievements", () => {
   describe("predicate tests per category", () => {
     // Speed
     it("Speed Demon unlocks at wpm > 100", () => {
-      const ctx = makeContext({ session: { wpm: 101, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
+      const ctx = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 101, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
       const found = checkAchievements(ctx, new Set());
       expect(found.some((a) => a.id === "speed-demon")).toBe(true);
     });
 
     it("Speed Demon does not unlock at wpm <= 100", () => {
-      const ctx = makeContext({ session: { wpm: 100, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
+      const ctx = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 100, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
       const found = checkAchievements(ctx, new Set());
       expect(found.some((a) => a.id === "speed-demon")).toBe(false);
     });
 
     // Accuracy
     it("Perfectionist requires accuracy === 1", () => {
-      const perfect = makeContext({ session: { wpm: 40, accuracy: 1, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 0, totalKeystrokes: 100, correctKeystrokes: 100, history: [] } });
+      const perfect = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 40, accuracy: 1, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 0, totalKeystrokes: 100, correctKeystrokes: 100, history: [] } });
       expect(checkAchievements(perfect, new Set()).some((a) => a.id === "perfectionist")).toBe(true);
 
-      const imperfect = makeContext({ session: { wpm: 40, accuracy: 0.99, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 1, totalKeystrokes: 100, correctKeystrokes: 99, history: [] } });
+      const imperfect = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 40, accuracy: 0.99, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 1, totalKeystrokes: 100, correctKeystrokes: 99, history: [] } });
       expect(checkAchievements(imperfect, new Set()).some((a) => a.id === "perfectionist")).toBe(false);
     });
 
@@ -206,16 +206,16 @@ describe("achievements", () => {
 
     // Challenge
     it("Hard Mode unlocks on hard difficulty", () => {
-      const ctx = makeContext({ session: { wpm: 40, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "hard", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
+      const ctx = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 40, accuracy: 0.9, elapsedMs: 60000, language: "javascript", difficulty: "hard", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 90, history: [] } });
       expect(checkAchievements(ctx, new Set()).some((a) => a.id === "hard-mode")).toBe(true);
     });
 
     // Special
     it("Zen Master requires 100% accuracy AND wpm > 100", () => {
-      const ctx = makeContext({ session: { wpm: 110, accuracy: 1, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 0, totalKeystrokes: 100, correctKeystrokes: 100, history: [] } });
+      const ctx = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 110, accuracy: 1, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 0, totalKeystrokes: 100, correctKeystrokes: 100, history: [] } });
       expect(checkAchievements(ctx, new Set()).some((a) => a.id === "zen-master")).toBe(true);
 
-      const fastOnly = makeContext({ session: { wpm: 110, accuracy: 0.95, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 95, history: [] } });
+      const fastOnly = makeContext({ session: { snippetId: "javascript:two-sum", wpm: 110, accuracy: 0.95, elapsedMs: 60000, language: "javascript", difficulty: "easy", lengthCategory: "short", errorCount: 5, totalKeystrokes: 100, correctKeystrokes: 95, history: [] } });
       expect(checkAchievements(fastOnly, new Set()).some((a) => a.id === "zen-master")).toBe(false);
     });
   });
