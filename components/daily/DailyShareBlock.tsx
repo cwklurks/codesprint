@@ -66,7 +66,7 @@ export function DailyShareBlock({
                     fontSize="sm"
                     color="var(--text)"
                     whiteSpace="pre-wrap"
-                    textAlign="center"
+                    textAlign="left"
                     m={0}
                 >
                     {shareText}

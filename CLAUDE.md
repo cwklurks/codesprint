@@ -2,6 +2,38 @@
 
 Client-side typing trainer for code. Next.js 15 App Router, React 19, Chakra 3, Monaco, Vercel AI SDK. See `AGENTS.md` for full project architecture.
 
+## Pi harness bootstrap
+
+This repo contains the development source for the global multi-agent harness.
+After installation, runtime usage should go through `~/.pi-harness`,
+`pi-harness`, and the Pi `/harness` command, not a CodeSprint-local Node path.
+
+Read before harness work:
+
+- Harness docs: `.pi-harness/README.md`
+- Harness config: `.pi-harness/harness.config.json`
+- Harness skill: `.pi-harness/skills/pi-multi-agent-harness/SKILL.md`
+
+Default harness commands:
+
+```sh
+node .pi-harness/scripts/install-global.mjs
+pi-harness validate
+pi-harness plan --prompt "<task>"
+pi-harness orchestrate --permission-profile review --run-external --prompt "<task>"
+pi-harness audit --run-external --prompt "<task>"
+```
+
+Routing constraints:
+
+- Codex leader/synthesis must use Codex CLI OAuth through `codex exec`, default model `gpt-5.5`, high reasoning.
+- Planner must use Codex CLI OAuth through `codex exec`, default model `gpt-5.5`, high reasoning.
+- Executor must use `opencode run --model opencode-go/kimi-k2.7-code`.
+- Claude review must use local headless `claude -p`, never OpenRouter.
+- Do not require or forward `OPENAI_API_KEY` for GPT leader lanes.
+- External dispatch requires explicit `--run-external`.
+- Legacy Pi lanes, if manually configured, receive no tools by default; `--allow-external-tools` is required for read-only Pi tools.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill

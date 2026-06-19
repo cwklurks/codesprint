@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateTextSummary, type ShareCardData } from "../share-card";
+import { getSiteHost } from "../site";
 
 describe("generateTextSummary", () => {
     it("generates a formatted text summary", () => {
@@ -21,7 +22,7 @@ describe("generateTextSummary", () => {
         expect(result).toContain("95% accuracy");
         expect(result).toContain("Pattern: 88/100");
         expect(result).toContain("PYTHON");
-        expect(result).toContain("codesprint.dev");
+        expect(result).toContain(getSiteHost());
     });
 
     it("omits pattern score when undefined", () => {

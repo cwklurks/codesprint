@@ -50,6 +50,8 @@ AGENTS.md
 hookgen/
 logs/
 .claude/
+.pi-harness/state/
+.pi-harness/traces/
 
 # separate project / planning artifacts
 codesprint/

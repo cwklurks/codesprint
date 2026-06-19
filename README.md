@@ -18,9 +18,9 @@
 
 <img src="https://github.com/user-attachments/assets/0fa880d2-714c-47cf-9c58-218524943d60" alt="CodeSprint demo" width="100%">
 
-<strong>A code typing trainer that builds real syntax muscle memory.</strong>
+<strong>A daily code-typing challenge for people who want Monkeytype, but for real code.</strong>
 <br>
-Practice 1,800+ real LeetCode snippets across Python, JavaScript, Java, and C++<br>with syntax-aware scoring, spaced repetition, and adaptive difficulty.
+Run the same real-code snippet as everyone else each day, track code WPM,<br>build a streak, and share a spoiler-free result block.
 
 <p>
   <a href="#features">Features</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#how-it-works">How It Works</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#data-pipeline">Data Pipeline</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#running-locally">Running Locally</a>
@@ -32,12 +32,23 @@ Practice 1,800+ real LeetCode snippets across Python, JavaScript, Java, and C++<
 
 Most typing tests measure how fast you can type English. That doesn't translate when you're writing code full of brackets, operators, and indentation.
 
-CodeSprint exists because syntax fluency matters — in interviews and in daily work. It lets you drill patterns like "Depth First Search in Python" or "Ring Buffer in C++" until your fingers know the shape of the code.
+CodeSprint exists because normal typing tests do not capture the feel of code: brackets, operators, indentation, capitalization, and symbols all change the game.
+
+The first wedge is simple: a daily code-typing challenge for typing-practice grinders. One snippet, same for everyone, one honest code WPM score to compare.
 
 > [!NOTE]
 > Core typing practice runs client-side with no account required. Session data stays in browser storage. If AI drills are enabled, your browser sends prompt context and your BYOK API key to this app's `/api/generate` route to proxy the provider request; keys are not stored server-side.
 
 ## Features
+
+<details open>
+<summary><strong>Daily CodeSprint</strong></summary>
+
+<br>
+
+Every day has a deterministic snippet picked from the practice pool, so everyone gets the same challenge. Finish it to update your daily streak and copy a compact, spoiler-free result block with WPM, accuracy, and streak count.
+
+</details>
 
 <details open>
 <summary><strong>Syntax-Aware Scoring</strong></summary>
@@ -99,7 +110,7 @@ Tracks your proficiency per language and recommends what to practice next. Adjus
 
 <br>
 
-1,800+ real snippets sourced from LeetCode problems across four languages (JavaScript, Python, Java, C++) and three difficulty tiers (easy, medium, hard), categorized by length.
+200+ real-code problems across JavaScript, Python, Java, and C++, with short, medium, and long practice lengths.
 
 </details>
 
@@ -186,6 +197,7 @@ npm start
 
 ## Roadmap
 
+- **Daily CodeSprint** - deterministic daily snippet, streak tracking, and copy-paste share block. Shipped.
 - **AI Drills** — BYOK generation, preview/accept flow, result badging, export support, and session recording. ✓ Shipped.
 - **Custom Renderer** — Migrating from Monaco to a WebGL/Canvas text renderer for zero DOM overhead (Gap Buffer implementation in progress).
 - **Tree-sitter Integration** — Semantic typing that lets you skip whitespace and formatting irrelevant to code logic.

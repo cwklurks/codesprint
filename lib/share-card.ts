@@ -7,6 +7,7 @@
 
 import { computePercentile } from "./percentile";
 import { bestDelta } from "./personal-best";
+import { getSiteHost } from "./site";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -222,7 +223,7 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     ctx.fillText("CodeSprint", PADDING, CARD_HEIGHT - PADDING + 8);
     ctx.fillStyle = colors.textSubtle;
     ctx.font = `14px ${FONT}`;
-    ctx.fillText("codesprint.dev", CARD_WIDTH - PADDING, CARD_HEIGHT - PADDING + 8);
+    ctx.fillText(getSiteHost(), CARD_WIDTH - PADDING, CARD_HEIGHT - PADDING + 8);
 
     // suppress unused variable warning
     void pillX;
@@ -428,7 +429,7 @@ export function generateTextSummary(data: ShareCardData): string {
     if (data.patternScore !== undefined) {
         parts.push(`Pattern: ${data.patternScore}/100`);
     }
-    parts.push("codesprint.dev");
+    parts.push(getSiteHost());
     return parts.join(" | ");
 }
 
