@@ -28,7 +28,7 @@ Overall health: ~8.5/10. Issues below are bugs, tech debt, and feature opportuni
   `lib/tokenizer.ts:180`
   Cache keyed by `content` only, ignoring language, so Python and JS snippets with identical text reuse wrong tokens. Module-level globals `_tokenizeCache`, `_cmCache`, `_pscCache`, `_calcCache`, `_wpCache` grow unbounded (memory leak). Fix: key by `${language}:${content}`, cap with LRU.
 
-- [ ] **3. Harden AI key storage**
+- [x] **3. Harden AI key storage**
   `lib/ai/key-storage.ts:13`, `components/AIKeyConfig.tsx:75`
   Provider API keys stored in `localStorage` (XSS/extension exposure) and proxied through `/api/generate`. Move to `sessionStorage`, add a security note in the UI, avoid logging headers server-side.
 
