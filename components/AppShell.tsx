@@ -76,6 +76,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             const target = event.target as HTMLElement | null;
             if (target?.closest("input, textarea, [contenteditable=true]")) return;
             if (document.body.classList.contains("cs-focus-active")) return;
+            // If a dialog/drawer overlay is open, don't toggle app drawers via shortcut
+            // (the overlay will handle Escape to close itself).
+            if (
+                document.querySelector('[data-scope="dialog"][data-state="open"], [data-scope="drawer"][data-state="open"]')
+            ) {
+                return;
+            }
             const key = event.key.toLowerCase();
             if (key === "p") {
                 event.preventDefault();

@@ -96,6 +96,16 @@ export function useKeyboardShortcuts({
             const allowVimHandling = vimMode;
             const keyLower = e.key.toLowerCase();
 
+            // 0. Overlay guard: if a Chakra dialog/drawer is open, let it handle all keys.
+            // This prevents game shortcuts and the idle typing guard from stealing keystrokes
+            // while a modal/drawer is open. Escape propagates to Chakra which closes the overlay.
+            if (
+                typeof document !== "undefined" &&
+                document.querySelector('[data-scope="dialog"][data-state="open"], [data-scope="drawer"][data-state="open"]')
+            ) {
+                return;
+            }
+
             // 1. Global Escape Handling (Highest Priority)
             if (e.key === "Escape") {
                 if (isVimPreviewing) {
@@ -140,6 +150,10 @@ export function useKeyboardShortcuts({
                     return;
                 }
             }
+
+            // Block key-repeat for all shortcuts below (vim toggle, vim preview, global shortcuts).
+            // Typing repeats are allowed — they reach the engine via section 6 or the idle guard.
+            if (e.repeat && phase !== "running") return;
 
             // 3. Vim Toggle (v) - Allow toggling ON/OFF only in finished phase
             if (!e.metaKey && !e.ctrlKey && !e.altKey && keyLower === "v" && phase === "finished") {
