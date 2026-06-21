@@ -24,7 +24,7 @@ Overall health: ~8.5/10. Issues below are bugs, tech debt, and feature opportuni
   `hooks/useKeyboardShortcuts.ts:264` + `components/AppShell.tsx:72`
   Capture-phase `keydown` listener forwards printable keys without checking for open overlays (Preferences/Shortcuts/Analytics/AI Drill). Typing `r`/`n`/`p`/`a`/`q`/`l`/`Tab`/`Space`/`Enter` while a drawer is open triggers game actions or focus jumps. Also ignore `e.repeat`.
 
-- [ ] **2. Tokenizer cache: composite key + LRU cap**
+- [x] **2. Tokenizer cache: composite key + LRU cap**
   `lib/tokenizer.ts:180`
   Cache keyed by `content` only, ignoring language, so Python and JS snippets with identical text reuse wrong tokens. Module-level globals `_tokenizeCache`, `_cmCache`, `_pscCache`, `_calcCache`, `_wpCache` grow unbounded (memory leak). Fix: key by `${language}:${content}`, cap with LRU.
 
