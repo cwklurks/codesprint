@@ -399,6 +399,7 @@ export default function TypingSession() {
                                                     fontSize={editorFontSize}
                                                     surfaceStyle={effectiveSurfaceStyle}
                                                     syntaxHighlighting={preferences.syntaxHighlighting}
+                                                    snippetId={controls.snippet.id}
                                                 />
                                             </Box>
 

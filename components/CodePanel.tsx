@@ -26,6 +26,7 @@ type CodePanelProps = {
     fontSize: number;
     surfaceStyle: SurfaceStyle;
     syntaxHighlighting: "full" | "partial" | "none";
+    snippetId?: string;
 };
 
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
@@ -40,6 +41,7 @@ export default function CodePanel({
     fontSize,
     surfaceStyle,
     syntaxHighlighting,
+    snippetId,
 }: CodePanelProps) {
     const { preferences } = usePreferences();
     const prefersReducedMotion = usePrefersReducedMotion();
@@ -60,7 +62,7 @@ export default function CodePanel({
     // Full content height, uncapped: the editor never scrolls internally, so the
     // page is the single smooth scroll authority that follows the caret.
     const estimatedHeight = useMemo(() => estimateEditorHeight(content, fontSize), [content, fontSize]);
-    const snippetKey = `${language}-${content.length}-${content.slice(0, 16)}`;
+    const snippetKey = snippetId || `${language}-${content.length}-${content.slice(0, 16)}`;
     const totalLines = useMemo(() => {
         if (!content) return 1;
         return content.split(LINE_BREAK_REGEX).length;

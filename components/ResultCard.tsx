@@ -2,10 +2,10 @@
 
 import { Badge, Box, Button, Flex, Stack, Text, chakra } from "@chakra-ui/react";
 import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { m } from "framer-motion";
-const MotionBox = m(Box);
-const MotionFlex = m(Flex);
+const MotionBox = m.create(Box);
+const MotionFlex = m.create(Flex);
 import ResultGraph, { type ResultGraphPoint } from "./ResultGraph";
 import type { Token } from "@/lib/tokenizer";
 import type { WeakPattern } from "@/lib/pattern-analysis";
@@ -69,7 +69,6 @@ export default function ResultCard({
     errorLog,
     history,
     onNext,
-    autoAdvanceDeadline,
     patternScore,
     tokens,
     contentLength,
@@ -78,22 +77,8 @@ export default function ResultCard({
     isNewBest,
 }: ResultCardProps) {
     const prefersReducedMotion = usePrefersReducedMotion() ?? false;
-    const [countdown, setCountdown] = useState<number | null>(null);
     const [isSharing, setIsSharing] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
-
-    useEffect(() => {
-        if (!autoAdvanceDeadline) {
-            setCountdown(null);
-            return;
-        }
-        const tick = () => {
-            setCountdown(Math.max(0, Math.ceil((autoAdvanceDeadline - Date.now()) / 1000)));
-        };
-        tick();
-        const interval = setInterval(tick, 250);
-        return () => clearInterval(interval);
-    }, [autoAdvanceDeadline]);
 
     const mostMistaken = useMemo(() => {
         const counts: Record<string, number> = {};
@@ -412,12 +397,6 @@ export default function ResultCard({
                 {onNext && (
                     <Text textAlign="center" fontSize="xs" color="var(--text-subtle)" mt={4}>
                         Press Q, Escape, Tab, or Space to go to the next page
-                    </Text>
-                )}
-
-                {countdown !== null && countdown > 0 && (
-                    <Text textAlign="center" fontSize="xs" color="var(--text-subtle)" mt={2}>
-                        Auto-advancing in {countdown}s…
                     </Text>
                 )}
             </Stack>

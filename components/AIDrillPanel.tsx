@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
     Button,
     Badge,
@@ -32,7 +32,7 @@ interface AIDrillPanelProps {
     language: SupportedLanguage;
 }
 
-const MotionBox = m(Box);
+const MotionBox = m.create(Box);
 
 function ZapIcon(props: ChakraIconProps) {
     return (
@@ -102,8 +102,16 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen, ai.state.status, handleAccept, handleGenerateAnother, onClose]);
 
-    // Don't render on mobile (<640px)
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
+    }, []);
+
+    if (isMobile) {
         return null;
     }
 
