@@ -137,8 +137,9 @@ export function AIKeyConfig() {
                             Bring Your Own Key
                         </Text>
                         <Text fontSize="sm" color="var(--text-subtle)" mt={1}>
-                            Your API key is stored locally in your browser. It is sent to our server
-                            per-request to proxy the AI call, but is never stored or logged.
+                            Your API key is stored in sessionStorage and cleared when you
+                            close the tab. It is sent to our server per-request to proxy
+                            the AI call, but is never stored or logged server-side.
                         </Text>
                     </Box>
                 </Flex>
