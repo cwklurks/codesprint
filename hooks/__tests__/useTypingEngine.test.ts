@@ -348,6 +348,27 @@ describe("useTypingEngine", () => {
         expect(result.current.metrics.accuracy).toBeCloseTo(5 / 7);
     });
 
+    it("resets startTime when backspacing from finished phase", () => {
+        vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        const snippet = makeSnippet("ab");
+        const { result } = renderHook(() => useTypingEngine({ snippet }));
+
+        act(() => {
+            result.current.handleKeyDown(fireKey("a"));
+            result.current.handleKeyDown(fireKey("b"));
+        });
+        expect(result.current.phase).toBe("finished");
+        expect(result.current.elapsedMs).toBe(0);
+
+        vi.setSystemTime(new Date("2026-01-01T00:10:00.000Z"));
+        act(() => {
+            result.current.handleKeyDown(fireKey("Backspace"));
+        });
+
+        expect(result.current.phase).toBe("running");
+        expect(result.current.elapsedMs).toBe(0);
+    });
+
     // -------------------------------------------------------------------------
     // Enter treated as newline
     // -------------------------------------------------------------------------

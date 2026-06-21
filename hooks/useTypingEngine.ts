@@ -363,6 +363,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         if (e.key === "Backspace") {
             if (phaseNow === "finished") {
                 setPhase("running");
+                const ts = timestamp;
+                startTimeRef.current = ts;
+                setStartTime(ts);
+                setNow(ts);
             }
             swallowEvent();
             const currentCursor = cursorIndexRef.current;

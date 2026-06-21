@@ -71,7 +71,7 @@ export default function LeaderboardModal({ isOpen, onOpenChange }: LeaderboardMo
                                             #{index + 1}
                                         </Table.Cell>
                                         <Table.Cell fontWeight="bold">{Math.round(entry.wpm)}</Table.Cell>
-                                        <Table.Cell>{Math.round(entry.accuracy)}%</Table.Cell>
+                                        <Table.Cell>{Math.round(entry.accuracy * 100)}%</Table.Cell>
                                         <Table.Cell>
                                             <Badge variant="subtle" bg="var(--surface)" color="var(--accent)" size="sm">
                                                 {entry.language}
