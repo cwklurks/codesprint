@@ -32,11 +32,11 @@ Overall health: ~8.5/10. Issues below are bugs, tech debt, and feature opportuni
   `lib/ai/key-storage.ts:13`, `components/AIKeyConfig.tsx:75`
   Provider API keys stored in `localStorage` (XSS/extension exposure) and proxied through `/api/generate`. Move to `sessionStorage`, add a security note in the UI, avoid logging headers server-side.
 
-- [ ] **4. Reset `startTime` on backspace-from-finished**
+- [x] **4. Reset `startTime` on backspace-from-finished**
   `hooks/useTypingEngine.ts:363`
   Backspacing in the `finished` phase sets phase back to `running` but never resets `startTime`, so `elapsedMs` includes the idle pause and produces bogusly low WPM.
 
-- [ ] **5. Fix `LeaderboardModal` accuracy display**
+- [x] **5. Fix `LeaderboardModal` accuracy display**
   `components/LeaderboardModal.tsx:74`
   Renders `Math.round(entry.accuracy)}%` but accuracy is stored as a fraction (0.95), so it shows `1%` instead of `95%`. One-line fix: `Math.round(entry.accuracy * 100)`
 
