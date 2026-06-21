@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { tokenize, buildCategoryMap } from "../tokenizer";
+import { tokenize, buildCategoryMap, __testTokenizeCacheSize, _cmCache } from "../tokenizer";
+import type { TokenCategory } from "../tokenizer";
 
 describe("tokenize", () => {
     describe("JavaScript", () => {
@@ -155,5 +156,38 @@ describe("buildCategoryMap", () => {
         expect(map[2]).toBe("whitespace");
         // "("
         expect(map[3]).toBe("delimiter");
+    });
+});
+
+describe("tokenizer cache", () => {
+    it("isolates cache entries by language (python then javascript)", () => {
+        const pythonTokens = tokenize("def foo(): pass", "python");
+        expect(pythonTokens[0]).toMatchObject({ category: "keyword", text: "def" });
+
+        const jsTokens = tokenize("def foo(): pass", "javascript");
+        expect(jsTokens[0]).toMatchObject({ category: "identifier", text: "def" });
+    });
+
+    it("isolates cache entries by language (javascript then python)", () => {
+        const jsTokens = tokenize("const x = 1;", "javascript");
+        expect(jsTokens[0]).toMatchObject({ category: "keyword", text: "const" });
+
+        const pythonTokens = tokenize("const x = 1;", "python");
+        expect(pythonTokens[0]).toMatchObject({ category: "identifier", text: "const" });
+    });
+
+    it("caps the tokenize cache at 256 entries (LRU)", () => {
+        for (let i = 0; i < 300; i++) {
+            tokenize(`const x${i} = ${i};`, "javascript");
+        }
+        expect(__testTokenizeCacheSize()).toBeLessThanOrEqual(256);
+    });
+
+    it("caps the category map cache at 128 entries (LRU)", () => {
+        for (let i = 0; i < 200; i++) {
+            const tokens = tokenize(`const x${i} = ${i};`, "javascript");
+            buildCategoryMap(tokens, tokens.length);
+        }
+        expect((_cmCache as unknown as Map<number, TokenCategory[]>).size).toBeLessThanOrEqual(128);
     });
 });

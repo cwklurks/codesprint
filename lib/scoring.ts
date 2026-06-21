@@ -1,7 +1,7 @@
 "use client";
 
 import type { Token, CachedTokenArray } from "./tokenizer";
-import { _pscCache, _calcCache } from "./tokenizer";
+import { _pscCache, _calcCache, lruGet, lruSet, MAX_DERIVED_CACHE } from "./tokenizer";
 import { getCachedWeights } from "./token-weights";
 import type { TokenWeights } from "./token-weights";
 import type { SupportedLanguage } from "./snippets";
@@ -73,8 +73,10 @@ type PatternScoreInput = {
 
 // Named property cache — faster than Symbol in JSC (hidden class optimized)
 export function computePatternScore(input: PatternScoreInput): number {
-    const c = _pscCache[(input.tokens as CachedTokenArray)._id];
-    return c && c[0] === input.errorPositions ? c[1] : _computePatternScoreCold(input);
+    const id = (input.tokens as CachedTokenArray)._id;
+    const c = lruGet(_pscCache, id);
+    if (c && c[0] === input.errorPositions) return c[1];
+    return _computePatternScoreCold(input);
 }
 
 function _computePatternScoreCold(input: PatternScoreInput): number {
@@ -97,7 +99,7 @@ function _computePatternScoreCold(input: PatternScoreInput): number {
 
     const score = Math.round(((totalWeight - errorWeight) / totalWeight) * 100);
     const result = Math.max(0, Math.min(100, score));
-    _pscCache[(tokens as CachedTokenArray)._id] = [errorPositions, result];
+    lruSet(_pscCache, (tokens as CachedTokenArray)._id, [errorPositions, result], MAX_DERIVED_CACHE);
     return result;
 }
 
@@ -114,7 +116,9 @@ type PatternScoreCalculatorInput = {
 export function createPatternScoreCalculator(
     input: PatternScoreCalculatorInput
 ): (errorPositions: number[]) => number {
-    return _calcCache[(input.tokens as CachedTokenArray)._id] || _createCalcCold(input);
+    const id = (input.tokens as CachedTokenArray)._id;
+    const fn = lruGet(_calcCache, id);
+    return fn || _createCalcCold(input);
 }
 
 function _createCalcCold(
@@ -129,7 +133,7 @@ function _createCalcCold(
     const totalWeight = totalWeightFromTokens(tokens, weights);
     if (totalWeight === 0) {
         const fn = () => 100;
-        _calcCache[(tokens as CachedTokenArray)._id] = fn;
+        lruSet(_calcCache, (tokens as CachedTokenArray)._id, fn, MAX_DERIVED_CACHE);
         return fn;
     }
 
@@ -155,6 +159,6 @@ function _createCalcCold(
         return result;
     };
 
-    _calcCache[(tokens as CachedTokenArray)._id] = fn;
+    lruSet(_calcCache, (tokens as CachedTokenArray)._id, fn, MAX_DERIVED_CACHE);
     return fn;
 }

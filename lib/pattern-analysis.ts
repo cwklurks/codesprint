@@ -7,7 +7,7 @@
  */
 
 import type { Token, TokenCategory, CachedTokenArray } from "./tokenizer";
-import { _wpCache } from "./tokenizer";
+import { _wpCache, lruGet, lruSet, MAX_DERIVED_CACHE } from "./tokenizer";
 import { getCachedWeights } from "./token-weights";
 import type { SupportedLanguage } from "./snippets";
 
@@ -74,7 +74,8 @@ export function analyzeWeakPatterns(
     language: SupportedLanguage,
     topN: number = 3,
 ): WeakPattern[] {
-    const c = _wpCache[(tokens as CachedTokenArray)._id];
+    const id = (tokens as CachedTokenArray)._id;
+    const c = lruGet(_wpCache, id);
     return c && c[0] === errors ? c[1] as WeakPattern[] : _analyzeWeakPatternsCold(errors, tokens, contentLength, language, topN);
 }
 
@@ -138,7 +139,7 @@ function _analyzeWeakPatternsCold(
         .sort((a, b) => b.errorRate - a.errorRate)
         .slice(0, topN);
 
-    _wpCache[(tokens as CachedTokenArray)._id] = [errors, result];
+    lruSet(_wpCache, (tokens as CachedTokenArray)._id, [errors, result], MAX_DERIVED_CACHE);
 
     return result;
 }

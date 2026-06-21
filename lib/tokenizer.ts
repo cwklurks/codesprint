@@ -167,18 +167,43 @@ for (let c = 0; c < 128; c++) {
  * The tokenizer is intentionally simple (regex + character scanning) rather than
  * a full parser. It's accurate enough for scoring weights and pattern analysis.
  */
-// Memoization cache: plain object for faster string-key lookup
-const _tokenizeCache: Record<string, Token[]> = Object.create(null);
+export const MAX_TOKENIZE_CACHE = 256;
+export const MAX_DERIVED_CACHE = 128;
+
+export function lruGet<K, V>(map: Map<K, V>, key: K): V | undefined {
+    if (!map.has(key)) return undefined;
+    const value = map.get(key)!;
+    map.delete(key);
+    map.set(key, value); // move to front (most recently used)
+    return value;
+}
+
+export function lruSet<K, V>(map: Map<K, V>, key: K, value: V, max: number): void {
+    if (map.has(key)) map.delete(key); // update position if exists
+    else if (map.size >= max) {
+        const oldestKey = map.keys().next().value;
+        if (oldestKey !== undefined) map.delete(oldestKey);
+    }
+    map.set(key, value);
+}
+
+const _tokenizeCache: Map<string, Token[]> = new Map();
 let _nextTokenId = 0;
 
-// Global array caches indexed by token ID — avoids named property access on token arrays
-export const _cmCache: (TokenCategory[] | null)[] = [];
-export const _pscCache: ([number[], number] | null)[] = [];
-export const _calcCache: (((ep: number[]) => number) | null)[] = [];
-export const _wpCache: ([unknown[], unknown[]] | null)[] = [];
+export const _cmCache: Map<number, TokenCategory[] | null> = new Map();
+export const _pscCache: Map<number, [number[], number] | null> = new Map();
+export const _calcCache: Map<number, ((ep: number[]) => number) | null> = new Map();
+export const _wpCache: Map<number, [unknown[], unknown[]] | null> = new Map();
 
 export function tokenize(content: string, language: SupportedLanguage): Token[] {
-    return _tokenizeCache[content] || _tokenizeImpl(content, language);
+    const key = `${language}:${content}`;
+    const cached = lruGet(_tokenizeCache, key);
+    if (cached !== undefined) return cached;
+    return _tokenizeImpl(content, language);
+}
+
+export function __testTokenizeCacheSize(): number {
+    return _tokenizeCache.size;
 }
 
 function _tokenizeImpl(content: string, language: SupportedLanguage): Token[] {
@@ -289,7 +314,7 @@ function _tokenizeImpl(content: string, language: SupportedLanguage): Token[] {
         }
     }
 
-    _tokenizeCache[content] = tokens;
+    lruSet(_tokenizeCache, `${language}:${content}`, tokens, MAX_TOKENIZE_CACHE);
     return tokens;
 }
 
@@ -299,7 +324,8 @@ function _tokenizeImpl(content: string, language: SupportedLanguage): Token[] {
  */
 export function buildCategoryMap(tokens: Token[], length: number): TokenCategory[] {
     const id = (tokens as CachedTokenArray)._id;
-    return _cmCache[id] || _buildCategoryMapCold(tokens, length, id);
+    const map = lruGet(_cmCache, id);
+    return map || _buildCategoryMapCold(tokens, length, id);
 }
 
 function _buildCategoryMapCold(tokens: Token[], length: number, id: number): TokenCategory[] {
@@ -312,6 +338,6 @@ function _buildCategoryMapCold(tokens: Token[], length: number, id: number): Tok
             map[i] = cat;
         }
     }
-    _cmCache[id] = map;
+    lruSet(_cmCache, id, map, MAX_DERIVED_CACHE);
     return map;
 }
