@@ -50,15 +50,15 @@ Overall health: ~8.5/10. Issues below are bugs, tech debt, and feature opportuni
   `hooks/useTypingEngine.ts:480`
   `calculateAndPublishMetrics` loops 0..cursorIndex to recompute `perfectChars` every 200ms tick. Fix: maintain a running counter incrementally.
 
-- [ ] **8. Fix `snippetKey` collisions**
+- [x] **8. Fix `snippetKey` collisions**
   `components/CodePanel.tsx:63`
   Keys by `${language}-${content.length}-${content.slice(0,16)}`; distinct snippets with the same prefix+length collide, preventing Monaco remount. Fix: use the snippet `id` (or a content hash).
 
-- [ ] **9. `AIDrillPanel` SSR mobile check**
+- [x] **9. `AIDrillPanel` SSR mobile check**
   `components/AIDrillPanel.tsx:106`
   Reads `window.innerWidth` during render, causing a hydration mismatch. Fix: move to `useEffect`/state or a CSS media query.
 
-- [ ] **10. Delete dead auto-advance**
+- [x] **10. Delete dead auto-advance**
   `hooks/useSessionLifecycle.ts:95`, `components/ResultCard.tsx:418`
   `setAutoAdvance` sets a deadline that is never scheduled; countdown UI in `ResultCard` is orphaned. Decision: delete the dead code (simpler than finishing a half-built feature).
 
