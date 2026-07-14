@@ -79,8 +79,11 @@ function sessionsToCSV(sessions: SessionRecord[]): string {
     return [headers.join(","), ...rows].join("\n");
 }
 
-function csvEscape(value: unknown): string {
-    const str = String(value ?? "");
+export function csvEscape(value: unknown): string {
+    let str = String(value ?? "");
+    if (typeof value === "string" && (/^[\t\r]/.test(str) || /^\s*[=+\-@]/.test(str))) {
+        str = `'${str}`;
+    }
     if (str.includes(",") || str.includes('"') || str.includes("\n")) {
         return `"${str.replace(/"/g, '""')}"`;
     }

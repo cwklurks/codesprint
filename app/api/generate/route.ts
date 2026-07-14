@@ -12,36 +12,104 @@ import { validateDrillResponse } from "@/lib/ai/response-parser";
 import type { DrillRequest, GenerateApiResponse, GenerateApiError } from "@/lib/ai/types";
 import { detectProviderFromKey } from "@/lib/ai/key-storage";
 
+const MAX_REQUEST_BODY_BYTES = 16 * 1024;
+const MAX_METRIC_VALUE = 1_000_000;
+const CANONICAL_SITE_ORIGIN = "https://codesprint.app";
+const tokenCategorySchema = z.enum([
+    "keyword", "operator", "delimiter", "identifier",
+    "literal", "string", "comment", "whitespace",
+]);
+
+const weakPatternSchema = z.object({
+    category: tokenCategorySchema,
+    errorCount: z.number().int().min(0).max(MAX_METRIC_VALUE),
+    totalTokens: z.number().int().min(1).max(MAX_METRIC_VALUE),
+    errorRate: z.number().finite().min(0).max(10),
+    label: z.string().trim().min(1).max(64),
+}).strict();
+
 const drillRequestSchema = z.object({
     language: z.enum(["javascript", "python", "java", "cpp"]),
     difficulty: z.enum(["easy", "medium", "hard"]),
     lengthCategory: z.enum(["short", "medium", "long"]),
-    weakPatterns: z.array(z.object({
-        category: z.enum(["keyword", "operator", "delimiter", "identifier", "literal", "string", "comment", "whitespace"]),
-        errorCount: z.number(),
-        totalTokens: z.number(),
-        errorRate: z.number(),
-        label: z.string(),
-    })),
-    targetTokenCategories: z.array(z.string()),
-    recentDrillTitles: z.array(z.string()),
+    weakPatterns: z.array(weakPatternSchema).max(8),
+    targetTokenCategories: z.array(tokenCategorySchema).max(8),
+    recentDrillTitles: z.array(z.string().trim().min(1).max(120)).max(10),
     userContext: z.object({
-        estimatedWpm: z.number(),
-        estimatedAccuracy: z.number(),
-        sessionCount: z.number(),
-    }),
-});
+        estimatedWpm: z.number().finite().min(0).max(1_000),
+        estimatedAccuracy: z.number().finite().min(0).max(1),
+        sessionCount: z.number().int().min(0).max(MAX_METRIC_VALUE),
+    }).strict(),
+}).strict();
+
+function configuredOrigins(request: Request): Set<string> {
+    const allowed = new Set<string>();
+    const candidates = [
+        CANONICAL_SITE_ORIGIN,
+        process.env.NEXT_PUBLIC_SITE_URL,
+        ...(process.env.AI_GENERATE_ALLOWED_ORIGINS?.split(",") ?? []),
+    ];
+
+    if (process.env.VERCEL_URL) {
+        candidates.push(`https://${process.env.VERCEL_URL}`);
+    }
+
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        try {
+            const parsed = new URL(candidate.trim());
+            if ((parsed.protocol === "https:" || parsed.protocol === "http:") &&
+                parsed.username === "" && parsed.password === "") {
+                allowed.add(parsed.origin);
+            }
+        } catch {
+            // Invalid server configuration is ignored so origin checks fail closed.
+        }
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+        const requestUrl = new URL(request.url);
+        if (requestUrl.hostname === "localhost" ||
+            requestUrl.hostname === "127.0.0.1" ||
+            requestUrl.hostname === "[::1]") {
+            allowed.add(requestUrl.origin);
+        }
+    }
+
+    return allowed;
+}
+
+function validateOrigin(request: Request): GenerateApiError | null {
+    const origin = request.headers.get("origin");
+    if (!origin || origin === "null") {
+        return { error: "Forbidden", code: "INVALID_ORIGIN" };
+    }
+
+    let parsed: URL;
+    try {
+        parsed = new URL(origin);
+    } catch {
+        return { error: "Forbidden", code: "INVALID_ORIGIN" };
+    }
+
+    if ((parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+        parsed.origin !== origin ||
+        parsed.username !== "" || parsed.password !== "") {
+        return { error: "Forbidden", code: "INVALID_ORIGIN" };
+    }
+
+    if (!configuredOrigins(request).has(parsed.origin)) {
+        return { error: "Forbidden", code: "ORIGIN_MISMATCH" };
+    }
+
+    return null;
+}
 
 export async function POST(request: Request) {
     // 1. Origin validation (CSRF protection)
-    const origin = request.headers.get("origin");
-    const host = request.headers.get("host");
-    if (origin && new URL(origin).host !== (host ?? "")) {
-        const error: GenerateApiError = { 
-            error: "Forbidden", 
-            code: "ORIGIN_MISMATCH" 
-        };
-        return Response.json(error, { status: 403 });
+    const originError = validateOrigin(request);
+    if (originError) {
+        return Response.json(originError, { status: 403 });
     }
 
     // 2. Read API key from Authorization header
@@ -62,7 +130,27 @@ export async function POST(request: Request) {
         return Response.json(error, { status: 400 });
     }
 
-    // 3. Parse + validate request body
+    // 3. Reject declared oversized bodies before buffering JSON
+    const contentLength = request.headers.get("content-length");
+    if (contentLength !== null) {
+        const declaredBytes = Number(contentLength);
+        if (!Number.isSafeInteger(declaredBytes) || declaredBytes < 0) {
+            const error: GenerateApiError = {
+                error: "Invalid Content-Length header",
+                code: "INVALID_CONTENT_LENGTH",
+            };
+            return Response.json(error, { status: 400 });
+        }
+        if (declaredBytes > MAX_REQUEST_BODY_BYTES) {
+            const error: GenerateApiError = {
+                error: "Request body is too large",
+                code: "PAYLOAD_TOO_LARGE",
+            };
+            return Response.json(error, { status: 413 });
+        }
+    }
+
+    // 4. Parse + validate request body
     let body: unknown;
     try {
         body = await request.json();
@@ -85,7 +173,7 @@ export async function POST(request: Request) {
     }
     const drillRequest = parseResult.data;
 
-    // 4. Determine provider from key prefix
+    // 5. Determine provider from key prefix
     const provider = detectProviderFromKey(apiKey);
     if (!provider) {
         const error: GenerateApiError = {
@@ -95,10 +183,10 @@ export async function POST(request: Request) {
         return Response.json(error, { status: 400 });
     }
 
-    // 5. Build prompt
+    // 6. Build prompt
     const { systemPrompt, userPrompt } = buildPrompt(drillRequest);
 
-    // 6. Call AI SDK
+    // 7. Call AI SDK
     try {
         // Create provider with API key
         const model = provider === "claude"
@@ -118,7 +206,7 @@ export async function POST(request: Request) {
 
         const drillResponse = result.output;
 
-        // 7. Validate generated code
+        // 8. Validate generated code
         const validation = validateDrillResponse(
             drillResponse,
             drillRequest as DrillRequest,
@@ -132,7 +220,7 @@ export async function POST(request: Request) {
             return Response.json(error, { status: 422 });
         }
 
-        // 8. Return response with cost info
+        // 9. Return response with cost info
         const response: GenerateApiResponse = {
             snippet: drillResponse,
             provider,
