@@ -92,8 +92,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 toggle("analytics");
             }
         }
+        function handleKeyboardModal(event: Event) {
+            const modal = (event as CustomEvent<ActiveModal>).detail;
+            if (modal === "preferences" || modal === "analytics") {
+                setActiveModal(modal);
+            }
+        }
         window.addEventListener("keydown", handleGlobalShortcut);
-        return () => window.removeEventListener("keydown", handleGlobalShortcut);
+        window.addEventListener("codesprint-open-modal", handleKeyboardModal);
+        return () => {
+            window.removeEventListener("keydown", handleGlobalShortcut);
+            window.removeEventListener("codesprint-open-modal", handleKeyboardModal);
+        };
     }, [toggle]);
 
     useEffect(() => {

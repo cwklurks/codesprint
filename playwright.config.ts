@@ -6,7 +6,7 @@ export default defineConfig({
     retries: 1,
     timeout: 60000,
     use: {
-        baseURL: "http://localhost:3000",
+        baseURL: "http://localhost:3010",
         trace: "on-first-retry",
     },
     projects: [
@@ -16,9 +16,9 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: "./node_modules/.bin/next dev",
-        url: "http://localhost:3000",
+        command: "./node_modules/.bin/next dev --turbopack --port 3010",
+        url: "http://localhost:3010",
         reuseExistingServer: !process.env.CI,
-        timeout: 60000,
+        timeout: 120000,
     },
 });

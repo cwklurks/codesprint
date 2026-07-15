@@ -31,17 +31,25 @@ export interface UseKeyboardShortcutsReturn {
     exitVimPreview: () => void;
 }
 
+const SHELL_MODAL_EVENT = "codesprint-open-modal";
+
+function openShellModal(modal: "preferences" | "analytics") {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent(SHELL_MODAL_EVENT, { detail: modal }));
+}
+
 /**
  * Hook to manage global keyboard shortcuts and event listeners
  * Extracted from TypingSession.tsx keyboard handling logic
  *
- * Manages a 6-level keyboard event hierarchy:
+ * Manages a 7-level keyboard event hierarchy:
  * 1. Global Escape Handling (Highest Priority)
- * 2. Idle Typing Guard (printable keys in idle bypass shortcuts → engine)
- * 3. Vim Toggle (v key, finished phase only)
- * 4. Vim Preview Mode
- * 5. Global Shortcuts (Non-Vim, finished phase only)
- * 6. Pass to Engine (Typing)
+ * 2. Idle shell shortcuts (when focus is not inside Monaco)
+ * 3. Idle Typing Guard (printable keys in idle bypass shortcuts → engine)
+ * 4. Vim Toggle (v key, finished phase only)
+ * 5. Vim Preview Mode
+ * 6. Global Shortcuts
+ * 7. Pass to Engine (Typing)
  */
 export function useKeyboardShortcuts({
     phase,
@@ -95,6 +103,8 @@ export function useKeyboardShortcuts({
         function onKeyDown(e: KeyboardEvent) {
             const allowVimHandling = vimMode;
             const keyLower = e.key.toLowerCase();
+            const target = e.target;
+            const isEditorTarget = target instanceof Element && Boolean(target.closest(".monaco-editor"));
 
             // 0. Overlay guard: if a Chakra dialog/drawer is open, let it handle all keys.
             // This prevents game shortcuts and the idle typing guard from stealing keystrokes
@@ -139,9 +149,48 @@ export function useKeyboardShortcuts({
                 }
             }
 
-            // 2. Idle Typing Guard: in idle phase, printable keys bypass all shortcuts and
-            // go directly to the engine. This prevents r/n/q/l/v/p/a from firing as
-            // shortcuts when a snippet starts with those characters.
+            // 2. Idle shell shortcuts: when focus is outside Monaco, documented
+            // global shortcuts should win over the typing engine. If the user has
+            // focused the editor, printable keys still start/type the snippet.
+            if (phase === "idle" && !isEditorTarget && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                if (e.shiftKey && keyLower === "a" && onOpenAIDrill) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onOpenAIDrill();
+                    return;
+                }
+                if (keyLower === "r") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    enableEditorFocus();
+                    onReset();
+                    onStartEngine();
+                    focusEditor();
+                    return;
+                }
+                if (keyLower === "n" || keyLower === "q") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    enableEditorFocus();
+                    onNextProblem();
+                    return;
+                }
+                if (keyLower === "l") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowLiveStatsDuringRun(!showLiveStatsDuringRun);
+                    return;
+                }
+                if (keyLower === "p" || keyLower === "a") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openShellModal(keyLower === "p" ? "preferences" : "analytics");
+                    return;
+                }
+            }
+
+            // 3. Idle Typing Guard: in idle phase, printable keys go directly to
+            // the engine after shell-level shortcuts have had a chance to run.
             if (phase === "idle" && !e.metaKey && !e.ctrlKey && !e.altKey) {
                 const isPrintable = e.key.length === 1 || e.key === "Enter" || e.key === "Tab";
                 if (isPrintable) {
@@ -155,7 +204,7 @@ export function useKeyboardShortcuts({
             // Typing repeats are allowed — they reach the engine via section 6 or the idle guard.
             if (e.repeat && phase !== "running") return;
 
-            // 3. Vim Toggle (v) - Allow toggling ON/OFF only in finished phase
+            // 4. Vim Toggle (v) - Allow toggling ON/OFF only in finished phase
             if (!e.metaKey && !e.ctrlKey && !e.altKey && keyLower === "v" && phase === "finished") {
                 e.preventDefault();
                 e.stopPropagation();
@@ -168,7 +217,7 @@ export function useKeyboardShortcuts({
                 return;
             }
 
-            // 4. Vim Preview Mode - Delegate to Monaco, ignore Engine
+            // 5. Vim Preview Mode - Delegate to Monaco, ignore Engine
             if (isVimPreviewing) {
                 // Handle 'i' to start typing
                 if (keyLower === "i" && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -206,7 +255,7 @@ export function useKeyboardShortcuts({
                 return;
             }
 
-            // 5. Global Shortcuts (Non-Vim, only active in finished phase due to idle guard above)
+            // 6. Global Shortcuts
             if (!e.metaKey && !e.ctrlKey && !e.altKey) {
                 // Handle Tab and Space to go to next test when finished
                 if (phase === "finished" && problemCount > 1) {
@@ -242,14 +291,6 @@ export function useKeyboardShortcuts({
                         return;
                     }
                 }
-                if (keyLower === "p" && phase !== "running") {
-                    // Allow propagation to AppShell for preferences drawer
-                    return;
-                }
-                if (keyLower === "a" && phase !== "running") {
-                    // Allow propagation to AppShell for analytics modal
-                    return;
-                }
                 // Shift+A for AI Drills
                 if (e.shiftKey && keyLower === "a" && phase !== "running" && phase !== "countdown" && onOpenAIDrill) {
                     e.preventDefault();
@@ -257,9 +298,21 @@ export function useKeyboardShortcuts({
                     onOpenAIDrill();
                     return;
                 }
+                if (keyLower === "p" && phase !== "running") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openShellModal("preferences");
+                    return;
+                }
+                if (keyLower === "a" && phase !== "running") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openShellModal("analytics");
+                    return;
+                }
             }
 
-            // 6. Pass to Engine (Typing)
+            // 7. Pass to Engine (Typing)
             if (allowVimHandling) {
                 enableEditorFocus();
                 engineHandleKeyDown(e);

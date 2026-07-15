@@ -49,6 +49,24 @@ function press(key: string, opts: Partial<KeyboardEventInit> = {}): KeyboardEven
     return event;
 }
 
+function pressFrom(target: HTMLElement, key: string, opts: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+    const event = fireKey(key, opts);
+    act(() => {
+        target.dispatchEvent(event);
+    });
+    return event;
+}
+
+function addEditorTarget(): HTMLElement {
+    const editor = document.createElement("div");
+    editor.className = "monaco-editor";
+    const textarea = document.createElement("textarea");
+    editor.appendChild(textarea);
+    document.body.appendChild(editor);
+    cleanups.push(() => editor.remove());
+    return textarea;
+}
+
 function addOverlay(scope: "dialog" | "drawer" = "dialog"): HTMLElement {
     const el = document.createElement("div");
     el.setAttribute("data-scope", scope);
@@ -58,13 +76,39 @@ function addOverlay(scope: "dialog" | "drawer" = "dialog"): HTMLElement {
 }
 
 describe("useKeyboardShortcuts", () => {
-    it("forwards idle printable keys to the engine when no overlay is open", () => {
+    it("forwards idle printable keys from the editor to the engine when no overlay is open", () => {
         const engineHandleKeyDown = vi.fn();
+        const editorTarget = addEditorTarget();
         renderShortcuts({ phase: "idle", engineHandleKeyDown });
+
+        pressFrom(editorTarget, "r");
+
+        expect(engineHandleKeyDown).toHaveBeenCalledTimes(1);
+    });
+
+    it("runs idle shell shortcuts instead of typing when focus is outside the editor", () => {
+        const engineHandleKeyDown = vi.fn();
+        const onReset = vi.fn();
+        const onStartEngine = vi.fn();
+        renderShortcuts({ phase: "idle", engineHandleKeyDown, onReset, onStartEngine });
 
         press("r");
 
-        expect(engineHandleKeyDown).toHaveBeenCalledTimes(1);
+        expect(engineHandleKeyDown).not.toHaveBeenCalled();
+        expect(onReset).toHaveBeenCalledTimes(1);
+        expect(onStartEngine).toHaveBeenCalledTimes(1);
+    });
+
+    it("dispatches shell modal shortcuts from idle shell focus", () => {
+        const opened = vi.fn();
+        window.addEventListener("codesprint-open-modal", opened);
+        cleanups.push(() => window.removeEventListener("codesprint-open-modal", opened));
+        renderShortcuts({ phase: "idle" });
+
+        press("p");
+
+        expect(opened).toHaveBeenCalledTimes(1);
+        expect((opened.mock.calls[0][0] as CustomEvent).detail).toBe("preferences");
     });
 
     it("ignores idle printable keys while an overlay is open", () => {

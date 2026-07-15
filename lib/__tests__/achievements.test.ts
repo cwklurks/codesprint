@@ -6,8 +6,12 @@ import {
   type AchievementCategory,
 } from "../achievements";
 
+type AchievementContextOverrides = Omit<Partial<AchievementContext>, "session"> & {
+  session?: Partial<AchievementContext["session"]>;
+};
+
 function makeContext(
-  overrides: Partial<AchievementContext> = {},
+  overrides: AchievementContextOverrides = {},
 ): AchievementContext {
   return {
     session: {

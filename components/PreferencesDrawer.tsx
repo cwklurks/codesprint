@@ -39,6 +39,13 @@ type PreferencesDrawerProps = {
     onClose: () => void;
 };
 
+function formatLocalDateStamp(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
 export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
     const {
         preferences,
@@ -90,7 +97,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
     const handleExportJSON = useCallback(async () => {
         try {
             const data = await exportSessions("json");
-            const date = new Date().toISOString().slice(0, 10);
+            const date = formatLocalDateStamp();
             downloadFile(data, `codesprint-${date}.json`, "application/json");
         } catch {
             setImportStatus("Export failed");
@@ -100,7 +107,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
     const handleExportCSV = useCallback(async () => {
         try {
             const data = await exportSessions("csv");
-            const date = new Date().toISOString().slice(0, 10);
+            const date = formatLocalDateStamp();
             downloadFile(data, `codesprint-${date}.csv`, "text/csv");
         } catch {
             setImportStatus("Export failed");

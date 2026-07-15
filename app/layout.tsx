@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     const themeInitScript = createThemeInitScript();
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning>
             <body>
                 <Script id="codesprint-theme-init" strategy="beforeInteractive">
                     {themeInitScript}
