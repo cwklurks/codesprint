@@ -35,7 +35,25 @@ export interface UseDailyReturn {
 export function useDaily(): UseDailyReturn {
     const today = useMemo(() => getLocalDateString(), []);
     const dayNumber = useMemo(() => getDailyNumber(today), [today]);
-    const dailySnippet = useMemo(() => getTodaysDaily(today), [today]);
+
+    // The pool is loaded on demand now, so the snippet arrives asynchronously.
+    // Null until it resolves; the daily card renders its unavailable state.
+    const [dailySnippet, setDailySnippet] = useState<Snippet | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setDailySnippet(null);
+        getTodaysDaily(today)
+            .then((snippet) => {
+                if (!cancelled) setDailySnippet(snippet);
+            })
+            .catch((error) => {
+                console.warn("Failed to load today's daily snippet:", error);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [today]);
 
     const [progress, setProgress] = useState<DailyProgress>(() => ({
         streak: {

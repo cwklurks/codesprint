@@ -98,6 +98,48 @@ describe("session-history", () => {
         });
     });
 
+    describe("localStorage mirror", () => {
+        it("drops the per-second history samples (no sync reader uses them)", () => {
+            createSession(createMockInput());
+
+            const stored = JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+            expect(stored[0].history).toEqual([]);
+        });
+
+        it("keeps errors and snippetContent, which weak-pattern analysis reads synchronously", () => {
+            createSession(
+                createMockInput({
+                    errors: [{ expected: "a", got: "b", index: 3 }],
+                    snippetContent: "const a = 1;",
+                    snippetContentLength: 12,
+                }),
+            );
+
+            const stored = JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+            expect(stored[0].errors).toEqual([{ expected: "a", got: "b", index: 3 }]);
+            expect(stored[0].snippetContent).toBe("const a = 1;");
+        });
+
+        it("trims the oldest half and retries once when the quota is exceeded", () => {
+            for (let i = 0; i < 8; i++) createSession(createMockInput({ wpm: i }));
+
+            const quotaError = new DOMException("quota", "QuotaExceededError");
+            let thrown = false;
+            mockLocalStorage.setItem.mockImplementationOnce(() => {
+                thrown = true;
+                throw quotaError;
+            });
+
+            expect(() => createSession(createMockInput({ wpm: 99 }))).not.toThrow();
+            expect(thrown).toBe(true);
+
+            // The retry kept the newest half rather than losing the write entirely.
+            const stored = JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+            expect(stored).toHaveLength(4);
+            expect(stored[0].wpm).toBe(99);
+        });
+    });
+
     describe("getSession", () => {
         it("should retrieve a session by id", () => {
             const created = createSession(createMockInput());

@@ -15,20 +15,46 @@ import {
     chakra,
 } from "@chakra-ui/react";
 import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { LazyMotion, domAnimation, m } from "framer-motion";
 import type { MotionProps } from "framer-motion";
+import dynamic from "next/dynamic";
 import { SPRING_SMOOTH, usePrefersReducedMotion } from "@/lib/motion";
 import { PreferencesProvider } from "@/lib/preferences";
-import PreferencesDrawer from "@/components/PreferencesDrawer";
-import ShortcutsDrawer from "@/components/ShortcutsDrawer";
-import AnalyticsModal from "@/components/AnalyticsModal";
-import AchievementGallery from "@/components/AchievementGallery";
 import { runMigrations } from "@/lib/storage/migration";
 import { getMetaValue } from "@/lib/storage/idb-store";
 import { idbGetAll, STORES, type AchievementRecord } from "@/lib/storage/idb-store";
 import { computeLevelFromXp } from "@/lib/xp";
 import type { StreakState } from "@/lib/streaks";
+
+// Overlay panels are opened by user action only — keep them (and the Chakra
+// dialog machinery they pull in) out of the first-load bundle.
+const PreferencesDrawer = dynamic(() => import("@/components/PreferencesDrawer"), { ssr: false });
+const ShortcutsDrawer = dynamic(() => import("@/components/ShortcutsDrawer"), { ssr: false });
+const AnalyticsModal = dynamic(() => import("@/components/AnalyticsModal"), { ssr: false });
+const AchievementGallery = dynamic(() => import("@/components/AchievementGallery"), { ssr: false });
+
+type OverlayStateValue = {
+    /** True while ANY dialog/drawer in the app is open. */
+    isOverlayOpen: boolean;
+    /** Register/unregister an overlay by a stable id. */
+    setOverlayOpen: (id: string, open: boolean) => void;
+};
+
+const OverlayStateContext = createContext<OverlayStateValue>({
+    isOverlayOpen: false,
+    setOverlayOpen: () => {},
+});
+
+/**
+ * Central "a dialog owns the keyboard" gate. Overlay state is spread across
+ * AppShell (preferences/shortcuts/analytics/gallery) and TypingSession
+ * (leaderboard/AI drills); the typing engine's capture-phase key handler needs a
+ * single answer, otherwise keys meant for an open dialog reach the engine.
+ */
+export function useOverlayState(): OverlayStateValue {
+    return useContext(OverlayStateContext);
+}
 
 function useProgressSummary() {
     const [data, setData] = useState<{ totalXp: number; streak: number; unlockedIds: Set<string> } | null>(null);
@@ -54,7 +80,23 @@ type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | null;
 
 export function AppShell({ children }: { children: ReactNode }) {
     const [activeModal, setActiveModal] = useState<ActiveModal>(null);
+    const [externalOverlays, setExternalOverlays] = useState<ReadonlySet<string>>(() => new Set());
     const progressSummary = useProgressSummary();
+
+    const setOverlayOpen = useCallback((id: string, open: boolean) => {
+        setExternalOverlays((prev) => {
+            if (open === prev.has(id)) return prev;
+            const next = new Set(prev);
+            if (open) next.add(id);
+            else next.delete(id);
+            return next;
+        });
+    }, []);
+
+    const overlayState = useMemo<OverlayStateValue>(
+        () => ({ isOverlayOpen: activeModal !== null || externalOverlays.size > 0, setOverlayOpen }),
+        [activeModal, externalOverlays, setOverlayOpen],
+    );
 
     useEffect(() => {
         runMigrations().catch((err) => {
@@ -73,9 +115,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         function handleGlobalShortcut(event: KeyboardEvent) {
             if (event.defaultPrevented) return;
             if (event.metaKey || event.ctrlKey || event.altKey) return;
+            // Cheap class check first — the DOM ancestor walk below is the expensive
+            // half and runs on every keystroke of a session otherwise.
+            if (document.body.classList.contains("cs-focus-active")) return;
             const target = event.target as HTMLElement | null;
             if (target?.closest("input, textarea, [contenteditable=true]")) return;
-            if (document.body.classList.contains("cs-focus-active")) return;
             const key = event.key.toLowerCase();
             if (key === "p") {
                 event.preventDefault();
@@ -99,6 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return (
         <PreferencesProvider>
             <LazyMotion features={domAnimation} strict>
+                <OverlayStateContext.Provider value={overlayState}>
                 <Flex direction="column" minH="100dvh" background="var(--bg-gradient)" color="var(--text)">
                     <Header
                         onOpenPreferences={() => setActiveModal("preferences")}
@@ -121,6 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         unlockedIds={progressSummary?.unlockedIds ?? new Set()}
                     />
                 )}
+                </OverlayStateContext.Provider>
             </LazyMotion>
         </PreferencesProvider>
     );

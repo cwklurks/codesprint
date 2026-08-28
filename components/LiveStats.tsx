@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Box, Flex, Text } from "@chakra-ui/react";
 
 type LiveStatsProps = {
@@ -8,7 +9,7 @@ type LiveStatsProps = {
     label?: string;
 };
 
-export default function LiveStats({ wpm, accuracy, label = "Live WPM" }: LiveStatsProps) {
+function LiveStats({ wpm, accuracy, label = "Live WPM" }: LiveStatsProps) {
     return (
         <Box
             borderRadius="16px"
@@ -35,3 +36,5 @@ export default function LiveStats({ wpm, accuracy, label = "Live WPM" }: LiveSta
         </Box>
     );
 }
+
+export default memo(LiveStats);

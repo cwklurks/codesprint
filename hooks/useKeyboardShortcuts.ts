@@ -18,6 +18,11 @@ export interface UseKeyboardShortcutsProps {
     showLiveStatsDuringRun: boolean;
     clearAutoAdvance: () => void;
     onOpenAIDrill?: () => void;
+    /**
+     * True while any dialog/drawer owns the keyboard. The capture-phase handler
+     * bails entirely so keys reach the open overlay instead of the engine.
+     */
+    isOverlayOpen?: boolean;
 }
 
 export interface UseKeyboardShortcutsReturn {
@@ -35,30 +40,29 @@ export interface UseKeyboardShortcutsReturn {
  * Hook to manage global keyboard shortcuts and event listeners
  * Extracted from TypingSession.tsx keyboard handling logic
  *
- * Manages a 6-level keyboard event hierarchy:
- * 1. Global Escape Handling (Highest Priority)
- * 2. Idle Typing Guard (printable keys in idle bypass shortcuts → engine)
- * 3. Vim Toggle (v key, finished phase only)
- * 4. Vim Preview Mode
- * 5. Global Shortcuts (Non-Vim, finished phase only)
- * 6. Pass to Engine (Typing)
+ * Manages a 7-level keyboard event hierarchy:
+ * 0. Overlay gate (a dialog/drawer owns the keyboard -> do nothing)
+ * 1. Global Escape Handling
+ * 2. Shift+A (AI drills) — before the idle typing guard AND the plain-"a" passthrough
+ * 3. Idle Typing Guard (printable keys in idle bypass shortcuts → engine)
+ * 4. Vim Toggle (v key, finished phase only)
+ * 5. Vim Preview Mode
+ * 6. Global Shortcuts (Non-Vim, finished phase only)
+ * 7. Pass to Engine (Typing)
+ *
+ * The document listener is registered ONCE. Every changing input is read through
+ * a ref written on each render, so a keystroke never tears down and re-adds the
+ * listener (it used to re-register on every keypress via inline arrow props).
  */
-export function useKeyboardShortcuts({
-    phase,
-    vimMode,
-    problemCount,
-    engineHandleKeyDown,
-    onReset,
-    onNextProblem,
-    onStartEngine,
-    enableEditorFocus,
-    focusEditor,
-    setVimMode,
-    setShowLiveStatsDuringRun,
-    showLiveStatsDuringRun,
-    clearAutoAdvance,
-    onOpenAIDrill,
-}: UseKeyboardShortcutsProps): UseKeyboardShortcutsReturn {
+export function useKeyboardShortcuts(props: UseKeyboardShortcutsProps): UseKeyboardShortcutsReturn {
+    const {
+        phase,
+        vimMode,
+        enableEditorFocus,
+        focusEditor,
+        setVimMode,
+    } = props;
+
     const [isVimPreviewing, setIsVimPreviewing] = useState(false);
     const vimPreviewTimeoutRef = useRef<number | null>(null);
 
@@ -90,11 +94,45 @@ export function useKeyboardShortcuts({
         }
     }, [phase, isVimPreviewing]);
 
-    // Main keyboard event handler
+    // Latest-value ref: written during render so the single document listener
+    // below always sees current props without being re-registered.
+    const latestRef = useRef({ props, isVimPreviewing, beginVimPreview, exitVimPreview });
+    latestRef.current = { props, isVimPreviewing, beginVimPreview, exitVimPreview };
+
+    // Main keyboard event handler — registered once for the component's lifetime.
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
+            const {
+                props: {
+                    phase,
+                    vimMode,
+                    problemCount,
+                    engineHandleKeyDown,
+                    onReset,
+                    onNextProblem,
+                    onStartEngine,
+                    enableEditorFocus,
+                    focusEditor,
+                    setVimMode,
+                    setShowLiveStatsDuringRun,
+                    showLiveStatsDuringRun,
+                    clearAutoAdvance,
+                    onOpenAIDrill,
+                    isOverlayOpen,
+                },
+                isVimPreviewing,
+                beginVimPreview,
+                exitVimPreview,
+            } = latestRef.current;
+
+            // 0. Overlay gate: while a dialog/drawer is open it owns the keyboard.
+            // Without this, the idle typing guard below turns a dialog's Enter into
+            // "start a run", and Escape resets the session instead of closing it.
+            if (isOverlayOpen) return;
+
             const allowVimHandling = vimMode;
             const keyLower = e.key.toLowerCase();
+            const noModifiers = !e.metaKey && !e.ctrlKey && !e.altKey;
 
             // 1. Global Escape Handling (Highest Priority)
             if (e.key === "Escape") {
@@ -129,10 +167,28 @@ export function useKeyboardShortcuts({
                 }
             }
 
-            // 2. Idle Typing Guard: in idle phase, printable keys bypass all shortcuts and
+            // 2. Shift+A opens AI drills. This MUST come before the idle typing guard
+            // (which would feed "A" to the engine and start a run) and before the
+            // plain-"a" analytics passthrough further down (which returned early and
+            // swallowed the shortcut in the finished phase).
+            if (
+                e.shiftKey &&
+                noModifiers &&
+                keyLower === "a" &&
+                phase !== "running" &&
+                phase !== "countdown" &&
+                onOpenAIDrill
+            ) {
+                e.preventDefault();
+                e.stopPropagation();
+                onOpenAIDrill();
+                return;
+            }
+
+            // 3. Idle Typing Guard: in idle phase, printable keys bypass all shortcuts and
             // go directly to the engine. This prevents r/n/q/l/v/p/a from firing as
             // shortcuts when a snippet starts with those characters.
-            if (phase === "idle" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            if (phase === "idle" && noModifiers) {
                 const isPrintable = e.key.length === 1 || e.key === "Enter" || e.key === "Tab";
                 if (isPrintable) {
                     enableEditorFocus();
@@ -141,8 +197,8 @@ export function useKeyboardShortcuts({
                 }
             }
 
-            // 3. Vim Toggle (v) - Allow toggling ON/OFF only in finished phase
-            if (!e.metaKey && !e.ctrlKey && !e.altKey && keyLower === "v" && phase === "finished") {
+            // 4. Vim Toggle (v) - Allow toggling ON/OFF only in finished phase
+            if (noModifiers && keyLower === "v" && phase === "finished") {
                 e.preventDefault();
                 e.stopPropagation();
                 if (isVimPreviewing || vimMode) {
@@ -154,10 +210,10 @@ export function useKeyboardShortcuts({
                 return;
             }
 
-            // 4. Vim Preview Mode - Delegate to Monaco, ignore Engine
+            // 5. Vim Preview Mode - Delegate to Monaco, ignore Engine
             if (isVimPreviewing) {
                 // Handle 'i' to start typing
-                if (keyLower === "i" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                if (keyLower === "i" && noModifiers) {
                     // Allow propagation so monaco-vim enters Insert mode
                     setVimMode(true);
                     setIsVimPreviewing(false);
@@ -169,7 +225,7 @@ export function useKeyboardShortcuts({
                 }
 
                 // Handle shortcuts that should work in preview
-                if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                if (noModifiers) {
                     if (keyLower === "r") {
                         e.preventDefault();
                         e.stopPropagation();
@@ -192,8 +248,8 @@ export function useKeyboardShortcuts({
                 return;
             }
 
-            // 5. Global Shortcuts (Non-Vim, only active in finished phase due to idle guard above)
-            if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+            // 6. Global Shortcuts (Non-Vim, only active in finished phase due to idle guard above)
+            if (noModifiers) {
                 // Handle Tab and Space to go to next test when finished
                 if (phase === "finished" && problemCount > 1) {
                     if (e.key === "Tab" || e.key === " ") {
@@ -236,16 +292,9 @@ export function useKeyboardShortcuts({
                     // Allow propagation to AppShell for analytics modal
                     return;
                 }
-                // Shift+A for AI Drills
-                if (e.shiftKey && keyLower === "a" && phase !== "running" && phase !== "countdown" && onOpenAIDrill) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onOpenAIDrill();
-                    return;
-                }
             }
 
-            // 6. Pass to Engine (Typing)
+            // 7. Pass to Engine (Typing)
             if (allowVimHandling) {
                 enableEditorFocus();
                 engineHandleKeyDown(e);
@@ -268,25 +317,7 @@ export function useKeyboardShortcuts({
             document.removeEventListener("keydown", onKeyDown, true);
             window.removeEventListener("paste", onPaste);
         };
-    }, [
-        phase,
-        showLiveStatsDuringRun,
-        vimMode,
-        setShowLiveStatsDuringRun,
-        setVimMode,
-        onNextProblem,
-        enableEditorFocus,
-        onReset,
-        onStartEngine,
-        engineHandleKeyDown,
-        beginVimPreview,
-        exitVimPreview,
-        isVimPreviewing,
-        problemCount,
-        focusEditor,
-        clearAutoAdvance,
-        onOpenAIDrill,
-    ]);
+    }, []);
 
     return {
         isVimPreviewing,

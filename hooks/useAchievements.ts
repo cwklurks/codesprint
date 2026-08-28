@@ -7,7 +7,7 @@ import type { StreakState } from "@/lib/streaks";
 import { updateStreak, getLocalDateString } from "@/lib/streaks";
 import { computeSessionXp, computeLevelFromXp } from "@/lib/xp";
 import type { LevelInfo } from "@/lib/xp";
-import { getSessionsAsync, getSessionStatsAsync } from "@/lib/storage/session-history";
+import { getSessionsAsync } from "@/lib/storage/session-history";
 import type { SessionRecord } from "@/lib/storage/session-history";
 import {
     idbGetAll,
@@ -49,6 +49,28 @@ export interface UseAchievementsReturn {
     level: number;
     levelProgress: number;
     dismissAchievements: () => void;
+}
+
+/**
+ * Aggregate the fields the achievement context needs. `getSessionStatsAsync`
+ * would re-read and re-filter the entire history a second time for exactly
+ * these numbers, so derive them from the list we already loaded.
+ */
+function summarizeSessions(sessions: readonly SessionRecord[]) {
+    let totalWpm = 0;
+    let bestWpm = 0;
+    let totalTimeMs = 0;
+    for (const s of sessions) {
+        totalWpm += s.wpm;
+        if (s.wpm > bestWpm) bestWpm = s.wpm;
+        totalTimeMs += s.elapsedMs;
+    }
+    return {
+        totalSessions: sessions.length,
+        averageWpm: sessions.length > 0 ? totalWpm / sessions.length : 0,
+        bestWpm,
+        totalTimeMs,
+    };
 }
 
 export function useAchievements({
@@ -98,7 +120,6 @@ export function useAchievements({
                 // 1. Load data from IDB
                 const [
                     recentSessions,
-                    stats,
                     storedStreak,
                     storedTotalXp,
                     unlockedRecords,
@@ -106,13 +127,14 @@ export function useAchievements({
                     storedThemes,
                 ] = await Promise.all([
                     getSessionsAsync(),
-                    getSessionStatsAsync(),
                     getMetaValue<StreakState>("streak"),
                     getMetaValue<number>("totalXp"),
                     idbGetAll<AchievementRecord>(STORES.achievements),
                     getMetaValue<number>("vimModeSessionCount"),
                     getMetaValue<string[]>("themesUsed"),
                 ]);
+
+                const stats = summarizeSessions(recentSessions);
 
                 // 2. Update streak
                 const today = getLocalDateString();

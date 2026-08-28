@@ -81,13 +81,18 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
         setSnippets([...CURATED_SNIPPETS_LIST, ...allLoaded, ...aiDrillsRef.current]);
     }, []);
 
-    // Load current language first (priority), then others in background
+    // Load ONLY the active language. The three others used to be pulled in on an
+    // idle callback — ~693 KB of JSON every visitor downloaded for languages they
+    // may never select. Switching language re-runs this effect and fetches that
+    // file then; already-loaded languages stay in the merged list.
     useEffect(() => {
         let mounted = true;
-        let timeoutId: ReturnType<typeof setTimeout> | null = null;
-        let idleId: number | null = null;
 
-        async function loadProgressively() {
+        async function loadActiveLanguage() {
+            if (!loadedLanguages.current[currentLanguage]) {
+                setIsLoading(true);
+            }
+
             // Load AI drills first
             const aiDrills = await loadAIDrills();
             if (!mounted) return;
@@ -98,32 +103,12 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
 
             rebuildSnippets();
             setIsLoading(false);
-
-            const otherLanguages = LANGUAGES.filter(lang => lang !== currentLanguage);
-
-            const loadInBackground = async () => {
-                await Promise.all(otherLanguages.map((lang) => loadLanguage(lang)));
-                if (!mounted) return;
-                rebuildSnippets();
-            };
-
-            if (typeof requestIdleCallback !== "undefined") {
-                idleId = requestIdleCallback(() => loadInBackground());
-            } else {
-                timeoutId = setTimeout(() => loadInBackground(), 100);
-            }
         }
 
-        loadProgressively();
+        loadActiveLanguage();
 
         return () => {
             mounted = false;
-            if (idleId !== null && typeof cancelIdleCallback !== "undefined") {
-                cancelIdleCallback(idleId);
-            }
-            if (timeoutId !== null) {
-                clearTimeout(timeoutId);
-            }
         };
     }, [currentLanguage, loadLanguage, rebuildSnippets, loadAIDrills]);
 

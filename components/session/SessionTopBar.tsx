@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Button, Flex, Text } from "@chakra-ui/react";
 import {
     TooltipContent,
@@ -25,7 +26,7 @@ export interface SessionTopBarProps extends ProgressIndicatorProps {
 /**
  * Top bar containing progress indicator, problem summary, and action buttons
  */
-export function SessionTopBar({
+function SessionTopBarImpl({
     progress,
     isTerminalMode,
     isImmersive,
@@ -131,3 +132,5 @@ export function SessionTopBar({
         </Flex>
     );
 }
+
+export const SessionTopBar = memo(SessionTopBarImpl);

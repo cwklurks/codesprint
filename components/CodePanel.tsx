@@ -1,10 +1,20 @@
 "use client";
 
 import { Box } from "@chakra-ui/react";
-import Editor, { type OnMount } from "@monaco-editor/react";
-import { initVimMode, type VimMode } from "monaco-vim";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Editor, { loader, type OnMount } from "@monaco-editor/react";
+import type { VimMode } from "monaco-vim";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
+
+// The editor core WITHOUT the bundled language services (typescript/json/css/html),
+// plus monarch tokenizers for exactly the four languages this app types.
+import * as monacoBundle from "monaco-editor/esm/vs/editor/editor.api";
+import "monaco-editor/esm/vs/editor/editor.all";
+import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
+import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
+import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
+import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
+
 import { estimateEditorHeight, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
 import { minAlphaForContrast } from "@/lib/contrast";
 import {
@@ -33,7 +43,23 @@ const LINE_BREAK_REGEX = /\r\n|\r|\n/;
 // The app's single mono voice (next/font JetBrains Mono, see app/globals.css).
 const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
 
-export default function CodePanel({
+// Without this, @monaco-editor/react fetches a SECOND copy of Monaco (0.54.0)
+// from jsdelivr at runtime while monaco-vim's npm copy (0.52.2) is already in the
+// bundle: two downloads, two versions, and a third-party runtime dependency.
+loader.config({ monaco: monacoBundle as unknown as typeof Monaco });
+
+// Bundled Monaco needs its own worker factory; the AMD/CDN loader used to supply one.
+if (typeof window !== "undefined") {
+    const globalWithEnv = window as Window & {
+        MonacoEnvironment?: { getWorker?: (moduleId: string, label: string) => Worker };
+    };
+    globalWithEnv.MonacoEnvironment ??= {
+        getWorker: () =>
+            new Worker(new URL("monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url)),
+    };
+}
+
+function CodePanel({
     content,
     cursorChar,
     wrongChars,
@@ -238,10 +264,13 @@ export default function CodePanel({
         applyTheme(monaco);
     }, [applyTheme, editorReadyToken]);
 
-    // Vim Mode Management
+    // Vim Mode Management. vimMode defaults off, so monaco-vim is imported the
+    // first time it is actually switched on rather than shipped to every user.
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
+
+        let cancelled = false;
 
         if (preferences.vimMode) {
             if (!vimModeRef.current) {
@@ -276,27 +305,32 @@ export default function CodePanel({
                     statusNodeRef.current = statusNode;
                 }
 
-                try {
-                    vimModeRef.current = initVimMode(editor, statusNode);
-                } catch (e) {
-                    console.error("Failed to init vim mode", e);
-                }
+                import("monaco-vim")
+                    .then(({ initVimMode }) => {
+                        // Vim was switched off again (or the editor remounted) while the
+                        // chunk was in flight — do not attach to a stale editor.
+                        if (cancelled || vimModeRef.current) return;
+                        if (editorRef.current !== editor) return;
+                        if (!statusNode.isConnected) return;
+                        vimModeRef.current = initVimMode(editor, statusNode);
+                    })
+                    .catch((e) => {
+                        console.error("Failed to init vim mode", e);
+                    });
             }
         } else {
             if (vimModeRef.current) {
                 vimModeRef.current.dispose();
                 vimModeRef.current = null;
-                if (statusNodeRef.current && statusNodeRef.current.parentElement) {
-                    statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
-                    statusNodeRef.current = null;
-                }
+            }
+            if (statusNodeRef.current && statusNodeRef.current.parentElement) {
+                statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
+                statusNodeRef.current = null;
             }
         }
 
         return () => {
-            // Cleanup on unmount is handled by the separate cleanup effect, 
-            // but we should also handle preference changes here if needed.
-            // Actually, let's leave cleanup to the main cleanup effect or when toggled off.
+            cancelled = true;
         };
     }, [preferences.vimMode, editorReadyToken]);
 
@@ -602,3 +636,7 @@ export default function CodePanel({
         </Box>
     );
 }
+
+// Memoized: the session re-renders on the metrics tick and the per-second history
+// tick as well as on keystrokes; without this the editor re-rendered for all three.
+export default memo(CodePanel);

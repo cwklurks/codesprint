@@ -60,13 +60,58 @@ function readLocalStorage(): SessionRecord[] {
     }
 }
 
+let mirrorWarned = false;
+
+function warnOnce(message: string, error?: unknown): void {
+    if (mirrorWarned) return;
+    mirrorWarned = true;
+    console.warn(message, error ?? "");
+}
+
+function isQuotaError(error: unknown): boolean {
+    return (
+        error instanceof DOMException &&
+        (error.name === "QuotaExceededError" ||
+            error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+            error.code === 22)
+    );
+}
+
 function writeLocalStorage(records: SessionRecord[]): void {
     if (isServer()) return;
     try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    } catch {
-        // Storage quota exceeded or other error
+        return;
+    } catch (error) {
+        if (!isQuotaError(error)) {
+            warnOnce("Failed to mirror session history to localStorage:", error);
+            return;
+        }
     }
+
+    // Quota cliff: silently dropping the write loses every sync reader's data
+    // with no signal. Keep the newest half (records are newest-first) and retry
+    // once, warning so the loss is visible instead of invisible.
+    const trimmed = records.slice(0, Math.max(1, Math.floor(records.length / 2)));
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        warnOnce(
+            `Session history mirror exceeded the localStorage quota; trimmed to the ${trimmed.length} most recent sessions. IndexedDB still holds the full history.`,
+        );
+    } catch (error) {
+        warnOnce("Session history mirror could not be written even after trimming:", error);
+    }
+}
+
+/**
+ * The localStorage mirror serves SYNCHRONOUS readers only (analytics
+ * aggregations, weak-pattern trends, leaderboard). Those read the scalar
+ * metrics plus `errors` + `snippetContent` for token-category analysis; none of
+ * them read the per-second `history` samples, which are the single largest
+ * field in a record. IndexedDB keeps the complete record either way.
+ */
+function toMirrorRecord(record: SessionRecord): SessionRecord {
+    return { ...record, history: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +137,7 @@ export async function createSessionAsync(input: CreateSessionInput): Promise<Ses
 
     // Always mirror to localStorage for sync readers (analytics, leaderboard)
     const existing = readLocalStorage();
-    const updated = [record, ...existing].slice(0, MAX_RECORDS);
+    const updated = [toMirrorRecord(record), ...existing].slice(0, MAX_RECORDS);
     writeLocalStorage(updated);
 
     return record;
@@ -121,8 +166,10 @@ export async function getSessionsAsync(filters?: SessionFilters): Promise<Sessio
     try {
         if (await isIdbAvailable()) {
             records = await idbGetAll<SessionRecord>(STORES.sessions);
-            // Sort by date descending (newest first)
-            records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            // Sort by date descending (newest first). ISO-8601 strings sort
+            // chronologically as plain strings, so this avoids allocating two
+            // Date objects per comparison across the whole history.
+            records.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
         } else {
             records = readLocalStorage();
         }
@@ -165,7 +212,12 @@ export async function clearSessionsAsync(): Promise<void> {
     } catch {
         // fall through
     }
-    window.localStorage.removeItem(STORAGE_KEY);
+
+    try {
+        window.localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+        warnOnce("Failed to clear the session history mirror:", error);
+    }
 }
 
 export async function getSessionStatsAsync(filters?: Omit<SessionFilters, "limit" | "offset">): Promise<{
@@ -216,7 +268,7 @@ export function createSession(input: CreateSessionInput): SessionRecord | null {
         };
 
         const existing = readLocalStorage();
-        const updated = [record, ...existing].slice(0, MAX_RECORDS);
+        const updated = [toMirrorRecord(record), ...existing].slice(0, MAX_RECORDS);
         writeLocalStorage(updated);
 
         // Also write to IndexedDB in background (fire-and-forget)
