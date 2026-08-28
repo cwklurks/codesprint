@@ -4,7 +4,6 @@ import {
     Box,
     DialogBackdrop,
     DialogBody,
-    DialogCloseTrigger,
     DialogContent,
     DialogHeader,
     DialogPositioner,
@@ -15,12 +14,20 @@ import {
     Portal,
     Text,
 } from "@chakra-ui/react";
+import { m } from "framer-motion";
 import { useMemo, useState } from "react";
 import {
     ACHIEVEMENTS,
     type AchievementCategory,
     type AchievementRarity,
 } from "@/lib/achievements";
+import { MOTION_DURATION, MOTION_EASE, usePrefersReducedMotion } from "@/lib/motion";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import {
+    overlayBackdropProps,
+    overlayDialogProps,
+    overlayHeaderProps,
+} from "@/components/ui/overlay";
 
 interface AchievementGalleryProps {
     isOpen: boolean;
@@ -28,11 +35,17 @@ interface AchievementGalleryProps {
     unlockedIds: Set<string>;
 }
 
+const MotionBox = m.create(Box);
+
+/**
+ * Rarity reads off the active theme instead of four fixed hex values, so the
+ * ladder stays legible (and on-brand) in every palette.
+ */
 const RARITY_COLORS: Record<AchievementRarity, string> = {
     common: "var(--text-subtle)",
-    rare: "#4299e1",
-    epic: "#9f7aea",
-    legendary: "#d69e2e",
+    rare: "var(--success)",
+    epic: "var(--accent)",
+    legendary: "var(--warning)",
 };
 
 const CATEGORIES: Array<{ value: AchievementCategory | "all"; label: string }> = [
@@ -47,8 +60,12 @@ const CATEGORIES: Array<{ value: AchievementCategory | "all"; label: string }> =
     { value: "special", label: "Special" },
 ];
 
+/** Cards past this index all share the last delay; a 90-card cascade is not a feature. */
+const MAX_STAGGERED_CARDS = 14;
+
 export default function AchievementGallery({ isOpen, onClose, unlockedIds }: AchievementGalleryProps) {
     const [selectedCategory, setSelectedCategory] = useState<AchievementCategory | "all">("all");
+    const reducedMotion = usePrefersReducedMotion();
 
     const filtered = useMemo(
         () =>
@@ -73,15 +90,11 @@ export default function AchievementGallery({ isOpen, onClose, unlockedIds }: Ach
             scrollBehavior="inside"
         >
             <Portal>
-                <DialogBackdrop backdropFilter="blur(6px)" />
+                <DialogBackdrop {...overlayBackdropProps} />
                 <DialogPositioner>
-                    <DialogContent
-                        bg="var(--panel-soft)"
-                        backdropFilter="blur(12px)"
-                        border="1px solid var(--border)"
-                    >
-                        <DialogCloseTrigger />
-                        <DialogHeader borderBottom="1px solid var(--border)">
+                    <DialogContent {...overlayDialogProps}>
+                        <DialogCloseButton />
+                        <DialogHeader {...overlayHeaderProps}>
                             <DialogTitle fontSize="xl" fontWeight="bold" color="var(--accent)">
                                 Achievements
                             </DialogTitle>
@@ -89,28 +102,56 @@ export default function AchievementGallery({ isOpen, onClose, unlockedIds }: Ach
                         <DialogBody py={4}>
                             {/* Progress bar */}
                             <Flex align="center" gap={3} mb={5}>
-                                <Text fontSize="sm" fontWeight={600} color="var(--text)" whiteSpace="nowrap">
-                                    {unlockedCount}/{totalCount} Unlocked
+                                <Text
+                                    fontSize="sm"
+                                    fontWeight={600}
+                                    color="var(--text)"
+                                    whiteSpace="nowrap"
+                                    fontVariantNumeric="tabular-nums"
+                                >
+                                    {unlockedCount}/{totalCount} unlocked
                                 </Text>
-                                <Box flex={1} h="6px" bg="var(--surface)" borderRadius="full" overflow="hidden">
+                                <Box
+                                    flex={1}
+                                    h="6px"
+                                    bg="var(--surface)"
+                                    borderRadius="full"
+                                    overflow="hidden"
+                                    role="progressbar"
+                                    aria-valuemin={0}
+                                    aria-valuemax={totalCount}
+                                    aria-valuenow={unlockedCount}
+                                    aria-label="Achievements unlocked"
+                                >
                                     <Box
                                         h="100%"
-                                        w={`${progress * 100}%`}
+                                        w="100%"
                                         bg="var(--accent)"
                                         borderRadius="full"
-                                        transition="width 0.3s ease"
+                                        transformOrigin="left center"
+                                        transform={`scaleX(${progress})`}
+                                        transition={reducedMotion ? "none" : "transform 0.35s ease"}
                                     />
                                 </Box>
                             </Flex>
 
                             {/* Category filter */}
-                            <Flex gap={2} mb={5} overflowX="auto" pb={1} flexWrap="wrap">
+                            <Flex
+                                role="group"
+                                aria-label="Filter achievements by category"
+                                gap={2}
+                                mb={5}
+                                overflowX="auto"
+                                pb={1}
+                                flexWrap="wrap"
+                            >
                                 {CATEGORIES.map((cat) => {
                                     const active = selectedCategory === cat.value;
                                     return (
                                         <Box
                                             as="button"
                                             key={cat.value}
+                                            aria-pressed={active}
                                             px={3}
                                             py={1.5}
                                             borderRadius="full"
@@ -122,6 +163,7 @@ export default function AchievementGallery({ isOpen, onClose, unlockedIds }: Ach
                                             color={active ? "var(--text)" : "var(--text-subtle)"}
                                             cursor="pointer"
                                             whiteSpace="nowrap"
+                                            transition="background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease"
                                             _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
                                             onClick={() => setSelectedCategory(cat.value)}
                                         >
@@ -140,28 +182,40 @@ export default function AchievementGallery({ isOpen, onClose, unlockedIds }: Ach
                                 }}
                                 gap={3}
                             >
-                                {filtered.map((achievement) => {
+                                {filtered.map((achievement, index) => {
                                     const unlocked = unlockedIds.has(achievement.id);
                                     return (
-                                        <Box
+                                        <MotionBox
                                             key={achievement.id}
+                                            initial={reducedMotion ? false : { opacity: 0, y: 8 }}
+                                            animate={{ opacity: unlocked ? 1 : 0.45, y: 0 }}
+                                            transition={{
+                                                duration: reducedMotion ? 0 : MOTION_DURATION.quick,
+                                                delay: reducedMotion
+                                                    ? 0
+                                                    : Math.min(index, MAX_STAGGERED_CARDS) * 0.02,
+                                                ease: MOTION_EASE.out,
+                                            }}
                                             p={3}
-                                            borderRadius="lg"
+                                            borderRadius="var(--radius-md)"
                                             border="1px solid var(--border)"
                                             bg="var(--surface)"
-                                            opacity={unlocked ? 1 : 0.4}
                                             filter={unlocked ? "none" : "grayscale(1)"}
-                                            transition="opacity 0.2s, filter 0.2s"
+                                            boxShadow={unlocked ? "var(--elev-1)" : "none"}
+                                            _hover={{
+                                                borderColor: "var(--border-strong)",
+                                                bg: "var(--surface-hover)",
+                                            }}
                                         >
                                             <Flex align="center" gap={2} mb={1}>
-                                                <Text fontSize="xl" lineHeight={1}>
+                                                <Text fontSize="xl" lineHeight={1} aria-hidden="true">
                                                     {achievement.icon}
                                                 </Text>
                                                 <Text
                                                     fontSize="2xs"
-                                                    fontWeight={600}
+                                                    fontWeight={700}
                                                     textTransform="uppercase"
-                                                    letterSpacing="0.05em"
+                                                    letterSpacing="0.08em"
                                                     color={RARITY_COLORS[achievement.rarity]}
                                                 >
                                                     {achievement.rarity}
@@ -173,7 +227,7 @@ export default function AchievementGallery({ isOpen, onClose, unlockedIds }: Ach
                                             <Text fontSize="xs" color="var(--text-subtle)" lineClamp={2}>
                                                 {achievement.description}
                                             </Text>
-                                        </Box>
+                                        </MotionBox>
                                     );
                                 })}
                             </Grid>

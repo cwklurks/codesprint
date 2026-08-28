@@ -235,7 +235,10 @@ main {
 .home-stack {
     display: flex;
     flex-direction: column;
-    gap: clamp(32px, 6vw, 72px);
+    /* Deliberately tight: the hero, the daily card and the control bar all sit
+       above the editor, and the editor has to stay above the fold on a 13"
+       laptop. */
+    gap: clamp(20px, 3vw, 32px);
 }
 
 .app-header,
@@ -265,14 +268,51 @@ nextjs-portal {
 /* Session control bar (extracted from inline styles for perf) */
 .session-control-bar {
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
-    padding: 6px 12px;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
     backdrop-filter: blur(var(--blur-sm));
     box-shadow: var(--elev-2);
+}
+
+/* Primary line: the filter groups, then the action slot at the far end. */
+.session-control-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
     flex-wrap: wrap;
+}
+
+/* Hairline between control groups, so the pills read as three sets and not one
+   long undifferentiated run. Hidden once the row wraps to one group per line,
+   where a divider would just dangle off the end of each row. */
+.session-control-divider {
+    display: none;
+    flex: none;
+    width: 1px;
+    align-self: stretch;
+    min-height: 20px;
+    background: var(--border);
+}
+
+@media (min-width: 48em) {
+    .session-control-divider {
+        display: block;
+    }
+}
+
+/* Secondary line: session context (review queue, suggested difficulty), which is
+   information rather than control and should not compete with the pills. */
+.session-control-meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 .analytics-range-select {

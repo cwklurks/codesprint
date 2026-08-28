@@ -19,7 +19,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { LazyMotion, domAnimation, m } from "framer-motion";
 import type { MotionProps } from "framer-motion";
 import dynamic from "next/dynamic";
-import { SPRING_SMOOTH, usePrefersReducedMotion } from "@/lib/motion";
+import { MOTION_DURATION, SPRING_SMOOTH, usePrefersReducedMotion } from "@/lib/motion";
 import { PreferencesProvider } from "@/lib/preferences";
 import { runMigrations } from "@/lib/storage/migration";
 import { getMetaValue } from "@/lib/storage/idb-store";
@@ -77,6 +77,46 @@ function useProgressSummary() {
 }
 
 type ActiveModal = "preferences" | "shortcuts" | "analytics" | "gallery" | null;
+
+/** One timing for every header affordance, taken from the motion scale. */
+const HEADER_CONTROL_TRANSITION = [
+    `transform ${MOTION_DURATION.quick}s ease`,
+    `background-color ${MOTION_DURATION.quick}s ease`,
+    `color ${MOTION_DURATION.quick}s ease`,
+    `border-color ${MOTION_DURATION.quick}s ease`,
+].join(", ");
+
+/**
+ * First focusable element on the page: hidden until it is tabbed to, then it
+ * jumps the keyboard past the header straight into the session.
+ */
+function SkipToContentLink() {
+    return (
+        <ChakraLink
+            href="#main"
+            position="fixed"
+            top={3}
+            left={4}
+            zIndex={100}
+            px={3}
+            py={2}
+            borderRadius="var(--radius-sm)"
+            bg="var(--surface)"
+            color="var(--text)"
+            border="1px solid var(--border-strong)"
+            backdropFilter="blur(var(--blur-md))"
+            boxShadow="var(--elev-2)"
+            fontSize="sm"
+            textDecoration="none"
+            transform="translateY(calc(-100% - 16px))"
+            transition={HEADER_CONTROL_TRANSITION}
+            _focusVisible={{ transform: "translateY(0)" }}
+            _focus={{ transform: "translateY(0)" }}
+        >
+            Skip to content
+        </ChakraLink>
+    );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
     const [activeModal, setActiveModal] = useState<ActiveModal>(null);
@@ -144,7 +184,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         <PreferencesProvider>
             <LazyMotion features={domAnimation} strict>
                 <OverlayStateContext.Provider value={overlayState}>
-                <Flex direction="column" minH="100dvh" background="var(--bg-gradient)" color="var(--text)">
+                {/* body already paints --bg-gradient (app/globals.css); a second
+                    full-height layer here just doubles the paint. */}
+                <Flex direction="column" minH="100dvh" color="var(--text)">
+                    <SkipToContentLink />
                     <Header
                         onOpenPreferences={() => setActiveModal("preferences")}
                         onOpenShortcuts={() => setActiveModal("shortcuts")}
@@ -152,7 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onOpenGallery={() => setActiveModal("gallery")}
                         progressSummary={progressSummary}
                     />
-                    <Container maxW="1280px" flex="1 1 auto" pt={8} pb={8} px={{ base: 4, lg: 10 }}>
+                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={8} pb={8} px={{ base: 4, lg: 10 }}>
                         {children}
                     </Container>
                 </Flex>
@@ -224,7 +267,9 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                     >
                         <Flex align="center" gap={4} flexWrap="wrap">
                             <Link href="/" aria-label="CodeSprint home">
-                                <Text fontWeight={700} fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="0.3px">
+                                {/* The single h1 for the app: the home hero deliberately
+                                    does not repeat the wordmark. */}
+                                <Text as="h1" fontWeight={700} fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="0.3px">
                                     codesprint
                                 </Text>
                             </Link>
@@ -240,9 +285,21 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                             {progressSummary && (
                                 <Flex align="center" gap={3} mr={2}>
                                     {progressSummary.streak >= 1 && (
-                                        <Flex align="center" gap={1}>
-                                            <Text fontSize="sm" lineHeight={1}>🔥</Text>
-                                            <Text fontSize="sm" fontWeight={600} color="var(--header-text)">
+                                        <Flex
+                                            align="center"
+                                            gap={1}
+                                            role="img"
+                                            aria-label={`${progressSummary.streak} day streak`}
+                                            title={`${progressSummary.streak} day streak`}
+                                        >
+                                            <FlameIcon boxSize={3.5} color="var(--accent)" />
+                                            <Text
+                                                aria-hidden="true"
+                                                fontSize="sm"
+                                                fontWeight={600}
+                                                color="var(--header-text)"
+                                                fontVariantNumeric="tabular-nums"
+                                            >
                                                 {progressSummary.streak}
                                             </Text>
                                         </Flex>
@@ -253,12 +310,16 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                                 Lv.{levelInfo.level}
                                             </Text>
                                             <Box w="40px" h="4px" bg="var(--surface)" borderRadius="full" overflow="hidden">
+                                                {/* scaleX rather than width: a compositor-only
+                                                    transition, no layout on every XP change. */}
                                                 <Box
                                                     h="100%"
-                                                    w={`${levelInfo.progress * 100}%`}
+                                                    w="100%"
                                                     bg="var(--accent)"
                                                     borderRadius="full"
-                                                    transition="width 0.3s ease"
+                                                    transform={`scaleX(${levelInfo.progress})`}
+                                                    transformOrigin="0% 50%"
+                                                    transition={`transform ${MOTION_DURATION.base}s ease`}
                                                 />
                                             </Box>
                                         </Flex>
@@ -275,15 +336,14 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                         h: 11,
                                         borderRadius: "full",
                                         border: "1px solid var(--header-border)",
-                                        bg: "rgba(255, 255, 255, 0.06)",
+                                        bg: "var(--surface)",
                                         color: "var(--header-text)",
-                                        transition:
-                                            "transform 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease",
+                                        transition: HEADER_CONTROL_TRANSITION,
                                         transform: "translateY(0)",
                                         _hover: {
-                                            bg: "var(--surface)",
+                                            bg: "var(--surface-hover)",
                                             color: "var(--header-text)",
-                                            borderColor: "var(--header-text)",
+                                            borderColor: "var(--border-strong)",
                                             transform: "translateY(-2px)",
                                         },
                                         _active: { bg: "var(--surface-active)", transform: "scale(0.96)" },
@@ -332,7 +392,7 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                                 <TooltipContent
                                                     px={2}
                                                     py={1}
-                                                    borderRadius="sm"
+                                                    borderRadius="var(--radius-sm)"
                                                     bg="var(--surface)"
                                                     color="var(--header-text)"
                                                     border="1px solid var(--border)"
@@ -355,7 +415,8 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                 color="var(--header-text)"
                                 bg="transparent"
                                 fontSize="sm"
-                                _hover={{ borderColor: "var(--border-strong)", bg: "var(--surface)" }}
+                                transition={HEADER_CONTROL_TRANSITION}
+                                _hover={{ borderColor: "var(--border-strong)", bg: "var(--surface-hover)" }}
                                 _active={{ borderColor: "var(--border-strong)", bg: "var(--surface-active)" }}
                                 onClick={onOpenPreferences}
                             >
@@ -425,6 +486,24 @@ function TrophyIcon(props: ChakraIconProps) {
             <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
             <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
             <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+        </chakra.svg>
+    );
+}
+
+function FlameIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <path d="M12 2c.6 3.2 2.4 4.4 3.9 6A7.4 7.4 0 0 1 18 13a6 6 0 0 1-12 0c0-1.9.9-3.4 1.8-4.4.2 1 .8 1.8 1.7 2.1-.2-2.9.9-6.5 2.5-8.7z" />
+            <path d="M12 20a3 3 0 0 1-1.6-5.5c.3 1 1 1.5 1.6 1.7.6-.9.9-2 .8-3 1.4 1 2.2 2.4 2.2 3.8A3 3 0 0 1 12 20z" />
         </chakra.svg>
     );
 }

@@ -187,9 +187,12 @@ export function useKeyboardShortcuts(props: UseKeyboardShortcutsProps): UseKeybo
 
             // 3. Idle Typing Guard: in idle phase, printable keys bypass all shortcuts and
             // go directly to the engine. This prevents r/n/q/l/v/p/a from firing as
-            // shortcuts when a snippet starts with those characters.
+            // shortcuts when a snippet starts with those characters. Tab is deliberately
+            // passed to the browser: from a fresh page it must drive focus traversal
+            // (skip link, header controls), and no snippet starts with a tab.
             if (phase === "idle" && noModifiers) {
-                const isPrintable = e.key.length === 1 || e.key === "Enter" || e.key === "Tab";
+                if (e.key === "Tab") return;
+                const isPrintable = e.key.length === 1 || e.key === "Enter";
                 if (isPrintable) {
                     enableEditorFocus();
                     engineHandleKeyDown(e);

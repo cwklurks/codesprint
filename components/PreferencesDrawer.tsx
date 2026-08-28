@@ -12,7 +12,10 @@ import {
     DrawerRoot,
     Flex,
     HStack,
+    Portal,
+    Separator,
     SliderControl,
+    SliderLabel,
     SliderRange,
     SliderRoot,
     SliderThumb,
@@ -23,9 +26,10 @@ import {
     SwitchRoot,
     Text,
 } from "@chakra-ui/react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import {
     DEFAULT_PREFERENCES,
+    type InterfaceMode,
     type SurfaceStyle,
     type SyntaxHighlightingMode,
     usePreferences,
@@ -33,11 +37,163 @@ import {
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { exportSessions, importSessions, downloadFile, type ImportResult } from "@/lib/export";
 import { AIKeyConfig } from "@/components/AIKeyConfig";
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
+import {
+    overlayBackdropProps,
+    overlayDrawerProps,
+    overlayEyebrowProps,
+    overlayHeaderProps,
+} from "@/components/ui/overlay";
 
 type PreferencesDrawerProps = {
     isOpen: boolean;
     onClose: () => void;
 };
+
+const syntaxHighlightingOptions: ReadonlyArray<SegmentedOption<SyntaxHighlightingMode>> = [
+    { value: "full", label: "Full" },
+    { value: "partial", label: "Partial" },
+    { value: "none", label: "None" },
+];
+
+const surfaceStyleOptions: ReadonlyArray<SegmentedOption<SurfaceStyle>> = [
+    { value: "immersive", label: "Immersive" },
+    { value: "panel", label: "Framed" },
+];
+
+const interfaceModeOptions: ReadonlyArray<SegmentedOption<InterfaceMode>> = [
+    { value: "ide", label: "IDE layout", helper: "Chakra chrome with session framing" },
+    { value: "terminal", label: "Terminal layout", helper: "Minimal framing with progress bar" },
+];
+
+/** One labelled block inside the drawer. The eyebrow is the section's a11y name. */
+function Section({ title, children }: { title: string; children: ReactNode }) {
+    const headingId = useId();
+    return (
+        <Stack as="section" aria-labelledby={headingId} gap={5}>
+            <Text id={headingId} {...overlayEyebrowProps}>
+                {title}
+            </Text>
+            {children}
+        </Stack>
+    );
+}
+
+/** Setting name above its control, for controls that need the full width. */
+function LabeledControl({ label, children }: { label: string; children: ReactNode }) {
+    return (
+        <Box>
+            <Text fontSize="sm" fontWeight={600} mb={2} color="var(--text)">
+                {label}
+            </Text>
+            {children}
+        </Box>
+    );
+}
+
+/** Setting name + one-line explanation on the left, control on the right. */
+function SettingRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+    return (
+        <Flex align="center" justify="space-between" gap={4}>
+            <Box>
+                <Text fontSize="sm" fontWeight={600} color="var(--text)">
+                    {label}
+                </Text>
+                <Text fontSize="xs" color="var(--text-subtle)" mt={0.5}>
+                    {hint}
+                </Text>
+            </Box>
+            {children}
+        </Flex>
+    );
+}
+
+function ToggleRow({
+    label,
+    hint,
+    checked,
+    onChange,
+}: {
+    label: string;
+    hint: string;
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+}) {
+    return (
+        <SettingRow label={label} hint={hint}>
+            <SwitchRoot
+                checked={checked}
+                onCheckedChange={({ checked: next }) => onChange(next)}
+                display="inline-flex"
+                alignItems="center"
+                flexShrink={0}
+            >
+                <SwitchControl />
+                <SwitchHiddenInput aria-label={label} />
+            </SwitchRoot>
+        </SettingRow>
+    );
+}
+
+function SliderSetting({
+    label,
+    valueLabel,
+    rangeLabel,
+    value,
+    min,
+    max,
+    step,
+    onChange,
+}: {
+    label: string;
+    valueLabel: string;
+    rangeLabel: string;
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    onChange: (value: number) => void;
+}) {
+    return (
+        <SliderRoot
+            value={[value]}
+            min={min}
+            max={max}
+            step={step}
+            onValueChange={({ value: next }) => {
+                if (next[0] != null) {
+                    onChange(next[0]);
+                }
+            }}
+        >
+            <HStack justify="space-between" align="baseline" mb={2}>
+                <SliderLabel fontSize="sm" fontWeight={600} color="var(--text)">
+                    {label}
+                </SliderLabel>
+                <Text fontSize="xs" color="var(--text-subtle)" fontVariantNumeric="tabular-nums">
+                    {valueLabel}
+                    <Box as="span" opacity={0.7}>
+                        {" "}
+                        · {rangeLabel}
+                    </Box>
+                </Text>
+            </HStack>
+            <SliderControl>
+                <SliderTrack bg="var(--surface)" h="4px" borderRadius="full">
+                    <SliderRange bg="var(--accent)" />
+                </SliderTrack>
+                <SliderThumb
+                    index={0}
+                    boxSize={4}
+                    bg="var(--accent)"
+                    borderWidth="2px"
+                    borderColor="var(--bg)"
+                    boxShadow="var(--elev-1)"
+                />
+            </SliderControl>
+        </SliderRoot>
+    );
+}
 
 export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
     const {
@@ -54,21 +210,6 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         setSpacedRepetitionEnabled,
         setAdaptiveDifficultyEnabled,
     } = usePreferences();
-
-    const syntaxHighlightingOptions: Array<{ value: SyntaxHighlightingMode; label: string }> = [
-        { value: "full", label: "Full" },
-        { value: "partial", label: "Partial" },
-        { value: "none", label: "None" },
-    ];
-
-    const surfaceStyleOptions: Array<{ value: SurfaceStyle; label: string }> = [
-        { value: "immersive", label: "Immersive" },
-        { value: "panel", label: "Framed" },
-    ];
-    const interfaceModeOptions: Array<{ value: typeof preferences.interfaceMode; label: string; helper: string }> = [
-        { value: "ide", label: "IDE layout", helper: "Chakra chrome with session framing" },
-        { value: "terminal", label: "Terminal layout", helper: "Minimal framing with progress bar" },
-    ];
 
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +268,15 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         if (fileInputRef.current) fileInputRef.current.value = "";
     }, []);
 
+    const dataButtonProps = {
+        size: "sm",
+        variant: "outline",
+        borderColor: "var(--border)",
+        color: "var(--text-subtle)",
+        borderRadius: "var(--radius-sm)",
+        _hover: { bg: "var(--surface-hover)", color: "var(--text)" },
+    } as const;
+
     return (
         <DrawerRoot
             open={isOpen}
@@ -138,353 +288,154 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                 }
             }}
         >
-            <DrawerBackdrop backdropFilter="blur(6px)" />
-            <DrawerPositioner>
-                <DrawerContent bg="var(--header-bg)" borderLeft="1px solid var(--border)" backdropFilter="blur(12px)">
-                    <CloseButton mt={2} position="absolute" top={2} right={2} onClick={onClose} />
-                    <DrawerHeader borderBottomWidth="1px" borderColor="var(--border)">
-                        Preferences
-                    </DrawerHeader>
-                    <DrawerBody>
-                        <Stack gap={8} mt={4}>
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Editor font size
-                                </Text>
-                                <HStack justify="space-between" mb={2}>
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        {preferences.fontSize}px
-                                    </Text>
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Range 16-36px
-                                    </Text>
-                                </HStack>
-                                <SliderRoot
-                                    value={[preferences.fontSize]}
-                                    min={16}
-                                    max={36}
-                                    step={1}
-                                    onValueChange={({ value }) => {
-                                        if (value[0] != null) {
-                                            setFontSize(value[0]);
-                                        }
-                                    }}
-                                >
-                                    <SliderControl>
-                                        <SliderTrack bg="var(--surface)">
-                                            <SliderRange bg="linear-gradient(90deg, var(--accent) 0%, transparent 100%)" />
-                                        </SliderTrack>
-                                        <SliderThumb index={0} boxSize={4} bg="var(--accent)" />
-                                    </SliderControl>
-                                </SliderRoot>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Caret width
-                                </Text>
-                                <HStack justify="space-between" mb={2}>
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        {preferences.caretWidth.toFixed(1)}px
-                                    </Text>
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Range 2-6px
-                                    </Text>
-                                </HStack>
-                                <SliderRoot
-                                    value={[preferences.caretWidth]}
-                                    min={2}
-                                    max={6}
-                                    step={0.2}
-                                    onValueChange={({ value }) => {
-                                        if (value[0] != null) {
-                                            setCaretWidth(value[0]);
-                                        }
-                                    }}
-                                >
-                                    <SliderControl>
-                                        <SliderTrack bg="var(--surface)">
-                                            <SliderRange bg="linear-gradient(90deg, var(--accent) 0%, transparent 100%)" />
-                                        </SliderTrack>
-                                        <SliderThumb index={0} boxSize={4} bg="var(--accent)" />
-                                    </SliderControl>
-                                </SliderRoot>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Countdown overlay
-                                </Text>
-                                <HStack justify="space-between" align="center">
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Show 3…2…1 countdown before runs
-                                    </Text>
-                                    <SwitchRoot
-                                        checked={preferences.countdownEnabled}
-                                        onCheckedChange={({ checked }) => setCountdownEnabled(checked)}
-                                        display="inline-flex"
-                                        alignItems="center"
-                                    >
-                                        <SwitchControl />
-                                        <SwitchHiddenInput />
-                                    </SwitchRoot>
-                                </HStack>
-                            </Box>
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Vim Mode
-                                </Text>
-                                <HStack justify="space-between" align="center">
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Enable Vim keybindings
-                                    </Text>
-                                    <SwitchRoot
-                                        checked={preferences.vimMode}
-                                        onCheckedChange={({ checked }) => setVimMode(checked)}
-                                        display="inline-flex"
-                                        alignItems="center"
-                                    >
-                                        <SwitchControl />
-                                        <SwitchHiddenInput />
-                                    </SwitchRoot>
-                                </HStack>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Syntax Highlighting
-                                </Text>
-                                <Flex gap={2} flexWrap="wrap">
-                                    {syntaxHighlightingOptions.map((option) => {
-                                        const active = preferences.syntaxHighlighting === option.value;
-                                        return (
-                                            <Button
-                                                key={option.value}
-                                                size="sm"
-                                                borderRadius="full"
-                                                px={4}
-                                                py={2}
-                                                bg={active ? "var(--surface-active)" : "transparent"}
-                                                color={active ? "var(--text)" : "var(--text-subtle)"}
-                                                border="1px solid"
-                                                borderColor={active ? "var(--border-strong)" : "var(--border)"}
-                                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                                onClick={() => setSyntaxHighlighting(option.value)}
-                                            >
-                                                {option.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </Flex>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Spaced Repetition
-                                </Text>
-                                <HStack justify="space-between" align="center">
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Smart review scheduling based on your performance
-                                    </Text>
-                                    <SwitchRoot
-                                        checked={preferences.spacedRepetitionEnabled}
-                                        onCheckedChange={({ checked }) => setSpacedRepetitionEnabled(checked)}
-                                        display="inline-flex"
-                                        alignItems="center"
-                                    >
-                                        <SwitchControl />
-                                        <SwitchHiddenInput />
-                                    </SwitchRoot>
-                                </HStack>
-                            </Box>
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Adaptive Difficulty
-                                </Text>
-                                <HStack justify="space-between" align="center">
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Auto-adjust difficulty to match your skill level
-                                    </Text>
-                                    <SwitchRoot
-                                        checked={preferences.adaptiveDifficultyEnabled}
-                                        onCheckedChange={({ checked }) => setAdaptiveDifficultyEnabled(checked)}
-                                        display="inline-flex"
-                                        alignItems="center"
-                                    >
-                                        <SwitchControl />
-                                        <SwitchHiddenInput />
-                                    </SwitchRoot>
-                                </HStack>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={3}>
-                                    AI Drills
-                                </Text>
-                                <AIKeyConfig />
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={2}>
-                                    Live stats during run
-                                </Text>
-                                <HStack justify="space-between" align="center">
-                                    <Text fontSize="xs" color="var(--text-subtle)">
-                                        Toggle live WPM panel (Cmd/Ctrl+Shift+L)
-                                    </Text>
-                                    <SwitchRoot
-                                        checked={preferences.showLiveStatsDuringRun}
-                                        onCheckedChange={({ checked }) => setShowLiveStatsDuringRun(checked)}
-                                        display="inline-flex"
-                                        alignItems="center"
-                                    >
-                                        <SwitchControl />
-                                        <SwitchHiddenInput />
-                                    </SwitchRoot>
-                                </HStack>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={3}>
-                                    Theme
-                                </Text>
-                                <ThemeSelector />
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={3}>
-                                    Interface layout
-                                </Text>
-                                <Stack gap={2}>
-                                    {interfaceModeOptions.map((option) => {
-                                        const active = preferences.interfaceMode === option.value;
-                                        return (
-                                            <Button
-                                                key={option.value}
-                                                justifyContent="space-between"
-                                                height="auto"
-                                                borderRadius="md"
-                                                px={4}
-                                                py={3}
-                                                bg={active ? "var(--surface-active)" : "transparent"}
-                                                color={active ? "var(--text)" : "var(--text-subtle)"}
-                                                border="1px solid"
-                                                borderColor={active ? "var(--border-strong)" : "var(--border)"}
-                                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                                onClick={() => setInterfaceMode(option.value)}
-                                            >
-                                                <Flex direction="column" align="flex-start" gap={1}>
-                                                    <Text fontWeight={600}>{option.label}</Text>
-                                                    <Text fontSize="xs" color="var(--text-subtle)" textAlign="start">
-                                                        {option.helper}
-                                                    </Text>
-                                                </Flex>
-                                            </Button>
-                                        );
-                                    })}
-                                </Stack>
-                            </Box>
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={3}>
-                                    Code surface
-                                </Text>
-                                <Flex gap={2} flexWrap="wrap">
-                                    {surfaceStyleOptions.map((option) => {
-                                        const active = preferences.surfaceStyle === option.value;
-                                        return (
-                                            <Button
-                                                key={option.value}
-                                                size="sm"
-                                                borderRadius="full"
-                                                px={4}
-                                                py={2}
-                                                bg={active ? "var(--surface-active)" : "transparent"}
-                                                color={active ? "var(--text)" : "var(--text-subtle)"}
-                                                border="1px solid"
-                                                borderColor={active ? "var(--border-strong)" : "var(--border)"}
-                                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                                onClick={() => setSurfaceStyle(option.value)}
-                                            >
-                                                {option.label}
-                                            </Button>
-                                        );
-                                    })}
-                                </Flex>
-                            </Box>
-
-                            <Box borderBottom="1px solid var(--border)" />
-
-                            <Box>
-                                <Text fontSize="sm" fontWeight={600} mb={3}>
-                                    Data
-                                </Text>
-                                <Stack gap={2}>
-                                    <Flex gap={2}>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            borderColor="var(--border)"
-                                            color="var(--text-subtle)"
-                                            _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                            onClick={handleExportJSON}
-                                            flex={1}
-                                        >
-                                            Export JSON
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            borderColor="var(--border)"
-                                            color="var(--text-subtle)"
-                                            _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                            onClick={handleExportCSV}
-                                            flex={1}
-                                        >
-                                            Export CSV
-                                        </Button>
-                                    </Flex>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        borderColor="var(--border)"
-                                        color="var(--text-subtle)"
-                                        _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        Import Data
-                                    </Button>
-                                    <input
-                                        ref={fileInputRef}
-                                        aria-label="Import preferences JSON file"
-                                        type="file"
-                                        accept=".json"
-                                        onChange={handleImport}
-                                        style={{ display: "none" }}
-                                    />
-                                    {importStatus && (
-                                        <Text fontSize="xs" color="var(--accent)">
-                                            {importStatus}
-                                        </Text>
-                                    )}
-                                </Stack>
-                            </Box>
-
-                            <Box borderBottom="1px solid var(--border)" />
-
-                            <Button
-                                variant="outline"
-                                color="var(--text-subtle)"
-                                borderColor="var(--border)"
-                                _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                                onClick={resetToDefaults}
+            <Portal>
+                <DrawerBackdrop {...overlayBackdropProps} />
+                <DrawerPositioner>
+                    <DrawerContent {...overlayDrawerProps}>
+                        <CloseButton
+                            mt={2}
+                            position="absolute"
+                            top={2}
+                            right={2}
+                            color="var(--text-subtle)"
+                            _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
+                            onClick={onClose}
+                        />
+                        <DrawerHeader {...overlayHeaderProps}>Preferences</DrawerHeader>
+                        <DrawerBody>
+                            <Stack
+                                gap={8}
+                                mt={2}
+                                pb={6}
+                                separator={<Separator borderColor="var(--border)" />}
                             >
-                                Reset to defaults
-                            </Button>
-                        </Stack>
-                    </DrawerBody>
-                </DrawerContent>
-            </DrawerPositioner>
+                                <Section title="Appearance">
+                                    <LabeledControl label="Theme">
+                                        <ThemeSelector />
+                                    </LabeledControl>
+                                    <LabeledControl label="Interface layout">
+                                        <SegmentedControl
+                                            label="Interface layout"
+                                            orientation="vertical"
+                                            options={interfaceModeOptions}
+                                            value={preferences.interfaceMode}
+                                            onChange={setInterfaceMode}
+                                        />
+                                    </LabeledControl>
+                                    <LabeledControl label="Code surface">
+                                        <SegmentedControl
+                                            label="Code surface"
+                                            options={surfaceStyleOptions}
+                                            value={preferences.surfaceStyle}
+                                            onChange={setSurfaceStyle}
+                                        />
+                                    </LabeledControl>
+                                    <LabeledControl label="Syntax highlighting">
+                                        <SegmentedControl
+                                            label="Syntax highlighting"
+                                            options={syntaxHighlightingOptions}
+                                            value={preferences.syntaxHighlighting}
+                                            onChange={setSyntaxHighlighting}
+                                        />
+                                    </LabeledControl>
+                                </Section>
+
+                                <Section title="Typing">
+                                    <SliderSetting
+                                        label="Editor font size"
+                                        valueLabel={`${preferences.fontSize}px`}
+                                        rangeLabel="16-36px"
+                                        value={preferences.fontSize}
+                                        min={16}
+                                        max={36}
+                                        step={1}
+                                        onChange={setFontSize}
+                                    />
+                                    <SliderSetting
+                                        label="Caret width"
+                                        valueLabel={`${preferences.caretWidth.toFixed(1)}px`}
+                                        rangeLabel="2-6px"
+                                        value={preferences.caretWidth}
+                                        min={2}
+                                        max={6}
+                                        step={0.2}
+                                        onChange={setCaretWidth}
+                                    />
+                                    <ToggleRow
+                                        label="Countdown overlay"
+                                        hint="Show 3…2…1 before runs"
+                                        checked={preferences.countdownEnabled}
+                                        onChange={setCountdownEnabled}
+                                    />
+                                    <ToggleRow
+                                        label="Vim mode"
+                                        hint="Enable Vim keybindings"
+                                        checked={preferences.vimMode}
+                                        onChange={setVimMode}
+                                    />
+                                    <ToggleRow
+                                        label="Live stats during run"
+                                        hint="Toggle live WPM panel (Cmd/Ctrl+Shift+L)"
+                                        checked={preferences.showLiveStatsDuringRun}
+                                        onChange={setShowLiveStatsDuringRun}
+                                    />
+                                </Section>
+
+                                <Section title="Practice">
+                                    <ToggleRow
+                                        label="Spaced repetition"
+                                        hint="Smart review scheduling based on your performance"
+                                        checked={preferences.spacedRepetitionEnabled}
+                                        onChange={setSpacedRepetitionEnabled}
+                                    />
+                                    <ToggleRow
+                                        label="Adaptive difficulty"
+                                        hint="Auto-adjust difficulty to match your skill level"
+                                        checked={preferences.adaptiveDifficultyEnabled}
+                                        onChange={setAdaptiveDifficultyEnabled}
+                                    />
+                                </Section>
+
+                                <Section title="AI drills">
+                                    <AIKeyConfig />
+                                </Section>
+
+                                <Section title="Data">
+                                    <Stack gap={2}>
+                                        <Flex gap={2}>
+                                            <Button {...dataButtonProps} onClick={handleExportJSON} flex={1}>
+                                                Export JSON
+                                            </Button>
+                                            <Button {...dataButtonProps} onClick={handleExportCSV} flex={1}>
+                                                Export CSV
+                                            </Button>
+                                        </Flex>
+                                        <Button {...dataButtonProps} onClick={() => fileInputRef.current?.click()}>
+                                            Import data
+                                        </Button>
+                                        <input
+                                            ref={fileInputRef}
+                                            aria-label="Import preferences JSON file"
+                                            type="file"
+                                            accept=".json"
+                                            onChange={handleImport}
+                                            style={{ display: "none" }}
+                                        />
+                                        {importStatus && (
+                                            <Text fontSize="xs" color="var(--accent)" aria-live="polite">
+                                                {importStatus}
+                                            </Text>
+                                        )}
+                                        <Button {...dataButtonProps} mt={2} onClick={resetToDefaults}>
+                                            Reset to defaults
+                                        </Button>
+                                    </Stack>
+                                </Section>
+                            </Stack>
+                        </DrawerBody>
+                    </DrawerContent>
+                </DrawerPositioner>
+            </Portal>
         </DrawerRoot>
     );
 }

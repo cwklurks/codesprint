@@ -138,7 +138,23 @@ function getDb(): Promise<IDBDatabase> {
             }
         };
 
-        request.onsuccess = () => resolve(request.result);
+        // Another tab holds an older connection open: fail fast instead of
+        // leaving every caller awaiting a promise that may never settle.
+        request.onblocked = () => {
+            dbPromise = null;
+            reject(new Error("IndexedDB upgrade blocked by another open connection"));
+        };
+
+        request.onsuccess = () => {
+            const db = request.result;
+            // A newer tab wants to upgrade the schema: step aside so it can.
+            db.onversionchange = () => {
+                dbPromise = null;
+                db.close();
+            };
+            resolve(db);
+        };
+
         request.onerror = () => {
             dbPromise = null;
             reject(request.error);

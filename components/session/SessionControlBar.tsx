@@ -4,12 +4,13 @@ import {
     Button,
     Flex,
     Text,
-    Badge,
     TooltipRoot,
     TooltipTrigger,
     TooltipPositioner,
     TooltipContent,
+    chakra,
 } from "@chakra-ui/react";
+import type { IconProps as ChakraIconProps } from "@chakra-ui/react";
 import { AnimatePresence, m } from "framer-motion";
 import { getPillButtonStyles, getStartButtonStyles, SESSION_CSS_VARS } from "@/lib/session-styles";
 import { getControlsMotion, getStartButtonMotion } from "@/lib/motion-config";
@@ -74,6 +75,10 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceStyle; label: string }> = [
     { value: "immersive", label: "Immersive" },
 ];
 
+function Divider() {
+    return <span className="session-control-divider" aria-hidden="true" />;
+}
+
 /**
  * Control bar with language, length, surface style selectors and start button
  * Only visible when not in focus mode (running state)
@@ -97,14 +102,17 @@ export function SessionControlBar({
     const { panelGlass, border } = SESSION_CSS_VARS;
     const controlsMotion = getControlsMotion(prefersReducedMotion);
     const startButtonMotion = getStartButtonMotion(prefersReducedMotion);
-    const startButtonStyles = getStartButtonStyles(isTerminalMode);
 
     // AI Drills
     const { preferences } = usePreferences();
+    const startButtonStyles = getStartButtonStyles(isTerminalMode, preferences.theme);
     const ai = useAIDrills(preferences);
-    const showAIDrill = preferences.aiDrillsEnabled && getActiveProvider() !== null && 
+    const showAIDrill = preferences.aiDrillsEnabled && getActiveProvider() !== null &&
         phase !== "running" && phase !== "countdown";
     const rateLimit = checkRateLimit(preferences.aiMaxDrillsPerDay);
+
+    const hasDue = dueCount !== undefined && dueCount > 0;
+    const showMetaRow = hasDue || Boolean(suggestedDifficulty);
 
     return (
         <m.div
@@ -116,116 +124,171 @@ export function SessionControlBar({
             {...controlsMotion}
             layout
         >
-            {/* Language Selector */}
-            <Flex gap={2} flexWrap="wrap" align="center">
-                {LANGUAGE_OPTIONS.map((option) => (
-                    <Button
-                        key={option.value}
-                        {...getPillButtonStyles(language === option.value, isTerminalMode)}
-                        onClick={() => onLanguageChange(option.value)}
-                        disabled={disabled}
-                    >
-                        {option.label}
-                    </Button>
-                ))}
-            </Flex>
-
-            {/* Length Selector */}
-            <Flex gap={2} flexWrap="wrap" align="center" ml={2}>
-                {LENGTH_OPTIONS.map((option) => (
-                    <TooltipRoot key={option.value}>
-                        <TooltipTrigger asChild>
-                            <Button
-                                {...getPillButtonStyles(lengthPreference === option.value, isTerminalMode)}
-                                onClick={() => onLengthChange(option.value)}
-                                disabled={disabled}
-                            >
-                                {option.label}
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipPositioner>
-                            <TooltipContent
-                                bg="var(--surface)"
-                                color="var(--text)"
-                                border="1px solid var(--border)"
-                                fontSize="xs"
-                                px={2}
-                                py={1}
-                            >
-                                {option.helper}
-                            </TooltipContent>
-                        </TooltipPositioner>
-                    </TooltipRoot>
-                ))}
-            </Flex>
-
-            {/* AI Drill Button */}
-            {showAIDrill && (
-                <TooltipRoot>
-                    <TooltipTrigger asChild>
+            <div className="session-control-row">
+                {/* Filters: language, length, appearance — one visual band */}
+                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Language">
+                    {LANGUAGE_OPTIONS.map((option) => (
                         <Button
-                            {...getPillButtonStyles(false, isTerminalMode)}
-                            onClick={onOpenAIDrill}
-                            disabled={!rateLimit.allowed}
-                            ml={2}
+                            key={option.value}
+                            {...getPillButtonStyles(language === option.value, isTerminalMode)}
+                            aria-pressed={language === option.value}
+                            onClick={() => onLanguageChange(option.value)}
+                            disabled={disabled}
                         >
-                            ⚡ AI
-                            <Badge ml={1} size="sm">{ai.remainingToday}</Badge>
+                            {option.label}
                         </Button>
-                    </TooltipTrigger>
-                    <TooltipPositioner>
-                        <TooltipContent
-                            bg="var(--surface)"
-                            color="var(--text)"
-                            border="1px solid var(--border)"
-                            fontSize="xs"
-                            px={2}
-                            py={1}
-                        >
-                            {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A)"}
-                        </TooltipContent>
-                    </TooltipPositioner>
-                </TooltipRoot>
-            )}
-
-            {/* Surface Style Selector */}
-            <Flex gap={2} flexWrap="wrap" align="center" ml="auto">
-                {SURFACE_OPTIONS.map((option) => (
-                    <Button
-                        key={option.value}
-                        {...getPillButtonStyles(surfaceStyle === option.value, isTerminalMode)}
-                        onClick={() => onSurfaceChange(option.value)}
-                        disabled={disabled}
-                    >
-                        {option.label}
-                    </Button>
-                ))}
-            </Flex>
-
-            {/* Due count & suggested difficulty */}
-            {(dueCount !== undefined && dueCount > 0) && (
-                <Flex align="center" gap={1} px={2}>
-                    <Text fontSize="xs" color="var(--accent)" fontWeight={600}>
-                        📚 {dueCount} due
-                    </Text>
+                    ))}
                 </Flex>
-            )}
-            {suggestedDifficulty && (
-                <Text fontSize="xs" color="var(--text-subtle)" px={2}>
-                    Suggested: <Text as="span" fontWeight={600} color="var(--text)">{suggestedDifficulty}</Text>
-                </Text>
-            )}
 
-            {/* Start Button (only visible in idle phase) */}
-            <AnimatePresence>
-                {phase === "idle" && (
-                    <m.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
-                        <Button onClick={onStart} {...startButtonStyles}>
-                            Start
+                <Divider />
+
+                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Snippet length">
+                    {LENGTH_OPTIONS.map((option) => (
+                        <TooltipRoot key={option.value}>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    {...getPillButtonStyles(lengthPreference === option.value, isTerminalMode)}
+                                    aria-pressed={lengthPreference === option.value}
+                                    onClick={() => onLengthChange(option.value)}
+                                    disabled={disabled}
+                                >
+                                    {option.label}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipPositioner>
+                                <TooltipContent
+                                    bg="var(--surface)"
+                                    color="var(--text)"
+                                    border="1px solid var(--border)"
+                                    fontSize="xs"
+                                    px={2}
+                                    py={1}
+                                >
+                                    {option.helper}
+                                </TooltipContent>
+                            </TooltipPositioner>
+                        </TooltipRoot>
+                    ))}
+                </Flex>
+
+                <Divider />
+
+                <Flex gap={2} flexWrap="wrap" align="center" role="group" aria-label="Appearance">
+                    {SURFACE_OPTIONS.map((option) => (
+                        <Button
+                            key={option.value}
+                            {...getPillButtonStyles(surfaceStyle === option.value, isTerminalMode)}
+                            aria-pressed={surfaceStyle === option.value}
+                            onClick={() => onSurfaceChange(option.value)}
+                            disabled={disabled}
+                        >
+                            {option.label}
                         </Button>
-                    </m.div>
-                )}
-            </AnimatePresence>
+                    ))}
+                </Flex>
+
+                {/* Actions live in their own slot at the far end of the bar */}
+                <Flex gap={3} align="center" ml="auto" flexWrap="wrap">
+                    {showAIDrill && (
+                        <TooltipRoot>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    {...getPillButtonStyles(false, isTerminalMode)}
+                                    onClick={onOpenAIDrill}
+                                    disabled={!rateLimit.allowed}
+                                    gap={1.5}
+                                >
+                                    <BoltIcon boxSize={3.5} />
+                                    AI
+                                    <Text as="span" fontSize="xs" color="var(--text-subtle)" fontVariantNumeric="tabular-nums">
+                                        {ai.remainingToday}
+                                    </Text>
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipPositioner>
+                                <TooltipContent
+                                    bg="var(--surface)"
+                                    color="var(--text)"
+                                    border="1px solid var(--border)"
+                                    fontSize="xs"
+                                    px={2}
+                                    py={1}
+                                >
+                                    {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A)"}
+                                </TooltipContent>
+                            </TooltipPositioner>
+                        </TooltipRoot>
+                    )}
+
+                    <AnimatePresence>
+                        {phase === "idle" && (
+                            <m.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
+                                <Divider />
+                                <Button onClick={onStart} {...startButtonStyles} ml={3}>
+                                    Start
+                                </Button>
+                            </m.div>
+                        )}
+                    </AnimatePresence>
+                </Flex>
+            </div>
+
+            {/* Secondary line: session context, not controls */}
+            {showMetaRow && (
+                <div className="session-control-meta">
+                    {hasDue && (
+                        <Flex align="center" gap={1.5} color="var(--accent)">
+                            <DueIcon boxSize={3.5} />
+                            <Text fontSize="xs" fontWeight={600} fontVariantNumeric="tabular-nums">
+                                {dueCount} due for review
+                            </Text>
+                        </Flex>
+                    )}
+                    {suggestedDifficulty && (
+                        <Text fontSize="xs" color="var(--text-subtle)">
+                            Suggested:{" "}
+                            <Text as="span" fontWeight={600} color="var(--text)">
+                                {suggestedDifficulty}
+                            </Text>
+                        </Text>
+                    )}
+                </div>
+            )}
         </m.div>
+    );
+}
+
+function BoltIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" />
+        </chakra.svg>
+    );
+}
+
+function DueIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H5.5A1.5 1.5 0 0 1 4 15.5z" />
+            <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h4.5a1.5 1.5 0 0 0 1.5-1.5z" />
+        </chakra.svg>
     );
 }

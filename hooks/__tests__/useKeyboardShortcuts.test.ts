@@ -80,6 +80,28 @@ describe("useKeyboardShortcuts", () => {
         });
     });
 
+    describe("idle Tab passthrough", () => {
+        it("leaves Tab alone in idle so the browser can move focus (skip link)", () => {
+            const props = makeProps({ phase: "idle" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const event = press("Tab");
+
+            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
+            expect(event.defaultPrevented).toBe(false);
+        });
+
+        it("still advances to the next problem on Tab when finished", () => {
+            const props = makeProps({ phase: "finished" });
+            renderHook(() => useKeyboardShortcuts(props));
+
+            const event = press("Tab");
+
+            expect(props.onNextProblem).toHaveBeenCalledTimes(1);
+            expect(event.defaultPrevented).toBe(true);
+        });
+    });
+
     describe("overlay gate", () => {
         it("does not start a run when Enter is pressed with a dialog open", () => {
             const props = makeProps({ phase: "idle", isOverlayOpen: true });

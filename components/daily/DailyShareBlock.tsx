@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Box, Button, Flex, Text } from "@chakra-ui/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Box, Button, Flex, Text, chakra } from "@chakra-ui/react";
+import { AnimatePresence, m } from "framer-motion";
 
 import { formatDailyShare } from "@/lib/daily";
+import { MOTION_DURATION, MOTION_EASE, usePrefersReducedMotion } from "@/lib/motion";
 
 export interface DailyShareBlockProps {
     dateStr: string;
@@ -13,6 +15,35 @@ export interface DailyShareBlockProps {
     patternScore?: number;
     streak: number;
     language: string;
+}
+
+const COPIED_RESET_MS = 1800;
+
+/**
+ * Streak flame. Lives here because both the daily card and the result screen
+ * (which already import this module) need the same mark, and the app renders
+ * icons as inline SVG rather than emoji.
+ */
+export function StreakFlame({ size = 16 }: { size?: number }) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            width={size}
+            height={size}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            color="var(--accent)"
+            aria-hidden="true"
+            flexShrink={0}
+        >
+            <path d="M12 2c1.5 3 4.5 4.5 4.5 8a4.5 4.5 0 0 1-9 0c0-1.2.4-2.1 1-3" />
+            <path d="M12 22a6 6 0 0 0 6-6c0-2-1-3.5-2.5-5" />
+            <path d="M12 22a6 6 0 0 1-6-6c0-2 1-3.5 2.5-5" />
+        </chakra.svg>
+    );
 }
 
 /**
@@ -29,6 +60,12 @@ export function DailyShareBlock({
     language,
 }: DailyShareBlockProps) {
     const [copied, setCopied] = useState(false);
+    const prefersReducedMotion = usePrefersReducedMotion() ?? false;
+    const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => () => {
+        if (resetTimer.current) clearTimeout(resetTimer.current);
+    }, []);
 
     const shareText = formatDailyShare({
         dateStr,
@@ -44,11 +81,21 @@ export function DailyShareBlock({
         try {
             await navigator.clipboard.writeText(shareText);
             setCopied(true);
-            setTimeout(() => setCopied(false), 1800);
+            if (resetTimer.current) clearTimeout(resetTimer.current);
+            resetTimer.current = setTimeout(() => setCopied(false), COPIED_RESET_MS);
         } catch (err) {
             console.warn("Failed to copy daily result", err);
         }
     }, [shareText]);
+
+    const swap = prefersReducedMotion
+        ? {}
+        : {
+              initial: { opacity: 0, y: 6 },
+              animate: { opacity: 1, y: 0 },
+              exit: { opacity: 0, y: -6 },
+              transition: { duration: MOTION_DURATION.micro, ease: MOTION_EASE.out },
+          };
 
     return (
         <Flex direction="column" align="center" gap={3} w="100%" maxW="360px">
@@ -56,13 +103,13 @@ export function DailyShareBlock({
                 w="100%"
                 bg="var(--surface)"
                 border="1px solid var(--border)"
-                borderRadius="md"
+                borderRadius="var(--radius-md)"
                 px={4}
                 py={3}
             >
                 <Text
                     as="pre"
-                    fontFamily="monospace"
+                    fontFamily="var(--font-mono), monospace"
                     fontSize="sm"
                     color="var(--text)"
                     whiteSpace="pre-wrap"
@@ -80,8 +127,17 @@ export function DailyShareBlock({
                 color="var(--accent)"
                 _hover={{ bg: "var(--accent)", color: "var(--bg)" }}
                 px={6}
+                // The label swaps in place; a fixed slot keeps the button from
+                // jumping between "Copy result" and "Copied!".
+                minW="9.5rem"
             >
-                {copied ? "Copied!" : "Copy result"}
+                <Box as="span" position="relative" display="block" w="100%" textAlign="center">
+                    <AnimatePresence initial={false} mode="wait">
+                        <m.span key={copied ? "copied" : "copy"} style={{ display: "block" }} {...swap}>
+                            {copied ? "Copied!" : "Copy result"}
+                        </m.span>
+                    </AnimatePresence>
+                </Box>
             </Button>
         </Flex>
     );

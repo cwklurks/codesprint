@@ -12,34 +12,55 @@ import { validateDrillResponse } from "@/lib/ai/response-parser";
 import type { DrillRequest, GenerateApiResponse, GenerateApiError } from "@/lib/ai/types";
 import { detectProviderFromKey } from "@/lib/ai/key-storage";
 
+/**
+ * Vercel kills the function at maxDuration; the in-app abort fires first so the
+ * caller gets the friendly TIMEOUT branch instead of a platform 504.
+ */
+export const maxDuration = 30;
+const GENERATION_TIMEOUT_MS = 25_000;
+
 const drillRequestSchema = z.object({
     language: z.enum(["javascript", "python", "java", "cpp"]),
     difficulty: z.enum(["easy", "medium", "hard"]),
     lengthCategory: z.enum(["short", "medium", "long"]),
     weakPatterns: z.array(z.object({
         category: z.enum(["keyword", "operator", "delimiter", "identifier", "literal", "string", "comment", "whitespace"]),
-        errorCount: z.number(),
-        totalTokens: z.number(),
-        errorRate: z.number(),
-        label: z.string(),
-    })),
-    targetTokenCategories: z.array(z.string()),
-    recentDrillTitles: z.array(z.string()),
+        errorCount: z.number().int().min(0).max(1_000_000),
+        totalTokens: z.number().int().min(0).max(1_000_000),
+        errorRate: z.number().min(0).max(1),
+        label: z.string().max(64),
+    })).max(16),
+    targetTokenCategories: z.array(z.string().max(32)).max(16),
+    recentDrillTitles: z.array(z.string().max(200)).max(20),
     userContext: z.object({
-        estimatedWpm: z.number(),
-        estimatedAccuracy: z.number(),
-        sessionCount: z.number(),
+        estimatedWpm: z.number().min(0).max(500),
+        estimatedAccuracy: z.number().min(0).max(1),
+        sessionCount: z.number().int().min(0).max(1_000_000),
     }),
 });
+
+/**
+ * Browser-only API: a same-host `Origin` is required. Browsers always send
+ * `Origin` on cross-site-capable POSTs, so an absent or opaque ("null") origin
+ * is never a legitimate first-party call.
+ */
+function isSameHostOrigin(origin: string | null, host: string | null): boolean {
+    if (!origin || !host) return false;
+    try {
+        return new URL(origin).host === host;
+    } catch {
+        return false;
+    }
+}
 
 export async function POST(request: Request) {
     // 1. Origin validation (CSRF protection)
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
-    if (origin && new URL(origin).host !== (host ?? "")) {
-        const error: GenerateApiError = { 
-            error: "Forbidden", 
-            code: "ORIGIN_MISMATCH" 
+    if (!isSameHostOrigin(origin, host)) {
+        const error: GenerateApiError = {
+            error: "Forbidden",
+            code: "ORIGIN_MISMATCH"
         };
         return Response.json(error, { status: 403 });
     }
@@ -113,7 +134,7 @@ export async function POST(request: Request) {
             prompt: userPrompt,
             output: Output.object({ schema: drillResponseSchema }),
             maxOutputTokens: 2048,
-            abortSignal: AbortSignal.timeout(30_000),
+            abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
         });
 
         const drillResponse = result.output;

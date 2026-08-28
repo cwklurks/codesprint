@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
     Button,
     Badge,
@@ -9,13 +9,15 @@ import {
     VStack,
     HStack,
     Flex,
+    DialogBackdrop,
     DialogRoot,
     DialogContent,
     DialogHeader,
     DialogBody,
     DialogFooter,
-    DialogCloseTrigger,
+    DialogPositioner,
     DialogTitle,
+    Portal,
     type IconProps as ChakraIconProps,
     chakra,
 } from "@chakra-ui/react";
@@ -24,6 +26,14 @@ import { useAIDrills } from "@/hooks/useAIDrills";
 import { AILoadingSkeleton } from "@/components/AILoadingSkeleton";
 import type { Snippet, SupportedLanguage } from "@/lib/snippets";
 import { usePreferences } from "@/lib/preferences";
+import { MOTION_DURATION, usePrefersReducedMotion } from "@/lib/motion";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import {
+    overlayBackdropProps,
+    overlayDialogProps,
+    overlayFooterProps,
+    overlayHeaderProps,
+} from "@/components/ui/overlay";
 
 interface AIDrillPanelProps {
     isOpen: boolean;
@@ -32,7 +42,16 @@ interface AIDrillPanelProps {
     language: SupportedLanguage;
 }
 
-const MotionBox = m(Box);
+const MotionBox = m.create(Box);
+
+/** The dialog needs the room a code preview takes; below this it is not offered. */
+const NARROW_VIEWPORT = "(max-width: 639px)";
+
+const DIFFICULTY_COLOR: Record<"easy" | "medium" | "hard", string> = {
+    easy: "var(--success)",
+    medium: "var(--warning)",
+    hard: "var(--error)",
+};
 
 function ZapIcon(props: ChakraIconProps) {
     return (
@@ -55,6 +74,9 @@ function ZapIcon(props: ChakraIconProps) {
 export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPanelProps) {
     const { preferences } = usePreferences();
     const ai = useAIDrills(preferences);
+    const reducedMotion = usePrefersReducedMotion();
+    // Measured after mount: reading window.innerWidth during render desyncs SSR markup.
+    const [isNarrowViewport, setIsNarrowViewport] = useState(false);
 
     const handleAccept = useCallback(async () => {
         const snippet = await ai.acceptDrill();
@@ -72,6 +94,14 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
         ai.generateDrill(language);
     }, [ai, language]);
 
+    useEffect(() => {
+        const query = window.matchMedia(NARROW_VIEWPORT);
+        const sync = () => setIsNarrowViewport(query.matches);
+        sync();
+        query.addEventListener("change", sync);
+        return () => query.removeEventListener("change", sync);
+    }, []);
+
     // Generate drill on open
     useEffect(() => {
         if (isOpen && ai.state.status === "idle") {
@@ -79,7 +109,8 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
         }
     }, [isOpen, ai, language]);
 
-    // Keyboard shortcuts
+    // Accept / regenerate from the keyboard. Chakra maps neither Enter nor
+    // Shift+Enter; Escape it does handle, so there is no listener for it here.
     useEffect(() => {
         if (!isOpen) return;
 
@@ -92,18 +123,14 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
             } else if (e.key === "Enter" && e.shiftKey) {
                 e.preventDefault();
                 handleGenerateAnother();
-            } else if (e.key === "Escape") {
-                e.preventDefault();
-                onClose();
             }
         };
 
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [isOpen, ai.state.status, handleAccept, handleGenerateAnother, onClose]);
+    }, [isOpen, ai.state.status, handleAccept, handleGenerateAnother]);
 
-    // Don't render on mobile (<640px)
-    if (typeof window !== "undefined" && window.innerWidth < 640) {
+    if (isNarrowViewport) {
         return null;
     }
 
@@ -124,147 +151,190 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
             size="lg"
             placement="center"
         >
-            <DialogContent bg="var(--panel)" border="1px solid var(--border)">
-                <DialogHeader borderBottom="1px solid var(--border)">
-                    <DialogTitle>
-                        <HStack gap={2} align="center">
-                            <ZapIcon boxSize={5} color="var(--accent)" />
-                            <Text fontSize="lg" fontWeight={600}>
-                                AI Drill
-                            </Text>
-                            <Badge size="sm" bg="var(--accent)" color="var(--bg)" ml="auto">
-                                {ai.remainingToday} remaining today
-                            </Badge>
-                        </HStack>
-                    </DialogTitle>
-                </DialogHeader>
-
-                <DialogBody py={4}>
-                    <VStack gap={4} align="stretch">
-                        {/* Loading State */}
-                        {isLoading && (
-                            <Box
-                                bg="var(--bg-muted)"
-                                p={4}
-                                borderRadius="md"
-                                border="1px solid var(--border)"
-                            >
-                                <AILoadingSkeleton />
-                            </Box>
-                        )}
-
-                        {/* Error State */}
-                        {isError && (
-                            <Box p={4} textAlign="center">
-                                <Text color="red.500" mb={4}>
-                                    {(ai.state as { status: "error"; error: string; }).error}
-                                </Text>
-                                <Button onClick={handleRetry} bg="var(--accent)" color="var(--bg)" _hover={{ bg: "var(--accent)", opacity: 0.9 }}>
-                                    Try Again
-                                </Button>
-                            </Box>
-                        )}
-
-                        {/* Preview State */}
-                        {isPreview && drill && (
-                            <MotionBox
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ duration: 0.3 }}
-                            >
-                                {/* Title */}
-                                <Text fontSize="lg" fontWeight={600} mb={2}>
-                                    {drill.title}
-                                </Text>
-
-                                {/* Explanation */}
-                                <Text fontSize="sm" color="gray.500" mb={4}>
-                                    {drill.explanation}
-                                </Text>
-
-                                {/* Code Preview */}
-                                <Box
-                                    bg="var(--bg-muted)"
-                                    p={4}
-                                    borderRadius="md"
+            <Portal>
+                <DialogBackdrop {...overlayBackdropProps} />
+                <DialogPositioner>
+                    <DialogContent {...overlayDialogProps}>
+                        <DialogCloseButton />
+                        <DialogHeader {...overlayHeaderProps}>
+                            <HStack gap={2} align="center" width="100%" pr={8}>
+                                <ZapIcon boxSize={5} color="var(--accent)" />
+                                <DialogTitle fontSize="lg" fontWeight={600}>
+                                    AI drill
+                                </DialogTitle>
+                                <Badge
+                                    size="sm"
+                                    bg="var(--surface)"
+                                    color="var(--text-subtle)"
                                     border="1px solid var(--border)"
-                                    overflow="auto"
-                                    maxH="50vh"
-                                    mb={4}
+                                    borderRadius="var(--radius-sm)"
+                                    ml="auto"
                                 >
-                                    <Box
-                                        as="pre"
-                                        fontFamily="monospace"
-                                        fontSize="14px"
-                                        color="var(--text)"
-                                        whiteSpace="pre"
-                                        m={0}
-                                    >
-                                        {drill.content}
-                                    </Box>
-                                </Box>
-
-                                {/* Focus Areas */}
-                                {drill.focusAreas.length > 0 && (
-                                    <Flex gap={2} flexWrap="wrap">
-                                        {drill.focusAreas.map((area: string) => (
-                                            <Badge key={area} size="sm" variant="subtle">
-                                                {area}
-                                            </Badge>
-                                        ))}
-                                    </Flex>
-                                )}
-                            </MotionBox>
-                        )}
-                    </VStack>
-                </DialogBody>
-
-                {/* Footer */}
-                <DialogFooter borderTop="1px solid var(--border)">
-                    <VStack width="100%" gap={3}>
-                        {/* Metadata */}
-                        {isPreview && drill && (
-                            <HStack gap={4} fontSize="xs" color="gray.500" justify="center" width="100%">
-                                <Badge size="sm" colorPalette={drill.estimatedDifficulty === "easy" ? "green" : drill.estimatedDifficulty === "medium" ? "yellow" : "red"}>
-                                    {drill.estimatedDifficulty}
+                                    {ai.remainingToday} remaining today
                                 </Badge>
-                                <Text>{lineCount} lines</Text>
-                                <Text>~${cost.toFixed(3)}</Text>
-                                <Text>{provider === "claude" ? "claude-haiku-4-5" : provider === "fireworks" ? "llama-v3p1-70b" : "gpt-4o-mini"}</Text>
                             </HStack>
-                        )}
+                        </DialogHeader>
 
-                        {/* Action Buttons */}
-                        <HStack gap={2} justify="center" width="100%">
-                            <Button
-                                variant="ghost"
-                                onClick={onClose}
-                                disabled={isLoading}
-                            >
-                                Cancel (Esc)
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={handleGenerateAnother}
-                                disabled={isLoading}
-                            >
-                                Generate Another (Shift+Enter)
-                            </Button>
-                            <Button
-                                bg="var(--accent)"
-                                color="var(--bg)"
-                                _hover={{ bg: "var(--accent)", opacity: 0.9 }}
-                                onClick={handleAccept}
-                                disabled={isLoading || !isPreview}
-                                loading={isLoading}
-                            >
-                                Use This Drill (Enter)
-                            </Button>
-                        </HStack>
-                    </VStack>
-                    <DialogCloseTrigger />
-                </DialogFooter>
-            </DialogContent>
+                        <DialogBody py={4}>
+                            <VStack gap={4} align="stretch">
+                                {/* Loading State */}
+                                {isLoading && (
+                                    <Box
+                                        bg="var(--surface)"
+                                        p={4}
+                                        borderRadius="var(--radius-md)"
+                                        border="1px solid var(--border)"
+                                    >
+                                        <AILoadingSkeleton />
+                                    </Box>
+                                )}
+
+                                {/* Error State */}
+                                {isError && (
+                                    <Box p={4} textAlign="center">
+                                        <Text color="var(--error)" mb={4}>
+                                            {(ai.state as { status: "error"; error: string; }).error}
+                                        </Text>
+                                        <Button
+                                            onClick={handleRetry}
+                                            bg="var(--accent)"
+                                            color="var(--bg)"
+                                            borderRadius="var(--radius-sm)"
+                                            _hover={{ bg: "var(--accent)", opacity: 0.9 }}
+                                        >
+                                            Try again
+                                        </Button>
+                                    </Box>
+                                )}
+
+                                {/* Preview State */}
+                                {isPreview && drill && (
+                                    <MotionBox
+                                        initial={reducedMotion ? false : { opacity: 0, y: 6 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: reducedMotion ? 0 : MOTION_DURATION.base }}
+                                    >
+                                        {/* Title */}
+                                        <Text fontSize="lg" fontWeight={600} mb={2} color="var(--text)">
+                                            {drill.title}
+                                        </Text>
+
+                                        {/* Explanation */}
+                                        <Text fontSize="sm" color="var(--text-subtle)" mb={4}>
+                                            {drill.explanation}
+                                        </Text>
+
+                                        {/* Code Preview */}
+                                        <Box
+                                            bg="var(--surface)"
+                                            p={4}
+                                            borderRadius="var(--radius-md)"
+                                            border="1px solid var(--border)"
+                                            overflow="auto"
+                                            maxH="50vh"
+                                            mb={4}
+                                        >
+                                            <Box
+                                                as="pre"
+                                                fontFamily="var(--font-mono), ui-monospace, monospace"
+                                                fontSize="14px"
+                                                color="var(--text)"
+                                                whiteSpace="pre"
+                                                m={0}
+                                            >
+                                                {drill.content}
+                                            </Box>
+                                        </Box>
+
+                                        {/* Focus Areas */}
+                                        {drill.focusAreas.length > 0 && (
+                                            <Flex gap={2} flexWrap="wrap">
+                                                {drill.focusAreas.map((area: string) => (
+                                                    <Badge
+                                                        key={area}
+                                                        size="sm"
+                                                        variant="subtle"
+                                                        bg="var(--surface)"
+                                                        color="var(--text-subtle)"
+                                                        borderRadius="var(--radius-sm)"
+                                                    >
+                                                        {area}
+                                                    </Badge>
+                                                ))}
+                                            </Flex>
+                                        )}
+                                    </MotionBox>
+                                )}
+                            </VStack>
+                        </DialogBody>
+
+                        {/* Footer */}
+                        <DialogFooter {...overlayFooterProps}>
+                            <VStack width="100%" gap={3}>
+                                {/* Metadata */}
+                                {isPreview && drill && (
+                                    <HStack
+                                        gap={4}
+                                        fontSize="xs"
+                                        color="var(--text-subtle)"
+                                        justify="center"
+                                        width="100%"
+                                    >
+                                        <Badge
+                                            size="sm"
+                                            bg="transparent"
+                                            border="1px solid"
+                                            borderColor={DIFFICULTY_COLOR[drill.estimatedDifficulty]}
+                                            color={DIFFICULTY_COLOR[drill.estimatedDifficulty]}
+                                            borderRadius="var(--radius-sm)"
+                                        >
+                                            {drill.estimatedDifficulty}
+                                        </Badge>
+                                        <Text fontVariantNumeric="tabular-nums">{lineCount} lines</Text>
+                                        <Text fontVariantNumeric="tabular-nums">~${cost.toFixed(3)}</Text>
+                                        <Text>{provider === "claude" ? "claude-haiku-4-5" : provider === "fireworks" ? "llama-v3p1-70b" : "gpt-4o-mini"}</Text>
+                                    </HStack>
+                                )}
+
+                                {/* Action Buttons */}
+                                <HStack gap={2} justify="center" width="100%">
+                                    <Button
+                                        variant="ghost"
+                                        color="var(--text-subtle)"
+                                        _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
+                                        onClick={onClose}
+                                        disabled={isLoading}
+                                    >
+                                        Cancel (Esc)
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        borderColor="var(--border)"
+                                        borderRadius="var(--radius-sm)"
+                                        color="var(--text)"
+                                        _hover={{ bg: "var(--surface-hover)" }}
+                                        onClick={handleGenerateAnother}
+                                        disabled={isLoading}
+                                    >
+                                        Generate another (Shift+Enter)
+                                    </Button>
+                                    <Button
+                                        bg="var(--accent)"
+                                        color="var(--bg)"
+                                        borderRadius="var(--radius-sm)"
+                                        _hover={{ bg: "var(--accent)", opacity: 0.9 }}
+                                        onClick={handleAccept}
+                                        disabled={isLoading || !isPreview}
+                                        loading={isLoading}
+                                    >
+                                        Use this drill (Enter)
+                                    </Button>
+                                </HStack>
+                            </VStack>
+                        </DialogFooter>
+                    </DialogContent>
+                </DialogPositioner>
+            </Portal>
         </DialogRoot>
     );
 }

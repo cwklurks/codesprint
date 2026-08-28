@@ -2,7 +2,7 @@
 
 import { Box, Button, Flex, Text } from "@chakra-ui/react";
 
-import { DailyShareBlock } from "./DailyShareBlock";
+import { DailyShareBlock, StreakFlame } from "./DailyShareBlock";
 import type { DailyBest } from "@/lib/daily-store";
 
 export interface DailyChallengeCardProps {
@@ -41,7 +41,7 @@ export function DailyChallengeCard({
             w="100%"
             bg="var(--panel-soft)"
             border="1px solid var(--border)"
-            borderRadius="16px"
+            borderRadius="var(--radius-lg)"
             boxShadow="var(--shadow)"
             px={{ base: 5, md: 6 }}
             py={{ base: 4, md: 5 }}
@@ -66,10 +66,13 @@ export function DailyChallengeCard({
                 <Flex align="center" gap={4}>
                     {streak > 0 && (
                         <Flex align="center" gap={1.5}>
-                            <Text fontSize="lg" lineHeight={1}>
-                                🔥
-                            </Text>
-                            <Text fontSize="lg" fontWeight={700} color="var(--accent)">
+                            <StreakFlame size={18} />
+                            <Text
+                                fontSize="lg"
+                                fontWeight={700}
+                                color="var(--accent)"
+                                fontVariantNumeric="tabular-nums"
+                            >
                                 {streak}
                             </Text>
                             <Text fontSize="sm" color="var(--text-subtle)">
@@ -88,7 +91,15 @@ export function DailyChallengeCard({
                         _hover={
                             completed
                                 ? { bg: "var(--accent)", color: "var(--bg)" }
-                                : { opacity: 0.9 }
+                                : {
+                                      // A translucent theme scrim over the accent fill:
+                                      // real hover feedback without fading the label
+                                      // (opacity dimmed the text along with the button).
+                                      backgroundImage:
+                                          "linear-gradient(var(--overlay), var(--overlay))",
+                                      borderColor: "var(--border-strong)",
+                                      boxShadow: "var(--elev-1)",
+                                  }
                         }
                         px={6}
                         disabled={disabled || !available}
@@ -121,10 +132,16 @@ export function DailyChallengeCard({
 function Stat({ label, value }: { label: string; value: string }) {
     return (
         <Box textAlign="center">
-            <Text fontSize="2xl" fontWeight={700} color="var(--text)" lineHeight={1}>
+            <Text
+                fontSize="2xl"
+                fontWeight={700}
+                color="var(--text)"
+                lineHeight={1}
+                fontVariantNumeric="tabular-nums"
+            >
                 {value}
             </Text>
-            <Text fontSize="xs" color="var(--text-subtle)" textTransform="uppercase" letterSpacing="0.1em" mt={1}>
+            <Text fontSize="xs" color="var(--text-subtle)" textTransform="uppercase" letterSpacing="0.08em" mt={1}>
                 {label}
             </Text>
         </Box>
