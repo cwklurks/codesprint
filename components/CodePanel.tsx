@@ -30,6 +30,9 @@ type CodePanelProps = {
 
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
 
+// The app's single mono voice (next/font JetBrains Mono, see app/globals.css).
+const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
+
 export default function CodePanel({
     content,
     cursorChar,
@@ -305,6 +308,7 @@ export default function CodePanel({
         editor.updateOptions({
             readOnly: true,
             domReadOnly: true,
+            fontFamily: MONACO_FONT_FAMILY,
             fontSize,
             lineHeight: derivedLineHeight,
             minimap: { enabled: false },
@@ -340,6 +344,21 @@ export default function CodePanel({
         if (!editor) return;
         editor.updateOptions({ fontSize, lineHeight: derivedLineHeight });
     }, [fontSize, derivedLineHeight]);
+
+    // Monaco measures glyph widths once at mount. With a swapped webfont those
+    // measurements are taken against the fallback, so re-measure when the real
+    // face lands or every column position is off by a fraction.
+    useEffect(() => {
+        if (typeof document === "undefined" || !document.fonts) return;
+        let cancelled = false;
+        document.fonts.ready.then(() => {
+            if (cancelled) return;
+            monacoRef.current?.editor.remeasureFonts();
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [editorReadyToken]);
 
     useEffect(() => {
         ensureCaretNode();
@@ -560,6 +579,7 @@ export default function CodePanel({
                     readOnly: true,
                     domReadOnly: true,
                     automaticLayout: true,
+                    fontFamily: MONACO_FONT_FAMILY,
                     scrollbar: { vertical: "hidden", horizontal: "hidden" },
                 }}
                 onMount={handleMount}

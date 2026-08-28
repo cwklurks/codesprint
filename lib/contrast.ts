@@ -82,3 +82,20 @@ export function minAlphaForContrast(fgHex: string, bgHex: string, targetRatio: n
     }
     return MAX_UNTYPED_ALPHA;
 }
+
+/**
+ * The most muted opaque form of `fgHex` over `bgHex` that still clears
+ * `targetRatio`. Starts at the read-ahead muting alpha and keeps stepping toward
+ * the full foreground when that cap alone cannot reach the target (the cap only
+ * governs the read-ahead layer, not UI copy). Returns `fgHex` when even full
+ * opacity falls short, which means the palette itself has to change.
+ */
+export function mutedColorForContrast(fgHex: string, bgHex: string, targetRatio: number): string {
+    for (let alpha = minAlphaForContrast(fgHex, bgHex, targetRatio); alpha < 1; alpha += ALPHA_STEP) {
+        const candidate = compositeOver(fgHex, bgHex, alpha);
+        if (contrastRatio(candidate, bgHex) >= targetRatio) {
+            return candidate;
+        }
+    }
+    return fgHex;
+}

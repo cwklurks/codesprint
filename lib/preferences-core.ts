@@ -1,3 +1,5 @@
+import { contrastRatio, mutedColorForContrast } from "@/lib/contrast";
+
 export type ThemePreset =
     | "midnight"
     | "vaporwave"
@@ -26,25 +28,22 @@ export type ThemeTokens = {
     accent: string;
     caret: string;
     error: string;
-    errorExtra: string;
-    ok: string;
     success: string;
     warning: string;
     panel: string;
     panelGlass: string;
     panelSoft: string;
-    btn: string;
-    btnActive: string;
     border: string;
     borderStrong: string;
-    shadow: string;
+    elev1: string;
+    elev2: string;
+    elev3: string;
     surface: string;
     surfaceHover: string;
     surfaceActive: string;
     headerBg: string;
     headerBorder: string;
     headerText: string;
-    headerTextSubtle: string;
     overlay: string;
     focusRing: string;
     terminalBg: string;
@@ -133,6 +132,38 @@ function withAlpha(hex: string, alpha: number): string {
     return `rgba(${r}, ${g}, ${b}, ${clampedAlpha})`;
 }
 
+/** WCAG AA floor for body-size copy against the theme background. */
+const MIN_TEXT_CONTRAST = 4.5;
+
+/**
+ * Muted body copy still has to be readable. Keep a palette's declared subtle
+ * color when it already clears AA against the background, otherwise mute the
+ * theme's own text color only as far as legibility allows.
+ */
+function resolveTextSubtle(declared: string, text: string, bg: string): string {
+    if (declared.startsWith("#") && contrastRatio(declared, bg) >= MIN_TEXT_CONTRAST) {
+        return declared;
+    }
+    return mutedColorForContrast(text, bg, MIN_TEXT_CONTRAST);
+}
+
+/**
+ * Graduated elevation derived from the theme's own shadow color: elev-1 for
+ * resting chrome, elev-2 for lifted cards, elev-3 for modals and overlays.
+ * elev-3 reproduces the single shadow the themes shipped before the scale, so
+ * every existing `var(--shadow)` consumer is unchanged.
+ */
+function createElevation(
+    shade: (alpha: number) => string,
+    topAlpha: number,
+): { elev1: string; elev2: string; elev3: string } {
+    return {
+        elev1: `0 1px 2px ${shade(topAlpha * 0.6)}`,
+        elev2: `0 8px 24px ${shade(topAlpha * 0.8)}`,
+        elev3: `0 24px 48px ${shade(topAlpha)}`,
+    };
+}
+
 function createMinimalTheme(base: string, accent: string, overrides: Partial<ThemeTokens> = {}): ThemeTokens {
     const gradientTop = lighten(base, 0.08);
     const accentAlpha = (alpha: number) => withAlpha(accent, alpha);
@@ -147,39 +178,42 @@ function createMinimalTheme(base: string, accent: string, overrides: Partial<The
     const defaults: ThemeTokens = {
         bg: base,
         bgMuted: gradientTop,
-        bgGradient: `linear-gradient(180deg, ${base} 0%, ${base} 100%)`,
+        // Flat themes carry the plain background color here; only themes with a
+        // genuine gradient (vaporwave) override it with a linear-gradient().
+        bgGradient: base,
         text: accent,
         textSubtle: accentAlpha(0.68),
         accent,
         caret: accent,
         error: "#da3333",
-        errorExtra: "#791717",
-        ok: "#6daf3f",
         success: "#6daf3f",
         warning: "#d4a017",
         panel: withAlpha(surfaceBlend, 0.12),
         panelGlass: withAlpha(surfaceBlend, 0.12),
         panelSoft: withAlpha(surfaceBlend, 0.24),
-        btn: withAlpha(surfaceBlend, 0.12),
-        btnActive: withAlpha(surfaceStrongBlend, 0.24),
         border: withAlpha(borderBlend, 0.32),
         borderStrong: withAlpha(borderBlend, 0.5),
-        shadow: `0 24px 48px ${baseAlpha(0.55)}`,
+        ...createElevation(baseAlpha, 0.55),
         surface: withAlpha(surfaceBlend, 0.14),
         surfaceHover: withAlpha(surfaceStrongBlend, 0.2),
         surfaceActive: withAlpha(surfaceStrongBlend, 0.3),
         headerBg: withAlpha(headerBase, 0.84),
         headerBorder: withAlpha(borderBlend, 0.32),
         headerText: overrides?.text || accent, // Use text color for header text, allowing overrides
-        headerTextSubtle: accentAlpha(0.85),
         overlay: withAlpha(overlayBlend, 0.18),
         focusRing: accentAlpha(0.9),
         terminalBg: terminalBase,
     };
 
-    return { ...defaults, ...overrides };
+    const merged = { ...defaults, ...overrides };
+    return { ...merged, textSubtle: resolveTextSubtle(merged.textSubtle, merged.text, merged.bg) };
 }
 
+/**
+ * A Monkeytype palette, kept verbatim so a preset can be diffed against its
+ * upstream source. `errorExtra`, `colorfulError` and `colorfulErrorExtra` are
+ * carried for that fidelity only -- CodeSprint does not render them.
+ */
 type MonkeytypeColors = {
     bg: string;
     main: string;
@@ -194,7 +228,7 @@ type MonkeytypeColors = {
 };
 
 function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
-    const { bg, main, caret, sub, subAlt, text, error, errorExtra } = colors;
+    const { bg, main, caret, sub, subAlt, text, error } = colors;
 
     // Derive UI tokens from the palette to maintain the aesthetic
     // We use 'sub' and 'subAlt' for muted elements
@@ -202,32 +236,28 @@ function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
     return {
         bg,
         bgMuted: subAlt,
-        bgGradient: `linear-gradient(180deg, ${bg} 0%, ${bg} 100%)`,
+        // Flat background: the token carries the plain color, not a fake two-stop gradient.
+        bgGradient: bg,
         text,
-        textSubtle: sub,
+        textSubtle: resolveTextSubtle(sub, text, bg),
         accent: main,
         caret,
         error,
-        errorExtra,
-        ok: "#6daf3f",
         success: "#6daf3f",
         warning: "#d4a017",
         // UI Elements derived from sub/subAlt for a cohesive look
         panel: withAlpha(subAlt, 0.4),
         panelGlass: withAlpha(subAlt, 0.3),
         panelSoft: withAlpha(subAlt, 0.8),
-        btn: withAlpha(sub, 0.2),
-        btnActive: withAlpha(sub, 0.4),
         border: withAlpha(sub, 0.3),
         borderStrong: withAlpha(sub, 0.5),
-        shadow: `0 24px 48px ${withAlpha(bg, 0.8)}`,
+        ...createElevation((alpha) => withAlpha(bg, alpha), 0.8),
         surface: withAlpha(subAlt, 0.5),
         surfaceHover: withAlpha(subAlt, 0.7),
         surfaceActive: withAlpha(subAlt, 0.9),
         headerBg: withAlpha(bg, 0.95),
         headerBorder: withAlpha(sub, 0.2),
         headerText: main,
-        headerTextSubtle: sub,
         overlay: withAlpha(bg, 0.8),
         focusRing: withAlpha(main, 0.5),
         terminalBg: darken(bg, 0.2),
@@ -269,7 +299,6 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
         textSubtle: "#a89984",
         panel: "rgba(60, 56, 54, 0.6)",
         border: "rgba(168, 153, 132, 0.3)",
-        ok: "#b8bb26",
         success: "#b8bb26",
         warning: "#fabd2f",
     }),
@@ -335,12 +364,15 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
         colorfulError: "#bd4141",
         colorfulErrorExtra: "#883434",
     }),
+    // The upstream sage (#7b9c98) only reaches 2.61:1 under its near-white text,
+    // so the sage moves down a step: the old background becomes the muted tone
+    // and the surface deepens to #445654 (6.79:1). Same palette, one shade lower.
     botanical: createMonkeytypeTheme({
-        bg: "#7b9c98",
+        bg: "#445654",
         main: "#eaf1f3",
         caret: "#abc6c4",
-        sub: "#495755",
-        subAlt: "#72908d",
+        sub: "#7b9c98",
+        subAlt: "#3f4f4e",
         text: "#eaf1f3",
         error: "#f6c9b4",
         errorExtra: "#f59a71",
@@ -359,7 +391,9 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
         colorfulError: "#e72d2d",
         colorfulErrorExtra: "#7e2a33",
     }),
-    serika: createMinimalTheme("#e1e1e3", "#d1a510", {
+    // Serika's gold sits at 1.77:1 on its light paper; deepened to #9a7600
+    // (3.24:1) it keeps the hue and clears the WCAG non-text floor.
+    serika: createMinimalTheme("#e1e1e3", "#9a7600", {
         bgMuted: "#d1d3d8",
         text: "#323437",
         textSubtle: "#646669",

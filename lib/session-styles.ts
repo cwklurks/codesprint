@@ -18,9 +18,10 @@ export const SESSION_CSS_VARS = {
 } as const;
 
 /**
- * Monospace font stack used in terminal mode
+ * Monospace font stack used in terminal mode. Points at the one canonical stack
+ * declared in app/globals.css (fed by next/font in app/layout.tsx).
  */
-export const MONO_FONT_STACK = '"IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace';
+export const MONO_FONT_STACK = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
 
 /**
  * Generate pill button styles based on active state and terminal mode

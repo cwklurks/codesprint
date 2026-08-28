@@ -57,12 +57,8 @@ export function createThemeInitScript(): string {
     const root = document.documentElement;
     if (!root) return;
     const bgColor = preferences.interfaceMode === "terminal" ? tokens.terminalBg : tokens.bg;
-    const bgGradient =
-      preferences.interfaceMode === "terminal"
-        ? \`linear-gradient(180deg, \${tokens.terminalBg} 0%, \${tokens.terminalBg} 100%)\`
-        : tokens.bgGradient;
+    const bgGradient = preferences.interfaceMode === "terminal" ? tokens.terminalBg : tokens.bgGradient;
 
-    root.style.setProperty("--bg-base", tokens.bg);
     root.style.setProperty("--bg", bgColor);
     root.style.setProperty("--bg-muted", tokens.bgMuted);
     root.style.setProperty("--bg-gradient", bgGradient);
@@ -71,31 +67,27 @@ export function createThemeInitScript(): string {
     root.style.setProperty("--accent", tokens.accent);
     root.style.setProperty("--caret", tokens.caret);
     root.style.setProperty("--error", tokens.error);
-    root.style.setProperty("--error-extra", tokens.errorExtra);
-    root.style.setProperty("--ok", tokens.ok);
     root.style.setProperty("--success", tokens.success);
     root.style.setProperty("--warning", tokens.warning);
     root.style.setProperty("--panel", tokens.panel);
     root.style.setProperty("--panel-glass", tokens.panelGlass);
     root.style.setProperty("--panel-soft", tokens.panelSoft);
-    root.style.setProperty("--btn", tokens.btn);
-    root.style.setProperty("--btn-active", tokens.btnActive);
     root.style.setProperty("--border", tokens.border);
     root.style.setProperty("--border-strong", tokens.borderStrong);
-    root.style.setProperty("--shadow", tokens.shadow);
+    root.style.setProperty("--elev-1", tokens.elev1);
+    root.style.setProperty("--elev-2", tokens.elev2);
+    root.style.setProperty("--elev-3", tokens.elev3);
     root.style.setProperty("--surface", tokens.surface);
     root.style.setProperty("--surface-hover", tokens.surfaceHover);
     root.style.setProperty("--surface-active", tokens.surfaceActive);
     root.style.setProperty("--header-bg", tokens.headerBg);
     root.style.setProperty("--header-border", tokens.headerBorder);
     root.style.setProperty("--header-text", tokens.headerText);
-    root.style.setProperty("--header-text-subtle", tokens.headerTextSubtle);
     root.style.setProperty("--overlay", tokens.overlay);
     root.style.setProperty("--focus-ring", tokens.focusRing);
     root.style.setProperty("--terminal-bg", tokens.terminalBg);
     root.style.setProperty("--caret-width", preferences.caretWidth + "px");
     root.style.setProperty("--caret-height", computeCaretHeight(preferences.fontSize) + "px");
-    root.style.setProperty("--editor-font-size", preferences.fontSize + "px");
     root.setAttribute("data-interface", preferences.interfaceMode);
   };
 

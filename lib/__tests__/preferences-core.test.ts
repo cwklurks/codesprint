@@ -41,7 +41,8 @@ describe("THEME_PRESETS", () => {
     it("each theme has all required token keys", () => {
         const requiredKeys = [
             "bg", "bgMuted", "bgGradient", "text", "textSubtle",
-            "accent", "caret", "error", "errorExtra", "panel",
+            "accent", "caret", "error", "panel",
+            "elev1", "elev2", "elev3",
         ];
         for (const name of themeNames) {
             const theme = THEME_PRESETS[name];

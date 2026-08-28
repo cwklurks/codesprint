@@ -60,7 +60,7 @@ export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
                                             borderRadius="md"
                                             border="1px solid var(--border)"
                                             bg="var(--surface)"
-                                            fontFamily='"IBM Plex Mono", "JetBrains Mono", monospace'
+                                            fontFamily="var(--font-mono), ui-monospace, Menlo, Consolas, monospace"
                                             fontWeight={600}
                                             fontSize="md"
                                             textAlign="center"
