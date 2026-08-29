@@ -39,15 +39,15 @@ describe("useKeyboardShortcuts", () => {
     });
 
     describe("Shift+A opens AI drills", () => {
-        it("works in the idle phase (the printable-key guard must not swallow it)", () => {
+        it("goes to the engine in idle (typing a capital A must start the run)", () => {
             const props = makeProps({ phase: "idle" });
             renderHook(() => useKeyboardShortcuts(props));
 
             const event = press("A", { shiftKey: true });
 
-            expect(props.onOpenAIDrill).toHaveBeenCalledTimes(1);
-            expect(props.engineHandleKeyDown).not.toHaveBeenCalled();
-            expect(event.defaultPrevented).toBe(true);
+            expect(props.onOpenAIDrill).not.toHaveBeenCalled();
+            expect(props.engineHandleKeyDown).toHaveBeenCalledTimes(1);
+            expect(event.defaultPrevented).toBe(false);
         });
 
         it("works in the finished phase (the plain-'a' passthrough must not swallow it)", () => {
@@ -125,7 +125,7 @@ describe("useKeyboardShortcuts", () => {
         });
 
         it("does not intercept Shift+A while a dialog owns the keyboard", () => {
-            const props = makeProps({ phase: "idle", isOverlayOpen: true });
+            const props = makeProps({ phase: "finished", isOverlayOpen: true });
             renderHook(() => useKeyboardShortcuts(props));
 
             press("A", { shiftKey: true });
@@ -146,6 +146,32 @@ describe("useKeyboardShortcuts", () => {
             rerender({ ...props, isOverlayOpen: false });
             press("h");
             expect(props.engineHandleKeyDown).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("paste blocking", () => {
+        function paste(target: EventTarget): Event {
+            const event = new Event("paste", { bubbles: true, cancelable: true });
+            act(() => {
+                target.dispatchEvent(event);
+            });
+            return event;
+        }
+
+        it("blocks a paste aimed at the typing surface", () => {
+            renderHook(() => useKeyboardShortcuts(makeProps()));
+
+            expect(paste(window).defaultPrevented).toBe(true);
+        });
+
+        it("allows a paste into a real field (the API key input)", () => {
+            renderHook(() => useKeyboardShortcuts(makeProps()));
+            const input = document.createElement("input");
+            document.body.appendChild(input);
+
+            expect(paste(input).defaultPrevented).toBe(false);
+
+            input.remove();
         });
     });
 

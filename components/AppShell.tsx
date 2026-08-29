@@ -155,6 +155,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         function handleGlobalShortcut(event: KeyboardEvent) {
             if (event.defaultPrevented) return;
             if (event.metaKey || event.ctrlKey || event.altKey) return;
+            // A dialog owned by the session (leaderboard, AI drill) has the
+            // keyboard: the session's capture handler stands down for it without
+            // stopping propagation, so without this p/a would open Preferences or
+            // Analytics on top of it. `activeModal` is a single slot and cannot
+            // stack, so p-to-close still works.
+            if (externalOverlays.size > 0) return;
             // Cheap class check first — the DOM ancestor walk below is the expensive
             // half and runs on every keystroke of a session otherwise.
             if (document.body.classList.contains("cs-focus-active")) return;
@@ -171,7 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }
         window.addEventListener("keydown", handleGlobalShortcut);
         return () => window.removeEventListener("keydown", handleGlobalShortcut);
-    }, [toggle]);
+    }, [toggle, externalOverlays]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;

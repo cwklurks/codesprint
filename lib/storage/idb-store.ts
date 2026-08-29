@@ -140,13 +140,22 @@ function getDb(): Promise<IDBDatabase> {
 
         // Another tab holds an older connection open: fail fast instead of
         // leaving every caller awaiting a promise that may never settle.
+        let settledAsBlocked = false;
         request.onblocked = () => {
+            settledAsBlocked = true;
             dbPromise = null;
             reject(new Error("IndexedDB upgrade blocked by another open connection"));
         };
 
         request.onsuccess = () => {
             const db = request.result;
+            // The blocker eventually closed and the open succeeded, but this
+            // promise already rejected and nobody holds the handle: close it
+            // rather than leaking a connection that blocks the next upgrade.
+            if (settledAsBlocked) {
+                db.close();
+                return;
+            }
             // A newer tab wants to upgrade the schema: step aside so it can.
             db.onversionchange = () => {
                 dbPromise = null;

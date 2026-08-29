@@ -46,6 +46,18 @@ describe("theme preset contrast", () => {
         expect(ratioAgainstBg(theme.accent, theme.bg)).toBeGreaterThanOrEqual(NON_TEXT_MIN);
     });
 
+    it.each(presets)("%s: body and muted text stay readable on the terminal backdrop", (_name, theme) => {
+        // Terminal mode swaps the page background for terminalBg while text stays put.
+        expect(ratioAgainstBg(theme.text, theme.terminalBg)).toBeGreaterThanOrEqual(TEXT_MIN);
+        expect(ratioAgainstBg(theme.textSubtle, theme.terminalBg)).toBeGreaterThanOrEqual(TEXT_MIN);
+    });
+
+    it.each(presets)("%s: status colors clear the non-text floor against the background", (_name, theme) => {
+        expect(ratioAgainstBg(theme.error, theme.bg)).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+        expect(ratioAgainstBg(theme.success, theme.bg)).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+        expect(ratioAgainstBg(theme.warning, theme.bg)).toBeGreaterThanOrEqual(NON_TEXT_MIN);
+    });
+
     it("keeps muted text visibly quieter than body text wherever the palette allows", () => {
         // Muting is the point: textSubtle should not silently collapse onto text.
         const collapsed = presets.filter(([, theme]) => theme.textSubtle === theme.text);

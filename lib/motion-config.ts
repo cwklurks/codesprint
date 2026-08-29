@@ -28,6 +28,22 @@ export function getStartButtonMotion(prefersReducedMotion: boolean): MotionProps
     };
 }
 
+/**
+ * The session <-> result swap. Under `AnimatePresence mode="wait"` the incoming
+ * screen waits for this exit to finish, so with reduced motion the props are
+ * dropped entirely: no exit animation means an instant swap instead of ~300ms
+ * of blank viewport.
+ */
+export function getSessionSwapMotion(prefersReducedMotion: boolean): MotionProps {
+    if (prefersReducedMotion) return {};
+    return {
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -10, transition: { duration: MOTION_DURATION.quick } },
+        transition: { duration: MOTION_DURATION.base, ease: MOTION_EASE.out },
+    };
+}
+
 export function getResultCardMotion(prefersReducedMotion: boolean): MotionProps {
     if (prefersReducedMotion) return {};
     return {

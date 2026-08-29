@@ -214,7 +214,7 @@ export function SessionControlBar({
                                     px={2}
                                     py={1}
                                 >
-                                    {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A)"}
+                                    {!rateLimit.allowed ? rateLimit.reason : "Generate AI drill (Shift+A on the result screen)"}
                                 </TooltipContent>
                             </TooltipPositioner>
                         </TooltipRoot>

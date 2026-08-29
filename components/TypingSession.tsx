@@ -16,7 +16,7 @@ import { DailyChallengeCard } from "@/components/daily/DailyChallengeCard";
 
 import { usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
-import { getPanelMotion } from "@/lib/motion-config";
+import { getPanelMotion, getSessionSwapMotion } from "@/lib/motion-config";
 import { getLayoutGap } from "@/lib/session-styles";
 import { estimateEditorHeight } from "@/lib/code-panel";
 
@@ -66,11 +66,15 @@ export default function TypingSession() {
 
     // Publish this component's overlays into the shared gate so the engine's
     // capture-phase key handler stands down while one of them owns the keyboard.
+    // The cleanups matter: without them an unmount (or a dynamic chunk that never
+    // loads) would leave the gate latched and the keyboard dead.
     useEffect(() => {
         setOverlayOpen("leaderboard", isLeaderboardOpen);
+        return () => setOverlayOpen("leaderboard", false);
     }, [isLeaderboardOpen, setOverlayOpen]);
     useEffect(() => {
         setOverlayOpen("ai-drill", isDrillPanelOpen);
+        return () => setOverlayOpen("ai-drill", false);
     }, [isDrillPanelOpen, setOverlayOpen]);
 
     // Store engine reset function in a ref to break circular dependency
@@ -295,6 +299,7 @@ export default function TypingSession() {
 
     const layoutGap = getLayoutGap(isTerminalMode, isImmersive);
     const panelMotion = getPanelMotion(prefersReducedMotion);
+    const sessionSwapMotion = getSessionSwapMotion(prefersReducedMotion);
 
     // Depend on the individual stable callbacks, not on the `focus` / `engine`
     // objects — those are new literals every render, which would break the memo
@@ -367,10 +372,7 @@ export default function TypingSession() {
                 {engine.phase !== "finished" ? (
                     <m.div
                         key="session"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        {...sessionSwapMotion}
                         style={{ width: "100%" }}
                     >
                         <Box display="flex" flexDirection="column" gap={8}>

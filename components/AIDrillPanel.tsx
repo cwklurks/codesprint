@@ -47,6 +47,13 @@ const MotionBox = m.create(Box);
 /** The dialog needs the room a code preview takes; below this it is not offered. */
 const NARROW_VIEWPORT = "(max-width: 639px)";
 
+/** Elements whose own Enter activation must win over the dialog-level shortcut. */
+const INTERACTIVE_TAGS = new Set(["BUTTON", "A", "INPUT", "TEXTAREA", "SELECT"]);
+
+function isInteractiveElement(element: Element | null): boolean {
+    return element !== null && INTERACTIVE_TAGS.has(element.tagName);
+}
+
 const DIFFICULTY_COLOR: Record<"easy" | "medium" | "hard", string> = {
     easy: "var(--success)",
     medium: "var(--warning)",
@@ -80,10 +87,15 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
 
     const handleAccept = useCallback(async () => {
         const snippet = await ai.acceptDrill();
-        if (snippet) {
+        if (!snippet) return;
+        try {
             await onAccept(snippet);
-            onClose();
+        } catch (error) {
+            // Never strand the dialog on a failed hand-off: the drill is already
+            // saved, so close and let the caller's own error surface show.
+            console.error("Failed to hand the accepted drill to the session", error);
         }
+        onClose();
     }, [ai, onAccept, onClose]);
 
     const handleGenerateAnother = useCallback(() => {
@@ -102,12 +114,23 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
         return () => query.removeEventListener("change", sync);
     }, []);
 
+    // Below the breakpoint this panel renders nothing, but the parent has already
+    // registered it as an open overlay — which makes the session's capture-phase
+    // key handler stand down and leaves the keyboard dead. Close immediately so
+    // the overlay registry can never claim an open dialog that is not on screen.
+    useEffect(() => {
+        if (isOpen && isNarrowViewport) {
+            onClose();
+        }
+    }, [isOpen, isNarrowViewport, onClose]);
+
     // Generate drill on open
     useEffect(() => {
+        if (isNarrowViewport) return;
         if (isOpen && ai.state.status === "idle") {
             ai.generateDrill(language);
         }
-    }, [isOpen, ai, language]);
+    }, [isOpen, isNarrowViewport, ai, language]);
 
     // Accept / regenerate from the keyboard. Chakra maps neither Enter nor
     // Shift+Enter; Escape it does handle, so there is no listener for it here.
@@ -118,6 +141,9 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
             if (ai.state.status === "loading") return;
 
             if (e.key === "Enter" && !e.shiftKey) {
+                // A focused control owns Enter: pressing it on "Cancel" or
+                // "Try again" must activate THAT button, not accept the drill.
+                if (isInteractiveElement(document.activeElement)) return;
                 e.preventDefault();
                 handleAccept();
             } else if (e.key === "Enter" && e.shiftKey) {
@@ -137,6 +163,11 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
     const isLoading = ai.state.status === "loading";
     const isPreview = ai.state.status === "preview";
     const isError = ai.state.status === "error";
+    // `canGenerate` is exactly "drills enabled AND a key is stored", so a failure
+    // with it false is the not-configured case — retrying would fail identically,
+    // and there is no quota to report. Everything else (network, provider, rate
+    // limit) keeps the full button row, where retry is meaningful.
+    const isNotConfigured = isError && !ai.canGenerate;
 
     const drill = isPreview ? (ai.state as { status: "preview"; drill: { title: string; content: string; explanation: string; focusAreas: string[]; estimatedDifficulty: "easy" | "medium" | "hard"; }; costUsd: number; provider: "claude" | "openai" | "fireworks"; }).drill : null;
     const cost = isPreview ? (ai.state as { status: "preview"; costUsd: number; }).costUsd : 0;
@@ -162,16 +193,18 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                                 <DialogTitle fontSize="lg" fontWeight={600}>
                                     AI drill
                                 </DialogTitle>
-                                <Badge
-                                    size="sm"
-                                    bg="var(--surface)"
-                                    color="var(--text-subtle)"
-                                    border="1px solid var(--border)"
-                                    borderRadius="var(--radius-sm)"
-                                    ml="auto"
-                                >
-                                    {ai.remainingToday} remaining today
-                                </Badge>
+                                {!isNotConfigured && (
+                                    <Badge
+                                        size="sm"
+                                        bg="var(--surface)"
+                                        color="var(--text-subtle)"
+                                        border="1px solid var(--border)"
+                                        borderRadius="var(--radius-sm)"
+                                        ml="auto"
+                                    >
+                                        {ai.remainingToday} remaining today
+                                    </Badge>
+                                )}
                             </HStack>
                         </DialogHeader>
 
@@ -189,8 +222,17 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                                     </Box>
                                 )}
 
+                                {/* Not-configured State — no retry, just where to go */}
+                                {isNotConfigured && (
+                                    <Box p={4} textAlign="center">
+                                        <Text color="var(--text-subtle)">
+                                            Add an API key in Preferences to enable AI drills.
+                                        </Text>
+                                    </Box>
+                                )}
+
                                 {/* Error State */}
-                                {isError && (
+                                {isError && !isNotConfigured && (
                                     <Box p={4} textAlign="center">
                                         <Text color="var(--error)" mb={4}>
                                             {(ai.state as { status: "error"; error: string; }).error}
@@ -305,30 +347,34 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                                         onClick={onClose}
                                         disabled={isLoading}
                                     >
-                                        Cancel (Esc)
+                                        {isNotConfigured ? "Close (Esc)" : "Cancel (Esc)"}
                                     </Button>
-                                    <Button
-                                        variant="outline"
-                                        borderColor="var(--border)"
-                                        borderRadius="var(--radius-sm)"
-                                        color="var(--text)"
-                                        _hover={{ bg: "var(--surface-hover)" }}
-                                        onClick={handleGenerateAnother}
-                                        disabled={isLoading}
-                                    >
-                                        Generate another (Shift+Enter)
-                                    </Button>
-                                    <Button
-                                        bg="var(--accent)"
-                                        color="var(--bg)"
-                                        borderRadius="var(--radius-sm)"
-                                        _hover={{ bg: "var(--accent)", opacity: 0.9 }}
-                                        onClick={handleAccept}
-                                        disabled={isLoading || !isPreview}
-                                        loading={isLoading}
-                                    >
-                                        Use this drill (Enter)
-                                    </Button>
+                                    {!isNotConfigured && (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                borderColor="var(--border)"
+                                                borderRadius="var(--radius-sm)"
+                                                color="var(--text)"
+                                                _hover={{ bg: "var(--surface-hover)" }}
+                                                onClick={handleGenerateAnother}
+                                                disabled={isLoading}
+                                            >
+                                                Generate another (Shift+Enter)
+                                            </Button>
+                                            <Button
+                                                bg="var(--accent)"
+                                                color="var(--bg)"
+                                                borderRadius="var(--radius-sm)"
+                                                _hover={{ bg: "var(--accent)", opacity: 0.9 }}
+                                                onClick={handleAccept}
+                                                disabled={isLoading || !isPreview}
+                                                loading={isLoading}
+                                            >
+                                                Use this drill (Enter)
+                                            </Button>
+                                        </>
+                                    )}
                                 </HStack>
                             </VStack>
                         </DialogFooter>

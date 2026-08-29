@@ -43,15 +43,30 @@ export function useDaily(): UseDailyReturn {
     useEffect(() => {
         let cancelled = false;
         setDailySnippet(null);
-        getTodaysDaily(today)
-            .then((snippet) => {
-                if (!cancelled) setDailySnippet(snippet);
-            })
-            .catch((error) => {
-                console.warn("Failed to load today's daily snippet:", error);
-            });
+
+        const load = () => {
+            getTodaysDaily(today)
+                .then((snippet) => {
+                    if (!cancelled) setDailySnippet(snippet);
+                })
+                .catch((error) => {
+                    console.warn("Failed to load today's daily snippet:", error);
+                });
+        };
+
+        // The pool pulls in all four corpora (~693 KB of JSON). Nothing on the
+        // first screen needs it, and on the critical path it competes with Monaco
+        // for bandwidth and main-thread time — so wait for idle. The card renders
+        // its loading state meanwhile.
+        const canIdle = "requestIdleCallback" in window;
+        const handle = canIdle
+            ? window.requestIdleCallback(load, { timeout: 3000 })
+            : window.setTimeout(load, 200);
+
         return () => {
             cancelled = true;
+            if (canIdle) window.cancelIdleCallback(handle);
+            else window.clearTimeout(handle);
         };
     }, [today]);
 

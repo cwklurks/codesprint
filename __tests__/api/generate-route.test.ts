@@ -48,6 +48,7 @@ type RequestOptions = {
     host?: string | null;
     authorization?: string | null;
     body?: unknown;
+    contentLength?: string;
 };
 
 function makeRequest(options: RequestOptions = {}): Request {
@@ -56,12 +57,14 @@ function makeRequest(options: RequestOptions = {}): Request {
         host = HOST,
         authorization = `Bearer ${VALID_KEY}`,
         body = validBody(),
+        contentLength,
     } = options;
 
     const headers = new Headers({ "content-type": "application/json" });
     if (origin !== null) headers.set("origin", origin);
     if (host !== null) headers.set("host", host);
     if (authorization !== null) headers.set("authorization", authorization);
+    if (contentLength !== undefined) headers.set("content-length", contentLength);
 
     return new Request(`${ORIGIN}/api/generate`, {
         method: "POST",
@@ -192,6 +195,13 @@ describe("POST /api/generate — body bounds", () => {
         expect(json.code).toBe("VALIDATION_ERROR");
     });
 
+    it("accepts a weighted error rate above 1 (the client sends 1.5-1.6)", async () => {
+        const body = validBody();
+        body.weakPatterns[0].errorRate = 1.6;
+        const { status } = await post({ body });
+        expect(status).toBe(200);
+    });
+
     it("rejects a negative error count", async () => {
         const body = validBody();
         body.weakPatterns[0].errorCount = -1;
@@ -248,6 +258,35 @@ describe("POST /api/generate — body bounds", () => {
             recentDrillTitles: [],
         };
         const { status } = await post({ body });
+        expect(status).toBe(200);
+    });
+});
+
+describe("POST /api/generate — the real client payload", () => {
+    it("accepts the exact cold-start request buildDrillRequest produces", async () => {
+        const { buildDrillRequest } = await import("@/lib/ai/skill-feed");
+        const body = await buildDrillRequest("python", {});
+
+        // Cold start: no sessions, no skill model — the language defaults, whose
+        // weighted error rates are 1.5/1.5/0.7, are what actually goes on the wire.
+        expect(body.weakPatterns.some((p) => p.errorRate > 1)).toBe(true);
+
+        const { status, json } = await post({ body });
+        expect(json.code).toBeUndefined();
+        expect(status).toBe(200);
+    });
+});
+
+describe("POST /api/generate — oversized bodies", () => {
+    it("rejects a body whose declared length exceeds the cap, before parsing it", async () => {
+        const { status, json } = await post({ contentLength: "5000000" });
+        expect(status).toBe(413);
+        expect(json.code).toBe("BODY_TOO_LARGE");
+        expect(generateText).not.toHaveBeenCalled();
+    });
+
+    it("accepts a normally sized declared length", async () => {
+        const { status } = await post({ contentLength: "512" });
         expect(status).toBe(200);
     });
 });

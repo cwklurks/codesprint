@@ -1,4 +1,10 @@
-import { contrastRatio, mutedColorForContrast } from "@/lib/contrast";
+import {
+    colorForContrast,
+    compositeOver,
+    contrastRatio,
+    mutedColorForContrast,
+    relativeLuminance,
+} from "@/lib/contrast";
 
 export type ThemePreset =
     | "midnight"
@@ -147,12 +153,52 @@ function resolveTextSubtle(declared: string, text: string, bg: string): string {
     return mutedColorForContrast(text, bg, MIN_TEXT_CONTRAST);
 }
 
+/** Status colors render copy and markers, so they get a non-text floor. */
+const MIN_STATUS_CONTRAST = 3.0;
+
+function resolveStatusColors(tokens: Pick<ThemeTokens, "bg" | "error" | "success" | "warning">) {
+    return {
+        error: colorForContrast(tokens.error, tokens.bg, MIN_STATUS_CONTRAST),
+        success: colorForContrast(tokens.success, tokens.bg, MIN_STATUS_CONTRAST),
+        warning: colorForContrast(tokens.warning, tokens.bg, MIN_STATUS_CONTRAST),
+    };
+}
+
+/**
+ * The deepest terminal backdrop that keeps the theme's copy readable. Terminal
+ * mode swaps the page background for this shade while text colors stay put, so
+ * dark themes keep their full terminal depth and light themes step back toward
+ * the page background until body and muted text both clear AA.
+ */
+function resolveTerminalBg(preferred: string, bg: string, text: string, textSubtle: string): string {
+    for (let step = 0; step <= 10; step += 1) {
+        const candidate = compositeOver(bg, preferred, step / 10);
+        if (
+            contrastRatio(text, candidate) >= MIN_TEXT_CONTRAST &&
+            contrastRatio(textSubtle, candidate) >= MIN_TEXT_CONTRAST
+        ) {
+            return candidate;
+        }
+    }
+    return bg;
+}
+
 /**
  * Graduated elevation derived from the theme's own shadow color: elev-1 for
  * resting chrome, elev-2 for lifted cards, elev-3 for modals and overlays.
  * elev-3 reproduces the single shadow the themes shipped before the scale, so
  * every existing `var(--shadow)` consumer is unchanged.
  */
+/**
+ * Neutral shadow ink. A shadow tinted with the theme's own background is
+ * invisible against that background (and a pale halo on light themes), so
+ * elevation always casts in black, softened on light backgrounds.
+ */
+function shadowShade(bg: string): (alpha: number) => string {
+    const strength = relativeLuminance(bg) > 0.5 ? 0.45 : 1;
+    return (alpha: number) => withAlpha("#000000", alpha * strength);
+}
+
 function createElevation(
     shade: (alpha: number) => string,
     topAlpha: number,
@@ -167,7 +213,6 @@ function createElevation(
 function createMinimalTheme(base: string, accent: string, overrides: Partial<ThemeTokens> = {}): ThemeTokens {
     const gradientTop = lighten(base, 0.08);
     const accentAlpha = (alpha: number) => withAlpha(accent, alpha);
-    const baseAlpha = (alpha: number) => withAlpha(base, alpha);
     const surfaceBlend = mix(lighten(base, 0.05), accent, 0.22);
     const surfaceStrongBlend = mix(lighten(base, 0.12), accent, 0.32);
     const borderBlend = mix(base, accent, 0.24);
@@ -193,7 +238,7 @@ function createMinimalTheme(base: string, accent: string, overrides: Partial<The
         panelSoft: withAlpha(surfaceBlend, 0.24),
         border: withAlpha(borderBlend, 0.32),
         borderStrong: withAlpha(borderBlend, 0.5),
-        ...createElevation(baseAlpha, 0.55),
+        ...createElevation(shadowShade(base), 0.55),
         surface: withAlpha(surfaceBlend, 0.14),
         surfaceHover: withAlpha(surfaceStrongBlend, 0.2),
         surfaceActive: withAlpha(surfaceStrongBlend, 0.3),
@@ -206,7 +251,13 @@ function createMinimalTheme(base: string, accent: string, overrides: Partial<The
     };
 
     const merged = { ...defaults, ...overrides };
-    return { ...merged, textSubtle: resolveTextSubtle(merged.textSubtle, merged.text, merged.bg) };
+    const textSubtle = resolveTextSubtle(merged.textSubtle, merged.text, merged.bg);
+    return {
+        ...merged,
+        textSubtle,
+        ...resolveStatusColors(merged),
+        terminalBg: resolveTerminalBg(merged.terminalBg, merged.bg, merged.text, textSubtle),
+    };
 }
 
 /**
@@ -233,13 +284,14 @@ function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
     // Derive UI tokens from the palette to maintain the aesthetic
     // We use 'sub' and 'subAlt' for muted elements
 
-    return {
+    const resolvedTextSubtle = resolveTextSubtle(sub, text, bg);
+    const tokens: ThemeTokens = {
         bg,
         bgMuted: subAlt,
         // Flat background: the token carries the plain color, not a fake two-stop gradient.
         bgGradient: bg,
         text,
-        textSubtle: resolveTextSubtle(sub, text, bg),
+        textSubtle: resolvedTextSubtle,
         accent: main,
         caret,
         error,
@@ -251,7 +303,7 @@ function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
         panelSoft: withAlpha(subAlt, 0.8),
         border: withAlpha(sub, 0.3),
         borderStrong: withAlpha(sub, 0.5),
-        ...createElevation((alpha) => withAlpha(bg, alpha), 0.8),
+        ...createElevation(shadowShade(bg), 0.8),
         surface: withAlpha(subAlt, 0.5),
         surfaceHover: withAlpha(subAlt, 0.7),
         surfaceActive: withAlpha(subAlt, 0.9),
@@ -261,6 +313,12 @@ function createMonkeytypeTheme(colors: MonkeytypeColors): ThemeTokens {
         overlay: withAlpha(bg, 0.8),
         focusRing: withAlpha(main, 0.5),
         terminalBg: darken(bg, 0.2),
+    };
+
+    return {
+        ...tokens,
+        ...resolveStatusColors(tokens),
+        terminalBg: resolveTerminalBg(tokens.terminalBg, bg, text, resolvedTextSubtle),
     };
 }
 
@@ -367,9 +425,11 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
     // The upstream sage (#7b9c98) only reaches 2.61:1 under its near-white text,
     // so the sage moves down a step: the old background becomes the muted tone
     // and the surface deepens to #445654 (6.79:1). Same palette, one shade lower.
+    // Accent stays a distinct soft sage (4.29:1) rather than collapsing onto the
+    // text color, which would erase syntax highlighting entirely.
     botanical: createMonkeytypeTheme({
         bg: "#445654",
-        main: "#eaf1f3",
+        main: "#abc6c4",
         caret: "#abc6c4",
         sub: "#7b9c98",
         subAlt: "#3f4f4e",

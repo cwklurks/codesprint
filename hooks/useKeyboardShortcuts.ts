@@ -43,7 +43,7 @@ export interface UseKeyboardShortcutsReturn {
  * Manages a 7-level keyboard event hierarchy:
  * 0. Overlay gate (a dialog/drawer owns the keyboard -> do nothing)
  * 1. Global Escape Handling
- * 2. Shift+A (AI drills) — before the idle typing guard AND the plain-"a" passthrough
+ * 2. Shift+A (AI drills, finished phase only) — before the plain-"a" passthrough
  * 3. Idle Typing Guard (printable keys in idle bypass shortcuts → engine)
  * 4. Vim Toggle (v key, finished phase only)
  * 5. Vim Preview Mode
@@ -167,16 +167,16 @@ export function useKeyboardShortcuts(props: UseKeyboardShortcutsProps): UseKeybo
                 }
             }
 
-            // 2. Shift+A opens AI drills. This MUST come before the idle typing guard
-            // (which would feed "A" to the engine and start a run) and before the
-            // plain-"a" analytics passthrough further down (which returned early and
-            // swallowed the shortcut in the finished phase).
+            // 2. Shift+A opens AI drills, on the result screen only. Snippets start
+            // with capital letters ("Array...", "ListNode..."), so in idle a shifted
+            // letter is the first keystroke of a run and must reach the engine. It
+            // still has to run before the plain-"a" analytics passthrough below,
+            // which returns early and would otherwise swallow it when finished.
             if (
                 e.shiftKey &&
                 noModifiers &&
                 keyLower === "a" &&
-                phase !== "running" &&
-                phase !== "countdown" &&
+                phase === "finished" &&
                 onOpenAIDrill
             ) {
                 e.preventDefault();
@@ -309,7 +309,12 @@ export function useKeyboardShortcuts(props: UseKeyboardShortcutsProps): UseKeybo
             engineHandleKeyDown(e);
         }
 
+        // Pasting must not be a way to "type" a snippet — but this is a window
+        // listener, so it also used to block pasting into real fields (the API key
+        // input in settings, most painfully). Only the typing surface is blocked.
         function onPaste(e: ClipboardEvent) {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest?.("input, textarea, [contenteditable=true]")) return;
             e.preventDefault();
         }
 

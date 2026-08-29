@@ -2,7 +2,11 @@
 
 import { Box } from "@chakra-ui/react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
-import type { VimMode } from "monaco-vim";
+// Statically imported on purpose: deferring it saved ~24 kB gzip inside a chunk
+// that is already ~2.7 MB (Monaco itself is deliberately bundled, see
+// loader.config below), and the deferral let "i" start a run before the chunk
+// resolved — vim then attached mid-run in Normal mode and ate the keystrokes.
+import { initVimMode, type VimMode } from "monaco-vim";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 
@@ -264,13 +268,10 @@ function CodePanel({
         applyTheme(monaco);
     }, [applyTheme, editorReadyToken]);
 
-    // Vim Mode Management. vimMode defaults off, so monaco-vim is imported the
-    // first time it is actually switched on rather than shipped to every user.
+    // Vim Mode Management
     useEffect(() => {
         const editor = editorRef.current;
         if (!editor) return;
-
-        let cancelled = false;
 
         if (preferences.vimMode) {
             if (!vimModeRef.current) {
@@ -305,18 +306,11 @@ function CodePanel({
                     statusNodeRef.current = statusNode;
                 }
 
-                import("monaco-vim")
-                    .then(({ initVimMode }) => {
-                        // Vim was switched off again (or the editor remounted) while the
-                        // chunk was in flight — do not attach to a stale editor.
-                        if (cancelled || vimModeRef.current) return;
-                        if (editorRef.current !== editor) return;
-                        if (!statusNode.isConnected) return;
-                        vimModeRef.current = initVimMode(editor, statusNode);
-                    })
-                    .catch((e) => {
-                        console.error("Failed to init vim mode", e);
-                    });
+                try {
+                    vimModeRef.current = initVimMode(editor, statusNode);
+                } catch (e) {
+                    console.error("Failed to init vim mode", e);
+                }
             }
         } else {
             if (vimModeRef.current) {
@@ -328,10 +322,6 @@ function CodePanel({
                 statusNodeRef.current = null;
             }
         }
-
-        return () => {
-            cancelled = true;
-        };
     }, [preferences.vimMode, editorReadyToken]);
 
     const handleMount: OnMount = (editor, monaco) => {

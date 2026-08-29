@@ -81,10 +81,10 @@ export function useSnippets(currentLanguage: SupportedLanguage = "python") {
         setSnippets([...CURATED_SNIPPETS_LIST, ...allLoaded, ...aiDrillsRef.current]);
     }, []);
 
-    // Load ONLY the active language. The three others used to be pulled in on an
-    // idle callback — ~693 KB of JSON every visitor downloaded for languages they
-    // may never select. Switching language re-runs this effect and fetches that
-    // file then; already-loaded languages stay in the merged list.
+    // Load ONLY the active language, rather than eagerly pulling all four on an
+    // idle callback. Switching language re-runs this effect and fetches that file
+    // then; already-loaded languages stay in the merged list. (The daily pool does
+    // still read all four corpora, but on its own idle callback — see useDaily.)
     useEffect(() => {
         let mounted = true;
 

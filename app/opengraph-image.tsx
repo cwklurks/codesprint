@@ -17,7 +17,7 @@ const WORDMARK = "codesprint";
 const EYEBROW = "CODE TYPING TRAINER";
 const CODE_TYPED = "def two_sum(nums,";
 const CODE_REST = "target):";
-const STATS = ["4 languages", "1,800+ snippets", "syntax-aware scoring"].join("  ·  ");
+const STATS = ["4 languages", "900+ snippets", "syntax-aware scoring"].join("  ·  ");
 
 /**
  * Satori has no built-in monospace face, so the subsetted TTF is pulled from

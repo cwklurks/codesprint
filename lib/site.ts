@@ -16,7 +16,7 @@ export const SITE_TITLE = "CodeSprint · Code Typing Trainer";
 export const SITE_TAGLINE = "Build real syntax muscle memory.";
 
 export const SITE_DESCRIPTION =
-    "Practice 1,800+ real LeetCode snippets in Python, JavaScript, Java, and C++ with syntax-aware scoring, spaced repetition, and adaptive difficulty.";
+    "Practice 900+ real LeetCode snippets in Python, JavaScript, Java, and C++ with syntax-aware scoring, spaced repetition, and adaptive difficulty.";
 
 /** Gruvbox background, the default theme. Used for themeColor and PWA chrome. */
 export const SITE_THEME_COLOR = "#282828";
