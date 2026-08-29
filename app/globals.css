@@ -282,24 +282,38 @@ nextjs-portal {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
+    column-gap: 10px;
+    row-gap: 12px;
     flex-wrap: wrap;
 }
 
 /* Hairline between control groups, so the pills read as three sets and not one
-   long undifferentiated run. Hidden once the row wraps to one group per line,
-   where a divider would just dangle off the end of each row. */
+   long undifferentiated run. Narrow, the row wraps: the rule turns full width
+   and puts each group on its own line, which is the only way the sets stay
+   legible once they stack. */
 .session-control-divider {
-    display: none;
+    display: block;
     flex: none;
-    width: 1px;
-    align-self: stretch;
-    min-height: 20px;
+    width: 100%;
+    height: 1px;
     background: var(--border);
+}
+
+/* The rule that rides with the Start button only reads as a separator beside
+   it, which is the one-line layout. */
+.session-control-divider-inline {
+    display: none;
 }
 
 @media (min-width: 48em) {
     .session-control-divider {
+        width: 1px;
+        height: auto;
+        align-self: stretch;
+        min-height: 20px;
+    }
+
+    .session-control-divider-inline {
         display: block;
     }
 }
@@ -313,15 +327,4 @@ nextjs-portal {
     flex-wrap: wrap;
     padding-top: 8px;
     border-top: 1px solid var(--border);
-}
-
-.analytics-range-select {
-    padding: 6px 12px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    font-family: inherit;
 }

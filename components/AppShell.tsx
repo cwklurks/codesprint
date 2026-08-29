@@ -101,12 +101,16 @@ function SkipToContentLink() {
             px={3}
             py={2}
             borderRadius="var(--radius-sm)"
-            bg="var(--surface)"
+            // Opaque, not the translucent --surface: over the sticky header the
+            // wordmark used to read through the link ("codesprint" as
+            // "...esprint"). The elevation keeps it reading as a layer above.
+            bg="var(--bg)"
             color="var(--text)"
             border="1px solid var(--border-strong)"
-            backdropFilter="blur(var(--blur-md))"
-            boxShadow="var(--elev-2)"
+            boxShadow="var(--elev-3)"
             fontSize="sm"
+            fontWeight={600}
+            whiteSpace="nowrap"
             textDecoration="none"
             transform="translateY(calc(-100% - 16px))"
             transition={HEADER_CONTROL_TRANSITION}
@@ -201,7 +205,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         onOpenGallery={() => setActiveModal("gallery")}
                         progressSummary={progressSummary}
                     />
-                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={8} pb={8} px={{ base: 4, lg: 10 }}>
+                    <Container as="main" id="main" maxW="1280px" flex="1 1 auto" pt={{ base: 5, md: 8 }} pb={8} px={{ base: 4, lg: 10 }}>
                         {children}
                     </Container>
                 </Flex>
@@ -264,32 +268,37 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
             borderBottom="1px solid var(--header-border)"
         >
             <m.div {...headerMotion}>
-                <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2.5, md: 3 }}>
+                <Container maxW="1280px" px={{ base: 4, md: 8 }} py={{ base: 2, md: 3 }}>
+                    {/* One row at every width. Stacked, this header ate 165px of a
+                        390x844 screen and pushed the editor clean below the fold,
+                        so on phones the wordmark shrinks, the level meter stands
+                        down and Preferences collapses to its icon. */}
                     <Flex
-                        direction={{ base: "column", md: "row" }}
-                        align={{ base: "flex-start", md: "center" }}
+                        direction="row"
+                        align="center"
                         justify="space-between"
-                        gap={{ base: 4, md: 5 }}
+                        gap={{ base: 2, md: 5 }}
+                        flexWrap="wrap"
                     >
-                        <Flex align="center" gap={4} flexWrap="wrap">
+                        <Flex align="center" gap={4} flexShrink={0}>
                             <Link href="/" aria-label="CodeSprint home">
                                 {/* The single h1 for the app: the home hero deliberately
                                     does not repeat the wordmark. */}
-                                <Text as="h1" fontWeight={700} fontSize={{ base: "2xl", md: "3xl" }} letterSpacing="0.3px">
+                                <Text as="h1" fontWeight={700} fontSize={{ base: "lg", sm: "xl", md: "3xl" }} letterSpacing="0.3px">
                                     codesprint
                                 </Text>
                             </Link>
                         </Flex>
                         <Flex
                             align="center"
-                            justify={{ base: "flex-start", md: "flex-end" }}
-                            gap={2}
-                            flexWrap="wrap"
-                            flex="1 1 auto"
-                            w={{ base: "100%", md: "auto" }}
+                            justify="flex-end"
+                            gap={{ base: 1.5, md: 2 }}
+                            flexWrap="nowrap"
+                            flex="0 1 auto"
+                            minW={0}
                         >
                             {progressSummary && (
-                                <Flex align="center" gap={3} mr={2}>
+                                <Flex align="center" gap={3} mr={{ base: 0.5, md: 2 }} flexShrink={0}>
                                     {progressSummary.streak >= 1 && (
                                         <Flex
                                             align="center"
@@ -311,35 +320,53 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                         </Flex>
                                     )}
                                     {levelInfo && (
-                                        <Flex align="center" gap={2}>
+                                        // The level meter is the first thing to go on a
+                                        // phone: it is ambient, and the row has to fit.
+                                        <Flex align="center" gap={2} display={{ base: "none", md: "flex" }}>
                                             <Text fontSize="xs" fontWeight={700} color="var(--accent)">
                                                 Lv.{levelInfo.level}
                                             </Text>
-                                            <Box w="40px" h="4px" bg="var(--surface)" borderRadius="full" overflow="hidden">
+                                            <Box
+                                                w="40px"
+                                                h="4px"
+                                                bg="var(--surface)"
+                                                // Inset ring, not a border: a real border would
+                                                // eat half of a 4px rail (same reason the slider
+                                                // recipe uses one). It is what makes an empty
+                                                // track read as a track.
+                                                boxShadow="inset 0 0 0 1px var(--border)"
+                                                borderRadius="full"
+                                                overflow="hidden"
+                                            >
                                                 {/* scaleX rather than width: a compositor-only
-                                                    transition, no layout on every XP change. */}
-                                                <Box
-                                                    h="100%"
-                                                    w="100%"
-                                                    bg="var(--accent)"
-                                                    borderRadius="full"
-                                                    transform={`scaleX(${levelInfo.progress})`}
-                                                    transformOrigin="0% 50%"
-                                                    transition={`transform ${MOTION_DURATION.base}s ease`}
-                                                />
+                                                    transition, no layout on every XP change.
+                                                    Skipped entirely at 0 — a zero-width rounded
+                                                    fill still paints a stray hairline. */}
+                                                {levelInfo.progress > 0 && (
+                                                    <Box
+                                                        h="100%"
+                                                        w="100%"
+                                                        bg="var(--accent)"
+                                                        borderRadius="full"
+                                                        transform={`scaleX(${levelInfo.progress})`}
+                                                        transformOrigin="0% 50%"
+                                                        transition={`transform ${MOTION_DURATION.base}s ease`}
+                                                    />
+                                                )}
                                             </Box>
                                         </Flex>
                                     )}
                                 </Flex>
                             )}
-                            <Flex gap={2} align="center" flexWrap="wrap">
+                            <Flex gap={{ base: 1, md: 2 }} align="center" flexWrap="nowrap" flexShrink={0}>
                                 {iconLinks.map((item) => {
                                     const linkStyles = {
                                         display: "inline-flex",
                                         alignItems: "center",
                                         justifyContent: "center",
-                                        w: 11,
-                                        h: 11,
+                                        flexShrink: 0,
+                                        w: { base: 9, md: 11 },
+                                        h: { base: 9, md: 11 },
                                         borderRadius: "full",
                                         border: "1px solid var(--header-border)",
                                         bg: "var(--surface)",
@@ -412,10 +439,16 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                 })}
                             </Flex>
                             <Button
+                                aria-label="Preferences"
                                 size="md"
                                 borderRadius="full"
-                                px={5}
-                                py={3}
+                                px={{ base: 0, md: 5 }}
+                                // Squares up with the icon buttons beside it at
+                                // both sizes (36px on phones, 44px from md).
+                                w={{ base: 9, md: "auto" }}
+                                h={{ base: 9, md: 11 }}
+                                minW={{ base: 9, md: "auto" }}
+                                flexShrink={0}
                                 variant="outline"
                                 borderColor="var(--border)"
                                 color="var(--header-text)"
@@ -426,7 +459,12 @@ function Header({ onOpenPreferences, onOpenShortcuts, onOpenAnalytics, onOpenGal
                                 _active={{ borderColor: "var(--border-strong)", bg: "var(--surface-active)" }}
                                 onClick={onOpenPreferences}
                             >
-                                Preferences
+                                {/* Label on desktop, icon on phones — the aria-label
+                                    keeps the accessible name "Preferences" either way. */}
+                                <Box as="span" display={{ base: "none", md: "inline" }}>
+                                    Preferences
+                                </Box>
+                                <SlidersIcon boxSize={5} display={{ base: "block", md: "none" }} />
                             </Button>
                         </Flex>
                     </Flex>
@@ -451,6 +489,26 @@ function CommandIcon(props: ChakraIconProps) {
             {...props}
         >
             <path d="M13 5L8.5 13h4.5l-1.5 6 6-8.5h-4.5l1.5-5z" />
+        </chakra.svg>
+    );
+}
+
+function SlidersIcon(props: ChakraIconProps) {
+    return (
+        <chakra.svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            {...props}
+        >
+            <line x1="4" y1="8" x2="20" y2="8" />
+            <line x1="4" y1="16" x2="20" y2="16" />
+            <circle cx="10" cy="8" r="2.4" />
+            <circle cx="15" cy="16" r="2.4" />
         </chakra.svg>
     );
 }

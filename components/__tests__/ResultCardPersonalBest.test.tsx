@@ -21,6 +21,8 @@ const baseProps = {
     history: [],
     contentLength: 100,
     errorLog: [],
+    totalKeystrokes: 96,
+    correctKeystrokes: 93,
 };
 
 describe("ResultCard personal best", () => {
@@ -46,5 +48,21 @@ describe("ResultCard personal best", () => {
     it("renders nothing PB-related when no prior best info is supplied", () => {
         const { container } = render(<ResultCard {...baseProps} />);
         expect(container.textContent).not.toContain("NEW BEST");
+    });
+
+    it("does not claim a NEW BEST on a first-ever run", () => {
+        // The lifecycle reports isNewBest for a first run (nothing to beat), so
+        // the badge has to gate on there being a real prior best, or it reads as
+        // "NEW BEST +80" against an empty history.
+        const { container } = render(<ResultCard {...baseProps} wpm={80} isNewBest />);
+        expect(container.textContent).not.toContain("NEW BEST");
+        expect(container.textContent).not.toContain("+80");
+        expect(container.textContent).toContain("first run");
+    });
+
+    it("treats a zero prior best as no prior best", () => {
+        const { container } = render(<ResultCard {...baseProps} wpm={80} priorBestWpm={0} isNewBest />);
+        expect(container.textContent).not.toContain("NEW BEST");
+        expect(container.textContent).toContain("first run");
     });
 });

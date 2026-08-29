@@ -1,4 +1,5 @@
-import { createSystem, defaultConfig, defineConfig } from "@chakra-ui/react";
+import { createSystem, defaultConfig, defineConfig, defineSlotRecipe } from "@chakra-ui/react";
+import { sliderAnatomy, switchAnatomy } from "@chakra-ui/react/anatomy";
 
 /**
  * CodeSprint's Chakra system.
@@ -27,6 +28,61 @@ const statusPalette = (variable: string, contrast: string) => ({
     focusRing: { value: variable },
 });
 
+/**
+ * Switch and slider tracks, in one place.
+ *
+ * Chakra's stock recipes paint the switch's off-track from `bg.emphasized` and
+ * its on-track from `colorPalette.solid`. With our gray palette that resolves to
+ * `--surface-hover` (alpha 0.2 -- invisible against the page, so the knob floats)
+ * and `--text-subtle` (so "on" reads greyed-out rather than active). The slider's
+ * unfilled remainder had the same problem. Every Switch/Slider in the app reads
+ * from these, so there is one source of truth per control.
+ */
+const switchSlotRecipe = defineSlotRecipe({
+    slots: switchAnatomy.keys(),
+    variants: {
+        variant: {
+            solid: {
+                control: {
+                    bg: "var(--surface-active)",
+                    borderWidth: "1px",
+                    borderStyle: "solid",
+                    borderColor: "var(--border)",
+                    _checked: {
+                        bg: "var(--accent)",
+                        borderColor: "var(--accent)",
+                    },
+                },
+                thumb: {
+                    bg: "var(--text-subtle)",
+                    _checked: { bg: "var(--bg)" },
+                },
+            },
+        },
+    },
+});
+
+const sliderSlotRecipe = defineSlotRecipe({
+    slots: sliderAnatomy.keys(),
+    variants: {
+        variant: {
+            outline: {
+                // An inset ring rather than a border: the rail's height comes
+                // from `--slider-track-size` and a real border would eat into it.
+                track: {
+                    bg: "var(--surface-active)",
+                    boxShadow: "inset 0 0 0 1px var(--border)",
+                },
+                range: { bg: "var(--accent)" },
+                thumb: {
+                    bg: "var(--accent)",
+                    borderColor: "var(--bg)",
+                },
+            },
+        },
+    },
+});
+
 const config = defineConfig({
     globalCss: {
         body: {
@@ -34,6 +90,10 @@ const config = defineConfig({
         },
     },
     theme: {
+        slotRecipes: {
+            switch: switchSlotRecipe,
+            slider: sliderSlotRecipe,
+        },
         tokens: {
             fonts: {
                 body: { value: MONO_STACK },

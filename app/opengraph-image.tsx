@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
 
@@ -20,34 +22,36 @@ const CODE_REST = "target):";
 const STATS = ["4 languages", "900+ snippets", "syntax-aware scoring"].join("  ·  ");
 
 /**
- * Satori has no built-in monospace face, so the subsetted TTF is pulled from
- * Google Fonts at render time. The whole image is prerendered at build; if the
- * network is unavailable the layout still renders in the bundled fallback face
- * rather than failing the build.
+ * Satori has no built-in monospace face, so the wordmark needs a real TTF.
+ *
+ * These used to be fetched from Google Fonts at render time, which made the
+ * card's typography depend on the build machine's network: when the 700 weight
+ * failed the wordmark silently fell back to a proportional sans. The
+ * faces are vendored under `assets/fonts/` (JetBrains Mono 2.304, SIL OFL 1.1 —
+ * see `assets/fonts/OFL.txt`) and read off disk instead, so the render is
+ * hermetic.
  */
-async function loadMonoFont(weight: 400 | 700, text: string): Promise<ArrayBuffer | null> {
-    try {
-        const cssUrl = `https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@${weight}&text=${encodeURIComponent(text)}`;
-        const css = await fetch(cssUrl).then((response) => response.text());
-        const fontUrl = css.match(/src: url\(([^)]+)\) format\('(?:opentype|truetype)'\)/)?.[1];
-        if (!fontUrl) return null;
-        return await fetch(fontUrl).then((response) => response.arrayBuffer());
-    } catch {
-        return null;
-    }
+const FONT_FILES = {
+    400: "JetBrainsMono-Regular.ttf",
+    700: "JetBrainsMono-Bold.ttf",
+} as const;
+
+async function loadMonoFonts(): Promise<
+    { name: string; data: Buffer; weight: 400 | 700; style: "normal" }[]
+> {
+    const weights = [400, 700] as const;
+    return Promise.all(
+        weights.map(async (weight) => ({
+            name: "JetBrains Mono",
+            data: await readFile(join(process.cwd(), "assets", "fonts", FONT_FILES[weight])),
+            weight,
+            style: "normal" as const,
+        })),
+    );
 }
 
 export default async function OpengraphImage() {
-    const glyphs = [WORDMARK, EYEBROW, SITE_TAGLINE, CODE_TYPED, CODE_REST, STATS].join("");
-    const [regular, bold] = await Promise.all([
-        loadMonoFont(400, glyphs),
-        loadMonoFont(700, glyphs),
-    ]);
-
-    const fonts = [
-        regular && { name: "JetBrains Mono", data: regular, weight: 400 as const, style: "normal" as const },
-        bold && { name: "JetBrains Mono", data: bold, weight: 700 as const, style: "normal" as const },
-    ].filter((font) => font !== null);
+    const fonts = await loadMonoFonts();
 
     return new ImageResponse(
         (
@@ -120,6 +124,6 @@ export default async function OpengraphImage() {
                 </div>
             </div>
         ),
-        { ...size, fonts: fonts.length > 0 ? fonts : undefined },
+        { ...size, fonts },
     );
 }

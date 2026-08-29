@@ -9,7 +9,7 @@
  * only used here, at author time, never at build or runtime.
  */
 
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import sharp from "sharp";
 
@@ -75,6 +75,31 @@ function appleIcon(size: number): string {
     </svg>`;
 }
 
+/** Size of the single image inside favicon.ico. */
+const FAVICON_SIZE = 32;
+
+/**
+ * Wrap a PNG in an ICO container. Every browser this app targets reads
+ * PNG-compressed .ico entries, and one 32px entry is all a modern tab strip
+ * asks for; the SVG at /icon.svg still serves everything that prefers it.
+ */
+function icoFromPng(png: Buffer, size: number): Buffer {
+    const header = Buffer.alloc(6);
+    header.writeUInt16LE(0, 0); // reserved
+    header.writeUInt16LE(1, 2); // type: icon
+    header.writeUInt16LE(1, 4); // image count
+    const entry = Buffer.alloc(16);
+    entry.writeUInt8(size, 0); // width  (0 would mean 256)
+    entry.writeUInt8(size, 1); // height
+    entry.writeUInt8(0, 2); // palette entries: none, it is a PNG
+    entry.writeUInt8(0, 3); // reserved
+    entry.writeUInt16LE(1, 4); // colour planes
+    entry.writeUInt16LE(32, 6); // bits per pixel
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(header.length + entry.length, 12); // payload offset
+    return Buffer.concat([header, entry, png]);
+}
+
 const TARGETS = [
     { path: "public/icon-192.png", svg: anyIcon(192) },
     { path: "public/icon-512.png", svg: anyIcon(512) },
@@ -83,9 +108,20 @@ const TARGETS = [
     { path: "app/apple-icon.png", svg: appleIcon(180) },
 ];
 
-for (const target of TARGETS) {
-    const outPath = join(ROOT, target.path);
-    await mkdir(dirname(outPath), { recursive: true });
-    await sharp(Buffer.from(target.svg)).png({ compressionLevel: 9 }).toFile(outPath);
-    console.info(`wrote ${target.path}`);
+async function rasterise(svg: string): Promise<Buffer> {
+    return sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
 }
+
+async function write(path: string, bytes: Buffer): Promise<void> {
+    const outPath = join(ROOT, path);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, bytes);
+    console.info(`wrote ${path}`);
+}
+
+for (const target of TARGETS) {
+    await write(target.path, await rasterise(target.svg));
+}
+
+// /favicon.ico is requested by browsers whether or not anything links to it.
+await write("public/favicon.ico", icoFromPng(await rasterise(anyIcon(FAVICON_SIZE)), FAVICON_SIZE));

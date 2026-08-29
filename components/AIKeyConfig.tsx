@@ -8,6 +8,9 @@ import {
     Text,
     Flex,
     Badge,
+    SwitchControl,
+    SwitchHiddenInput,
+    SwitchRoot,
 } from "@chakra-ui/react";
 import { usePreferences } from "@/lib/preferences";
 import { storeApiKey, clearApiKey, hasApiKey, getApiKey, type AIProvider } from "@/lib/ai/key-storage";
@@ -332,23 +335,21 @@ export function AIKeyConfig() {
                 </Flex>
             </Flex>
 
-            {/* Enable/Disable */}
+            {/* Enable/Disable. A switch, like every other boolean in preferences --
+                this used to be the one setting that spoke in On/Off pills. */}
             <Flex align="center" justify="space-between" gap={4}>
                 <Text fontSize="sm" color="var(--text)">Enable AI drills</Text>
-                <Button
-                    size="sm"
-                    variant={preferences.aiDrillsEnabled ? "solid" : "outline"}
-                    borderRadius="var(--radius-sm)"
-                    borderColor="var(--border)"
-                    bg={preferences.aiDrillsEnabled ? "var(--accent)" : "transparent"}
-                    color={preferences.aiDrillsEnabled ? "var(--bg)" : "var(--text)"}
-                    _hover={preferences.aiDrillsEnabled ? { opacity: 0.9 } : { bg: "var(--surface-hover)" }}
-                    aria-pressed={preferences.aiDrillsEnabled}
-                    onClick={() => setAIDrillsEnabled(!preferences.aiDrillsEnabled)}
+                <SwitchRoot
+                    checked={preferences.aiDrillsEnabled}
                     disabled={!hasAnyKey}
+                    onCheckedChange={({ checked }) => setAIDrillsEnabled(checked)}
+                    display="inline-flex"
+                    alignItems="center"
+                    flexShrink={0}
                 >
-                    {preferences.aiDrillsEnabled ? "On" : "Off"}
-                </Button>
+                    <SwitchControl />
+                    <SwitchHiddenInput aria-label="Enable AI drills" />
+                </SwitchRoot>
             </Flex>
         </Box>
     );

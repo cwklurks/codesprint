@@ -3,13 +3,13 @@
 import {
     Box,
     Button,
-    CloseButton,
     DrawerBackdrop,
     DrawerBody,
     DrawerContent,
     DrawerHeader,
     DrawerPositioner,
     DrawerRoot,
+    DrawerTitle,
     Flex,
     HStack,
     Portal,
@@ -38,6 +38,7 @@ import { ThemeSelector } from "@/components/ThemeSelector";
 import { exportSessions, importSessions, downloadFile, type ImportResult } from "@/lib/export";
 import { AIKeyConfig } from "@/components/AIKeyConfig";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
+import { DrawerCloseButton } from "@/components/ui/DialogCloseButton";
 import {
     overlayBackdropProps,
     overlayDrawerProps,
@@ -178,18 +179,13 @@ function SliderSetting({
                     </Box>
                 </Text>
             </HStack>
+            {/* Rail, fill and knob colours come from the slider slot recipe in
+                lib/chakra-system.ts so every slider in the app matches. */}
             <SliderControl>
-                <SliderTrack bg="var(--surface)" h="4px" borderRadius="full">
-                    <SliderRange bg="var(--accent)" />
+                <SliderTrack>
+                    <SliderRange />
                 </SliderTrack>
-                <SliderThumb
-                    index={0}
-                    boxSize={4}
-                    bg="var(--accent)"
-                    borderWidth="2px"
-                    borderColor="var(--bg)"
-                    boxShadow="var(--elev-1)"
-                />
+                <SliderThumb index={0} boxSize={4} boxShadow="var(--elev-1)" />
             </SliderControl>
         </SliderRoot>
     );
@@ -213,6 +209,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
 
     const [importStatus, setImportStatus] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const bodyRef = useRef<HTMLDivElement>(null);
 
     const resetToDefaults = () => {
         setTheme(DEFAULT_PREFERENCES.theme);
@@ -277,11 +274,22 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
         _hover: { bg: "var(--surface-hover)", color: "var(--text)" },
     } as const;
 
+    /** Reset throws away every setting, so it wears the destructive outline. */
+    const resetButtonProps = {
+        ...dataButtonProps,
+        borderColor: "color-mix(in srgb, var(--error) 52%, transparent)",
+        color: "var(--error)",
+        _hover: { bg: "color-mix(in srgb, var(--error) 14%, transparent)", color: "var(--error)" },
+    } as const;
+
     return (
         <DrawerRoot
             open={isOpen}
             placement="end"
             size="sm"
+            // Without this the drawer autofocuses its close button, so the first
+            // thing a keyboard user sees is a focus ring pinned to the viewport edge.
+            initialFocusEl={() => bodyRef.current}
             onOpenChange={({ open }) => {
                 if (!open) {
                     onClose();
@@ -292,17 +300,11 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                 <DrawerBackdrop {...overlayBackdropProps} />
                 <DrawerPositioner>
                     <DrawerContent {...overlayDrawerProps}>
-                        <CloseButton
-                            mt={2}
-                            position="absolute"
-                            top={2}
-                            right={2}
-                            color="var(--text-subtle)"
-                            _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                            onClick={onClose}
-                        />
-                        <DrawerHeader {...overlayHeaderProps}>Preferences</DrawerHeader>
-                        <DrawerBody>
+                        <DrawerCloseButton />
+                        <DrawerHeader {...overlayHeaderProps}>
+                            <DrawerTitle>Preferences</DrawerTitle>
+                        </DrawerHeader>
+                        <DrawerBody ref={bodyRef} tabIndex={-1} outline="none">
                             <Stack
                                 gap={8}
                                 mt={2}
@@ -426,7 +428,7 @@ export function PreferencesDrawer({ isOpen, onClose }: PreferencesDrawerProps) {
                                                 {importStatus}
                                             </Text>
                                         )}
-                                        <Button {...dataButtonProps} mt={2} onClick={resetToDefaults}>
+                                        <Button {...resetButtonProps} mt={2} onClick={resetToDefaults}>
                                             Reset to defaults
                                         </Button>
                                     </Stack>

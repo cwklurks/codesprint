@@ -39,8 +39,27 @@ export type SessionFilters = {
 const STORAGE_KEY = "codesprint-session-history";
 const MAX_RECORDS = 500;
 
+/**
+ * Dispatched on `window` right after a record is written, so read-only surfaces
+ * (the hero's personal-best line) can refresh instead of reading storage once on
+ * mount and then going stale for the rest of the page's life. A plain
+ * CustomEvent on purpose: no store, no subscription library, nothing to import.
+ */
+export const SESSION_SAVED_EVENT = "codesprint:session-saved";
+
+export type SessionSavedDetail = { id: string; wpm: number };
+
 function isServer(): boolean {
     return typeof window === "undefined";
+}
+
+function announceSessionSaved(record: SessionRecord): void {
+    if (isServer() || typeof CustomEvent === "undefined") return;
+    window.dispatchEvent(
+        new CustomEvent<SessionSavedDetail>(SESSION_SAVED_EVENT, {
+            detail: { id: record.id, wpm: record.wpm },
+        }),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +178,8 @@ export async function createSessionAsync(input: CreateSessionInput): Promise<Ses
     const existing = readLocalStorage();
     const updated = [toMirrorRecord(record, backedByIdb), ...existing].slice(0, MAX_RECORDS);
     writeLocalStorage(updated, backedByIdb);
+
+    announceSessionSaved(record);
 
     return record;
 }
@@ -297,6 +318,8 @@ export function createSession(input: CreateSessionInput): SessionRecord | null {
         isIdbAvailable().then((ok) => {
             if (ok) idbPut(STORES.sessions, record);
         }).catch((err) => { console.warn("Background IDB write failed for session:", record.id, err); });
+
+        announceSessionSaved(record);
 
         return record;
     } catch {

@@ -27,6 +27,8 @@ const baseProps = {
     accuracy: 0.96,
     timeMs: 15000,
     errors: 2,
+    totalKeystrokes: 190,
+    correctKeystrokes: 184,
     snippetTitle: "Binary Search",
     snippetId: "algo-js-binary-search",
     language: "javascript" as const,

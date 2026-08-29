@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-28
+
+The portfolio mega-polish: a full design, performance, accessibility, and
+robustness overhaul, developed with layered adversarial review (independent
+design/performance/quality audits, a hostile plan review, two independent
+implementation reviews, and screenshot-driven browser QA).
+
+### Design
+
+- **Real typography.** JetBrains Mono ships via `next/font` with a single
+  canonical `--font-mono` stack; previously no webfont was loaded and the app
+  rendered in each OS's fallback mono. Monaco is told about the face and
+  remeasures when it loads.
+- **A real token system.** Radius, blur, and theme-derived elevation scales;
+  shadows now cast in neutral black (they were tinted with the theme's own
+  background and invisible). Chakra v3 is configured through `createSystem`
+  so stock components inherit the theme instead of leaking default grays.
+- **WCAG AA across all 17 themes**, enforced by tests: body text, muted text,
+  accent, status colors, and terminal-mode backdrops all clear their floors.
+  Botanical and serika were repaired rather than deleted.
+- **CTA hierarchy fixed.** Start is the filled accent action with a
+  contrast-derived label; Next problem is quiet in the top bar and primary on
+  the result screen. The control bar is grouped with dividers and aria-pressed
+  pills; a compact hero states what the product is without pushing the editor
+  below the fold.
+- **The result screen is choreographed**: staggered reveal, an exact-value WPM
+  count-up, and a graph that draws in and actually fills its card. All motion
+  respects `prefers-reduced-motion`.
+- **One overlay language.** Every dialog and drawer: portal, dimmed blurred
+  backdrop, readable glass surface, consistent close control. The theme picker
+  shows a miniature typing line per theme.
+- **Share card matches the app** (same face, radius, elevation; the clipped
+  codesprint.dev watermark is fixed).
+
+### Performance
+
+- **First Load JS: 577 kB → ~220 kB (−62%).** Emotion SSR no longer emits the
+  same stylesheet 13 times (prerendered HTML 1.1 MB → ~143 kB, −87%). Overlays,
+  dashboards, and the result screen are code-split; snippet corpora load on
+  demand and the daily pool waits for idle.
+- **One Monaco.** `loader.config({ monaco })` uses the bundled editor; the
+  second full copy previously fetched from a CDN (with version skew) is gone.
+- **A calm typing loop.** The 100 ms full-tree re-render interval is replaced
+  by an atomic finish snapshot; error decorations update only on real changes;
+  the keyboard listener registers once; hot components are memoized with
+  stable props.
+
+### Accessibility
+
+- Skip link, `main` landmark, single `h1`, labeled inputs, `aria-pressed`
+  pills, live-region stat announcements that state values instead of masking
+  them, and Tab reaching the browser from idle so keyboard users can navigate.
+
+### Fixed
+
+- Shift+A now opens AI drills from the result screen; in idle, shifted letters
+  type (snippets start with capitals). The advertised shortcut previously did
+  nothing at all.
+- Overlay keyboard gate: dialog keys can no longer start or reset a run, and a
+  narrow-viewport AI drill can no longer lock the keyboard.
+- The AI generate route no longer 500s on `Origin: null`, requires a same-host
+  origin, bounds every input, rejects oversized bodies, and accepts the app's
+  own cold-start payload (the error-rate domain was misbounded).
+- localStorage mirror keeps full records unless IndexedDB confirmed the write;
+  quota exhaustion trims loudly instead of silently freezing.
+- Paste works in inputs again (the global paste blocker no longer captures the
+  API-key field). IndexedDB opens can no longer hang forever across tabs.
+- Open Graph/Twitter images, PWA manifest with maskable icons, robots, sitemap,
+  canonical URLs, and route-level error pages exist now.
+
+### Technical
+
+- 863 unit tests (was 629) plus an 8-spec Playwright suite that runs against a
+  production build, completes a real typing session, and asserts a clean
+  console with no hydration-error filtering.
+
 ## [0.2.0] - 2026-04-21
 
 ### Added

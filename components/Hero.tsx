@@ -19,10 +19,28 @@ export function Hero() {
 
     useEffect(() => {
         let cancelled = false;
+        let detach = () => {};
+        // The module stays dynamically imported (it drags IndexedDB helpers in),
+        // so the event name is read off the resolved module rather than
+        // duplicated here — one source of truth, still nothing in first load.
         import("@/lib/storage/session-history")
-            .then(({ getSessionStatsAsync }) => getSessionStatsAsync())
-            .then((stats) => {
-                if (!cancelled) setBestWpm(Math.round(stats.bestWpm));
+            .then((mod) => {
+                if (cancelled) return;
+                const refresh = () => {
+                    mod.getSessionStatsAsync()
+                        .then((stats) => {
+                            if (!cancelled) setBestWpm(Math.round(stats.bestWpm));
+                        })
+                        .catch((err) => {
+                            console.warn("Failed to load personal best:", err);
+                        });
+                };
+                // A finished run writes its record while this strip is mounted
+                // (just hidden), so without this the line still reads "no runs
+                // yet" when the user lands back on the session.
+                window.addEventListener(mod.SESSION_SAVED_EVENT, refresh);
+                detach = () => window.removeEventListener(mod.SESSION_SAVED_EVENT, refresh);
+                refresh();
             })
             .catch((err) => {
                 // Decorative stat only — a storage-less browser just gets a shorter line.
@@ -30,6 +48,7 @@ export function Hero() {
             });
         return () => {
             cancelled = true;
+            detach();
         };
     }, []);
 

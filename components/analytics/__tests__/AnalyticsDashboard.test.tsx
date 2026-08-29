@@ -1,13 +1,7 @@
 import { describe, it, expect } from "vitest";
-import type { TimeRange, WpmTrend, LanguageStat, PersonalAverages } from "@/lib/analytics/aggregations";
+import type { WpmTrend, LanguageStat, PersonalAverages } from "@/lib/analytics/aggregations";
 import type { SupportedLanguage } from "@/lib/snippets";
-
-const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
-    { value: "day", label: "Last 24 Hours" },
-    { value: "week", label: "Last Week" },
-    { value: "month", label: "Last Month" },
-    { value: "all", label: "All Time" },
-];
+import { TIME_RANGE_OPTIONS } from "@/components/analytics/AnalyticsDashboard";
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
     javascript: "JavaScript",
@@ -41,10 +35,10 @@ describe("AnalyticsDashboard utilities", () => {
         });
 
         it("should have human-readable labels", () => {
-            expect(TIME_RANGE_OPTIONS[0].label).toBe("Last 24 Hours");
-            expect(TIME_RANGE_OPTIONS[1].label).toBe("Last Week");
-            expect(TIME_RANGE_OPTIONS[2].label).toBe("Last Month");
-            expect(TIME_RANGE_OPTIONS[3].label).toBe("All Time");
+            expect(TIME_RANGE_OPTIONS[0].label).toBe("24h");
+            expect(TIME_RANGE_OPTIONS[1].label).toBe("Week");
+            expect(TIME_RANGE_OPTIONS[2].label).toBe("Month");
+            expect(TIME_RANGE_OPTIONS[3].label).toBe("All time");
         });
     });
 

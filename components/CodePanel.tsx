@@ -88,6 +88,7 @@ function CodePanel({
     const caretUpdatePendingRef = useRef(false);
     const vimModeRef = useRef<VimMode | null>(null);
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
+    const tailMarkerRef = useRef<HTMLDivElement | null>(null);
 
     const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
     // Full content height, uncapped: the editor never scrolls internally, so the
@@ -105,13 +106,15 @@ function CodePanel({
         return Math.max(1, before.split(LINE_BREAK_REGEX).length);
     }, [content, cursorChar]);
     const linesRemaining = Math.max(0, totalLines - activeLine);
-    const completedAll = cursorChar >= content.length && content.length > 0;
-    const lineCountdownLabel = completedAll
-        ? "All lines completed"
-        : linesRemaining === 0
-            ? "Final line..."
-            : `${linesRemaining} more ${linesRemaining === 1 ? "line" : "lines"} left...`;
-    const showLineCountdown = totalLines > 1 || completedAll;
+    // Counts what is still to type, which is what the reader is asking. No
+    // ellipsis: with one it read as a truncation warning rather than progress.
+    const lineCountdownLabel = `${linesRemaining} ${linesRemaining === 1 ? "line" : "lines"} left`;
+    // True while the end of the snippet is on screen, in which case there is
+    // nothing below the fold to announce and the chip stands down. Defaults to
+    // "visible" so a browser without IntersectionObserver never warns about
+    // lines the reader can already see.
+    const [tailOnScreen, setTailOnScreen] = useState(true);
+    const showLineCountdown = !tailOnScreen && linesRemaining > 0;
     const triggerCaretActivity = useCallback(() => {
         const caretNode = caretNodeRef.current;
         if (!caretNode) return;
@@ -453,6 +456,22 @@ function CodePanel({
         );
     }, [cursorChar, content, editorReadyToken, renderCaretNow, triggerCaretActivity, ensureCaretNode, prefersReducedMotion]);
 
+    // Watch the panel's bottom edge instead of listening to scroll: the observer
+    // only fires when the end of the snippet crosses the viewport boundary, so
+    // this costs nothing during a run and never reads layout on the caret path.
+    useEffect(() => {
+        const marker = tailMarkerRef.current;
+        if (!marker || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) setTailOnScreen(entry.isIntersecting);
+            },
+            { threshold: 0 },
+        );
+        observer.observe(marker);
+        return () => observer.disconnect();
+    }, []);
+
     // Caret error visual toggle (cheap - no decoration work)
     useEffect(() => {
         const caretNode = caretNodeRef.current;
@@ -608,19 +627,40 @@ function CodePanel({
                 }}
                 onMount={handleMount}
             />
+            {/* Zero-height marker on the panel's bottom edge; see the observer above. */}
+            <Box ref={tailMarkerRef} position="absolute" left={0} right={0} bottom={0} h="1px" aria-hidden="true" pointerEvents="none" />
             {showLineCountdown ? (
+                // The chip's flow position is the panel's bottom edge (hence the
+                // flex-end overlay, which adds no layout of its own); sticky then
+                // floats it up to the bottom of the viewport for as long as there
+                // is snippet below the fold. It reads as a "more below" marker
+                // rather than a truncation warning stranded under the last line.
                 <Box
                     position="absolute"
-                    bottom={surfaceStyle === "panel" ? 3 : 2}
-                    left="50%"
-                    transform="translateX(-50%)"
-                    textAlign="center"
-                    fontSize="sm"
-                    color="var(--text-subtle)"
+                    inset={0}
+                    display="flex"
+                    flexDirection="column"
+                    justifyContent="flex-end"
+                    pb={surfaceStyle === "panel" ? 3 : 2}
                     pointerEvents="none"
-                    px={3}
                 >
-                    {lineCountdownLabel}
+                    <Box position="sticky" bottom={3} display="flex" justifyContent="center">
+                        <Box
+                            as="span"
+                            fontFamily={MONACO_FONT_FAMILY}
+                            fontSize="xs"
+                            letterSpacing="0.04em"
+                            color="var(--text-subtle)"
+                            bg="var(--surface)"
+                            border="1px solid var(--border)"
+                            borderRadius="var(--radius-sm)"
+                            backdropFilter="blur(var(--blur-sm))"
+                            px={2.5}
+                            py={1}
+                        >
+                            {lineCountdownLabel}
+                        </Box>
+                    </Box>
                 </Box>
             ) : null}
         </Box>

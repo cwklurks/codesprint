@@ -5,7 +5,6 @@ import {
     Button,
     DialogBackdrop,
     DialogBody,
-    DialogCloseTrigger,
     DialogContent,
     DialogFooter,
     DialogHeader,
@@ -147,55 +146,49 @@ export default function LeaderboardModal({ isOpen, onOpenChange }: LeaderboardMo
                                 </Table.Root>
                             )}
                         </DialogBody>
-                        <DialogFooter {...overlayFooterProps}>
-                            {confirmingClear ? (
-                                <Flex align="center" gap={2} mr="auto">
-                                    <Text fontSize="sm" color="var(--text-subtle)">
-                                        Clear all history?
-                                    </Text>
+                        {/* Nothing to clear means nothing to put in the footer: a
+                            destructive action over an empty list is an invitation to
+                            nowhere. Dismissal is the header's close button, the same
+                            one every other overlay uses. */}
+                        {entries.length > 0 && (
+                            <DialogFooter {...overlayFooterProps}>
+                                {confirmingClear ? (
+                                    <Flex align="center" gap={2} mr="auto">
+                                        <Text fontSize="sm" color="var(--text-subtle)">
+                                            Clear all history?
+                                        </Text>
+                                        <Button
+                                            variant="solid"
+                                            bg="var(--error)"
+                                            color="var(--bg)"
+                                            borderRadius="var(--radius-sm)"
+                                            size="sm"
+                                            onClick={handleClear}
+                                        >
+                                            Clear history
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            color="var(--text-subtle)"
+                                            size="sm"
+                                            onClick={() => setConfirmingClear(false)}
+                                        >
+                                            Cancel
+                                        </Button>
+                                    </Flex>
+                                ) : (
                                     <Button
-                                        variant="solid"
-                                        bg="var(--error)"
-                                        color="var(--bg)"
-                                        borderRadius="var(--radius-sm)"
+                                        variant="ghost"
+                                        color="var(--error)"
                                         size="sm"
-                                        onClick={handleClear}
+                                        onClick={() => setConfirmingClear(true)}
+                                        mr="auto"
                                     >
                                         Clear history
                                     </Button>
-                                    <Button
-                                        variant="ghost"
-                                        color="var(--text-subtle)"
-                                        size="sm"
-                                        onClick={() => setConfirmingClear(false)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </Flex>
-                            ) : (
-                                <Button
-                                    variant="ghost"
-                                    color="var(--error)"
-                                    size="sm"
-                                    onClick={() => setConfirmingClear(true)}
-                                    mr="auto"
-                                    disabled={entries.length === 0}
-                                >
-                                    Clear history
-                                </Button>
-                            )}
-                            <DialogCloseTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    borderColor="var(--border)"
-                                    borderRadius="var(--radius-sm)"
-                                    color="var(--text)"
-                                    _hover={{ bg: "var(--surface-hover)" }}
-                                >
-                                    Close
-                                </Button>
-                            </DialogCloseTrigger>
-                        </DialogFooter>
+                                )}
+                            </DialogFooter>
+                        )}
                     </DialogContent>
                 </DialogPositioner>
             </Portal>

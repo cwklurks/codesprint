@@ -458,7 +458,13 @@ export const THEME_PRESETS: Record<ThemePreset, ThemeTokens> = {
         text: "#323437",
         textSubtle: "#646669",
         panel: "rgba(209, 211, 216, 0.4)",
-        border: "rgba(50, 52, 55, 0.15)",
+        // Light base: surfaces and hairlines need more alpha than the dark
+        // themes or the control bar and cards melt into the page.
+        border: "rgba(50, 52, 55, 0.3)",
+        borderStrong: "rgba(50, 52, 55, 0.45)",
+        surface: "rgba(180, 184, 192, 0.45)",
+        surfaceHover: "rgba(168, 172, 182, 0.55)",
+        surfaceActive: "rgba(156, 160, 172, 0.65)",
     }),
     miamiNights: createMonkeytypeTheme({
         bg: "#18181a",

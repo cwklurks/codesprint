@@ -20,7 +20,7 @@
 
 <strong>A code typing trainer that builds real syntax muscle memory.</strong>
 <br>
-Practice 1,800+ real LeetCode snippets across Python, JavaScript, Java, and C++<br>with syntax-aware scoring, spaced repetition, and adaptive difficulty.
+Practice 900+ real code snippets across Python, JavaScript, Java, and C++<br>with syntax-aware scoring, spaced repetition, and adaptive difficulty.
 
 <p>
   <a href="#features">Features</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#how-it-works">How It Works</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#data-pipeline">Data Pipeline</a>&nbsp;&nbsp;·&nbsp;&nbsp;<a href="#running-locally">Running Locally</a>
@@ -99,7 +99,7 @@ Tracks your proficiency per language and recommends what to practice next. Adjus
 
 <br>
 
-1,800+ real snippets sourced from LeetCode problems across four languages (JavaScript, Python, Java, C++) and three difficulty tiers (easy, medium, hard), categorized by length.
+900+ real snippets sourced from LeetCode-style problems and TheAlgorithms across four languages (JavaScript, Python, Java, C++) and three difficulty tiers (easy, medium, hard), categorized by length.
 
 </details>
 

@@ -13,6 +13,8 @@ import { renderShareCard, shareCard, downloadCanvas, type ShareCardData } from "
 import { computePercentile } from "@/lib/percentile";
 import { bestDelta } from "@/lib/personal-best";
 import { MOTION_EASE, usePrefersReducedMotion } from "@/lib/motion";
+import { getResultPrimaryButtonStyles } from "@/lib/session-styles";
+import { DEFAULT_PREFERENCES, type ThemePreset } from "@/lib/preferences-core";
 
 const MotionBox = m.create(Box);
 const MotionFlex = m.create(Flex);
@@ -67,6 +69,12 @@ type ResultCardProps = {
     isAIDrill?: boolean;
     priorBestWpm?: number;
     isNewBest?: boolean;
+    /** Every key the run counted, which is exactly what raw WPM divides. */
+    totalKeystrokes: number;
+    /** Of those, the ones that matched the snippet — the accuracy numerator. */
+    correctKeystrokes: number;
+    /** Active theme, so the primary action can carry its accent fill. */
+    theme?: ThemePreset;
 };
 
 function formatDuration(ms: number) {
@@ -145,6 +153,9 @@ export default function ResultCard({
     isAIDrill,
     priorBestWpm,
     isNewBest,
+    totalKeystrokes,
+    correctKeystrokes,
+    theme = DEFAULT_PREFERENCES.theme,
 }: ResultCardProps) {
     const prefersReducedMotion = usePrefersReducedMotion() ?? false;
     const [countdown, setCountdown] = useState<number | null>(null);
@@ -230,8 +241,15 @@ export default function ResultCard({
     const percentile = useMemo(() => computePercentile(wpm), [wpm]);
 
     const pbDelta = useMemo(() => bestDelta(wpm, priorBestWpm), [wpm, priorBestWpm]);
+    const hasPriorBest = priorBestWpm !== undefined && priorBestWpm > 0;
+    // "NEW BEST +766" on a first-ever run is a record beaten against nothing.
+    // The badge needs a real prior best; the first run gets an honest line.
+    const showNewBest = Boolean(isNewBest) && hasPriorBest;
+    const showFirstRun = Boolean(isNewBest) && !hasPriorBest;
     // A subtle "best" line only makes sense when we have a real prior best to beat.
-    const showPriorBest = !isNewBest && priorBestWpm !== undefined && priorBestWpm > 0;
+    const showPriorBest = !isNewBest && hasPriorBest;
+    const mistypedKeystrokes = Math.max(0, totalKeystrokes - correctKeystrokes);
+    const nextProblemStyles = useMemo(() => getResultPrimaryButtonStyles(theme), [theme]);
 
     const containerMotion = prefersReducedMotion
         ? {}
@@ -272,7 +290,9 @@ export default function ResultCard({
                             >
                                 {percentile}%
                             </Text>
-                            <Text fontSize="md" color="var(--text-subtle)" mt={1}>faster than peers</Text>
+                            {/* An estimate off a population curve (lib/percentile.ts),
+                                not a measurement against real users — say so. */}
+                            <Text fontSize="md" color="var(--text-subtle)" mt={1}>est. faster than peers</Text>
                         </Box>
                     </Flex>
                     <Box textAlign="center" px={{ md: 8 }}>
@@ -280,7 +300,7 @@ export default function ResultCard({
                             <CountUpNumber value={Math.round(wpm)} animate={!prefersReducedMotion} />
                         </Text>
                         <Text fontSize="md" color="var(--text-subtle)" mt={1}>wpm</Text>
-                        {isNewBest ? (
+                        {showNewBest ? (
                             <MotionFlex
                                 align="center"
                                 justify="center"
@@ -313,6 +333,10 @@ export default function ResultCard({
                         ) : showPriorBest ? (
                             <Text fontSize="xs" color="var(--text-subtle)" mt={2} fontVariantNumeric="tabular-nums">
                                 best: {Math.round(priorBestWpm!)}
+                            </Text>
+                        ) : showFirstRun ? (
+                            <Text fontSize="xs" color="var(--text-subtle)" mt={2}>
+                                first run
                             </Text>
                         ) : null}
                     </Box>
@@ -383,9 +407,23 @@ export default function ResultCard({
                         columnGap={{ base: 4, md: 6 }}
                         rowGap={4}
                     >
+                        {/* These four reconcile with each other on purpose:
+                            keystrokes / 5 / minutes is raw wpm, and
+                            correct / total keystrokes is accuracy. The old
+                            "characters" count could not divide into raw,
+                            because raw counts keys pressed and the character
+                            count included auto-advanced indentation. */}
                         <StatBox label="Raw" value={Math.round(rawWpm).toString()} />
-                        <StatBox label="Accuracy" value={`${Math.round(accuracy * 100)}%`} />
-                        <StatBox label="Characters" value={`${(contentLength ?? 0) - errors}/${errors}`} helper="correct/uncorrected" />
+                        <StatBox
+                            label="Accuracy"
+                            value={`${Math.round(accuracy * 100)}%`}
+                            helper={`${mistypedKeystrokes} mistyped`}
+                        />
+                        <StatBox
+                            label="Keystrokes"
+                            value={totalKeystrokes.toString()}
+                            helper={`${errors} uncorrected`}
+                        />
                         <StatBox label="Time" value={formatDuration(timeMs)} />
                     </Box>
                 </MotionBox>
@@ -445,15 +483,7 @@ export default function ResultCard({
                 {/* Actions */}
                 <MotionFlex {...sectionMotion} gap={3} flexWrap="wrap" justify="center" mt={8} pt={5} borderTop="1px solid var(--border)">
                     {onNext && (
-                        <Button
-                            onClick={onNext}
-                            size="lg"
-                            variant="outline"
-                            borderColor="var(--accent)"
-                            color="var(--accent)"
-                            _hover={{ bg: "var(--accent)", color: "var(--bg)" }}
-                            px={8}
-                        >
+                        <Button onClick={onNext} {...nextProblemStyles}>
                             Next Problem
                         </Button>
                     )}

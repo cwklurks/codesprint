@@ -11,6 +11,7 @@ import type { ErrorEntry, HistoryEntry } from "@/hooks/useTypingEngine";
 import type { Token } from "@/lib/tokenizer";
 import type { AchievementDefinition } from "@/lib/achievements";
 import type { Difficulty } from "@/lib/snippets";
+import type { ThemePreset } from "@/lib/preferences-core";
 
 export interface ResultScreenProps {
     /** Adjusted WPM score */
@@ -23,6 +24,12 @@ export interface ResultScreenProps {
     timeMs: number;
     /** Number of errors */
     errors: number;
+    /** Every key the run counted (the raw-WPM numerator) */
+    totalKeystrokes: number;
+    /** Of those, the ones that matched the snippet (the accuracy numerator) */
+    correctKeystrokes: number;
+    /** Active theme, so the card's primary action can carry its accent fill */
+    theme?: ThemePreset;
     /** Snippet title */
     snippetTitle: string;
     /** Snippet ID */
@@ -98,6 +105,9 @@ export function ResultScreen({
     accuracy,
     timeMs,
     errors,
+    totalKeystrokes,
+    correctKeystrokes,
+    theme,
     snippetTitle,
     snippetId,
     language,
@@ -140,6 +150,9 @@ export function ResultScreen({
                     accuracy={accuracy}
                     timeMs={timeMs}
                     errors={errors}
+                    totalKeystrokes={totalKeystrokes}
+                    correctKeystrokes={correctKeystrokes}
+                    theme={theme}
                     onNext={canAdvance ? onNext : undefined}
                     autoAdvanceDeadline={autoAdvanceDeadline}
                     snippetTitle={snippetTitle}

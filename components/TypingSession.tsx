@@ -375,7 +375,9 @@ export default function TypingSession() {
                         {...sessionSwapMotion}
                         style={{ width: "100%" }}
                     >
-                        <Box display="flex" flexDirection="column" gap={8}>
+                        {/* Tighter between the stacked blocks on phones: every
+                            pixel here is a pixel of editor above the fold. */}
+                        <Box display="flex" flexDirection="column" gap={{ base: 5, md: 8 }}>
                             {/* Control Bar (hidden during focus) */}
                             {!focusActive && (
                                 <SessionControlBar
@@ -437,7 +439,10 @@ export default function TypingSession() {
 
                                             {/* Live Stats (during running) */}
                                             {showRunningStats && (
-                                                <Box alignSelf="center" width="100%" maxW="md">
+                                                // Left-aligned with the code panel below it: centred, the
+                                                // card floated over left-aligned code with nothing to
+                                                // line up against.
+                                                <Box alignSelf="flex-start" width="100%" maxW="md">
                                                     <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
                                                 </Box>
                                             )}
@@ -486,6 +491,9 @@ export default function TypingSession() {
                         accuracy={resultMetrics.accuracy}
                         timeMs={resultElapsedMs}
                         errors={resultErrorCount}
+                        totalKeystrokes={resultTotalKeystrokes}
+                        correctKeystrokes={resultCorrectKeystrokes}
+                        theme={preferences.theme}
                         snippetTitle={controls.snippet.title}
                         snippetId={controls.snippet.id}
                         language={controls.language}

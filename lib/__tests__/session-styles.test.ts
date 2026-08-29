@@ -3,6 +3,7 @@ import {
     getAccentButtonPalette,
     getNextProblemButtonStyles,
     getPillButtonStyles,
+    getResultPrimaryButtonStyles,
     getStartButtonStyles,
 } from "../session-styles";
 import { THEME_PRESETS, type ThemePreset } from "../preferences-core";
@@ -59,5 +60,21 @@ describe("CTA hierarchy (IDE mode)", () => {
     it("keeps terminal mode monochrome for both actions", () => {
         expect(getStartButtonStyles(true, "gruvbox").bg).toBe("var(--surface)");
         expect(getNextProblemButtonStyles(true).bg).toBe("var(--surface)");
+    });
+});
+
+describe("result screen CTA", () => {
+    it.each(THEMES)("fills the result's next-problem action like Start (%s)", (theme) => {
+        const result = getResultPrimaryButtonStyles(theme);
+        const palette = getAccentButtonPalette(theme);
+        expect(result.bg).toBe(palette.fill);
+        expect(result.color).toBe(palette.label);
+        expect(result.size).toBe("lg");
+    });
+
+    it("outranks the quiet next-problem button in the session top bar", () => {
+        // Same words, different jobs: on the result screen it is the one thing
+        // to do next, in the top bar it is an escape hatch.
+        expect(getResultPrimaryButtonStyles("gruvbox").bg).not.toBe(getNextProblemButtonStyles(false).bg);
     });
 });

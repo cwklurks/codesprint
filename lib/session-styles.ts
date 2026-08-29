@@ -206,6 +206,24 @@ export function getStartButtonStyles(isTerminalMode: boolean, theme: ThemePreset
 }
 
 /**
+ * On the result screen the same "next problem" move IS the primary action — it
+ * is what the auto-advance timer is about to do for you — so it carries Start's
+ * accent fill, one size up for the card's action row. The session top bar keeps
+ * the quiet outline below: there, moving on is a way out, not the point.
+ *
+ * Always the IDE treatment: the result card is not terminal-skinned (it paints
+ * from --panel-soft in both interface modes), so a flat bordered button would
+ * read as the same quiet outline this is meant to replace.
+ */
+export function getResultPrimaryButtonStyles(theme: ThemePreset): Partial<ButtonProps> {
+    return {
+        ...getStartButtonStyles(false, theme),
+        size: "lg",
+        px: 8,
+    };
+}
+
+/**
  * Next problem is a secondary move once a snippet is on screen, so it reads as a
  * quiet outline next to the accent-filled Start.
  */

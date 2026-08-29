@@ -33,19 +33,53 @@ export const overlayDialogProps = {
     borderRadius: "var(--radius-lg)",
 } satisfies BoxProps;
 
-/** Edge drawers: only the inner edge is a visible seam. */
+/**
+ * Edge drawers: only the inner edge is a visible seam.
+ *
+ * Below the `sm` breakpoint the panel goes full-bleed. The stock `size="sm"`
+ * recipe caps the content at `28rem`, which on a 448-479px viewport leaves a
+ * few pixels of backdrop showing down the left edge -- a sliver, not a gutter.
+ */
 export const overlayDrawerProps = {
     ...overlaySurfaceBase,
     borderLeft: "1px solid var(--border)",
+    maxW: { base: "100%", sm: "md" },
 } satisfies BoxProps;
 
-/** Shared seams so headers and footers line up across overlays. */
+/**
+ * Shared seams so headers and footers line up across overlays. The inline-end
+ * padding reserves the close button's corner so long titles never run under it.
+ */
 export const overlayHeaderProps = {
     borderBottom: "1px solid var(--border)",
+    paddingInlineEnd: "14",
 } satisfies BoxProps;
 
 export const overlayFooterProps = {
     borderTop: "1px solid var(--border)",
+} satisfies BoxProps;
+
+/**
+ * Inner scroll region inside an overlay.
+ *
+ * Overlay surfaces are translucent, so the platform's auto-hiding scrollbar is
+ * effectively invisible against them and a clipped last row reads as a layout
+ * bug. This paints a persistent thumb off `--border-strong` in both engines.
+ */
+export const overlayScrollAreaProps = {
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    scrollbarWidth: "thin",
+    scrollbarColor: "var(--border-strong) transparent",
+    css: {
+        "&::-webkit-scrollbar": { width: "8px" },
+        "&::-webkit-scrollbar-track": { background: "transparent" },
+        "&::-webkit-scrollbar-thumb": {
+            background: "var(--border-strong)",
+            borderRadius: "999px",
+        },
+        "&::-webkit-scrollbar-thumb:hover": { background: "var(--text-subtle)" },
+    },
 } satisfies BoxProps;
 
 /** Small uppercase section label used inside overlays. */

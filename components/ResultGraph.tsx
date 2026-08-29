@@ -28,6 +28,11 @@ const PADDING = { top: 20, right: 20, bottom: 30, left: 40 };
 /** Lines start drawing as the graph section reaches its slot in the card cascade. */
 const DRAW_ON_DELAY = 0.16;
 const DRAW_ON_DURATION = 0.55;
+/** Distance the tooltip keeps from the hovered point and from the plot's edges. */
+const TOOLTIP_GAP = 12;
+const TOOLTIP_EDGE_PAD = 4;
+/** Used for the first hovered frame, before the tooltip has been measured. */
+const TOOLTIP_FALLBACK_SIZE = { width: 148, height: 104 };
 
 export default function ResultGraph({ data, width = "100%", height = 300 }: ResultGraphProps) {
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -37,6 +42,10 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
     // fills its card edge to edge (a fixed viewBox letterboxed it) and neither
     // strokes nor labels are ever scaled non-uniformly.
     const [measuredWidth, setMeasuredWidth] = useState(0);
+    // The tooltip is clamped inside the plot, which needs its real box: the
+    // number columns change width with the values on screen.
+    const tooltipRef = useRef<HTMLDivElement>(null);
+    const [tooltipSize, setTooltipSize] = useState(TOOLTIP_FALLBACK_SIZE);
 
     const processedData = useMemo(() => {
         if (data.length === 0) return [];
@@ -57,6 +66,18 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
         // Re-runs when the placeholder swaps for the real plot, which is when
         // the measured container first exists.
     }, [processedData.length]);
+
+    useEffect(() => {
+        const el = tooltipRef.current;
+        if (!el) return;
+        const { width, height } = el.getBoundingClientRect();
+        if (width === 0 && height === 0) return;
+        setTooltipSize((prev) =>
+            Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
+                ? prev
+                : { width, height },
+        );
+    }, [hoverIndex]);
 
     if (processedData.length < 2) {
         return (
@@ -117,6 +138,23 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
     const hovered = hoverIndex !== null ? processedData[hoverIndex] : null;
     const hoverX = hovered ? getX(hovered.time) : 0;
     const hoverY = hovered ? getY(hovered.wpm, maxWpm) : 0;
+
+    // Keep the whole tooltip inside the plot: centred on the point where there
+    // is room, pushed in at the left/right edges, and flipped under the point
+    // rather than escaping over the metadata pills above the card.
+    const tooltipHalfWidth = tooltipSize.width / 2;
+    const minTooltipLeft = tooltipHalfWidth + TOOLTIP_EDGE_PAD;
+    const maxTooltipLeft = Math.max(minTooltipLeft, graphWidth - tooltipHalfWidth - TOOLTIP_EDGE_PAD);
+    const tooltipLeft = Math.min(Math.max(hoverX, minTooltipLeft), maxTooltipLeft);
+    const tooltipAbove = hoverY - TOOLTIP_GAP - tooltipSize.height;
+    const tooltipTop =
+        tooltipAbove >= TOOLTIP_EDGE_PAD
+            ? tooltipAbove
+            : Math.min(
+                  hoverY + TOOLTIP_GAP,
+                  Math.max(TOOLTIP_EDGE_PAD, graphHeight - tooltipSize.height - TOOLTIP_EDGE_PAD),
+              );
+
     const crosshairTransition = prefersReducedMotion
         ? { duration: 0 }
         : { duration: MOTION_DURATION.micro, ease: MOTION_EASE.out };
@@ -222,6 +260,7 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
 
             {/* Interaction Overlay */}
             <Box
+                data-hover-surface="result-graph"
                 position="absolute"
                 inset={0}
                 onMouseMove={handleMouseMove}
@@ -233,10 +272,16 @@ export default function ResultGraph({ data, width = "100%", height = 300 }: Resu
             {/* Tooltip */}
             {hovered && (
                 <Box
+                    ref={tooltipRef}
+                    data-tooltip="result-graph"
                     position="absolute"
-                    left={`${(hoverX / graphWidth) * 100}%`}
-                    top="0"
-                    transform="translate(-50%, -110%)"
+                    // Inline, not style props: the position changes with the
+                    // pointer and Chakra would mint a new class per pixel.
+                    style={{
+                        left: `${tooltipLeft}px`,
+                        top: `${tooltipTop}px`,
+                        transform: "translateX(-50%)",
+                    }}
                     bg="var(--terminal-bg)"
                     border="1px solid var(--border)"
                     color="var(--text)"

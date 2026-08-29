@@ -34,6 +34,7 @@ import {
     getSessionStats,
     getRecentSessions,
     getSessionsBySnippet,
+    SESSION_SAVED_EVENT,
     type SessionRecord,
     type CreateSessionInput,
 } from "../session-history";
@@ -58,7 +59,14 @@ const mockLocalStorage = (() => {
     };
 })();
 
-vi.stubGlobal("window", { localStorage: mockLocalStorage });
+const dispatchEvent = vi.fn((event: Event) => Boolean(event));
+
+vi.stubGlobal("window", {
+    localStorage: mockLocalStorage,
+    dispatchEvent,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+});
 
 let uuidCounter = 0;
 vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `test-uuid-${++uuidCounter}`) });
@@ -122,6 +130,33 @@ describe("session-history", () => {
             const sessions = getSessions();
             expect(sessions[0].snippetId).toBe("second");
             expect(sessions[1].snippetId).toBe("first");
+        });
+    });
+
+    describe("session-saved announcement", () => {
+        // Read-only surfaces (the hero's personal-best line) mount once and would
+        // otherwise stay stale for the rest of the page's life.
+        it("announces a synchronous write on window", () => {
+            const record = createSession(createMockInput({ wpm: 88 }));
+
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+            const event = dispatchEvent.mock.calls[0][0] as unknown as CustomEvent;
+            expect(event.type).toBe(SESSION_SAVED_EVENT);
+            expect(event.detail).toEqual({ id: record!.id, wpm: 88 });
+        });
+
+        it("announces an async write once the record has been persisted", async () => {
+            await createSessionAsync(createMockInput({ wpm: 42 }));
+
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+            const event = dispatchEvent.mock.calls[0][0] as unknown as CustomEvent;
+            expect(event.type).toBe(SESSION_SAVED_EVENT);
+            expect((event.detail as { wpm: number }).wpm).toBe(42);
+        });
+
+        it("stays quiet when nothing was written", () => {
+            updateSession("missing-id", { wpm: 10 });
+            expect(dispatchEvent).not.toHaveBeenCalled();
         });
     });
 

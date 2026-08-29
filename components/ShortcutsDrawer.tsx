@@ -2,19 +2,21 @@
 
 import {
     Box,
-    CloseButton,
     DrawerBackdrop,
     DrawerBody,
     DrawerContent,
     DrawerHeader,
     DrawerPositioner,
     DrawerRoot,
-    Flex,
+    DrawerTitle,
+    Grid,
     Portal,
     Stack,
     Text,
 } from "@chakra-ui/react";
+import { Fragment, useRef } from "react";
 import { KEYBOARD_SHORTCUTS } from "@/lib/shortcuts";
+import { DrawerCloseButton } from "@/components/ui/DialogCloseButton";
 import { overlayBackdropProps, overlayDrawerProps, overlayHeaderProps } from "@/components/ui/overlay";
 
 type ShortcutsDrawerProps = {
@@ -22,12 +24,22 @@ type ShortcutsDrawerProps = {
     onClose: () => void;
 };
 
+/**
+ * Wide enough for the longest combo in `KEYBOARD_SHORTCUTS`. Fixing the key
+ * column means every description starts on the same x, instead of stepping in
+ * and out with the width of each chip.
+ */
+const KEY_COLUMN = "104px";
+
 export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
+    const bodyRef = useRef<HTMLDivElement>(null);
+
     return (
         <DrawerRoot
             open={isOpen}
             placement="end"
             size="sm"
+            initialFocusEl={() => bodyRef.current}
             onOpenChange={({ open }) => {
                 if (!open) {
                     onClose();
@@ -38,53 +50,46 @@ export function ShortcutsDrawer({ isOpen, onClose }: ShortcutsDrawerProps) {
                 <DrawerBackdrop {...overlayBackdropProps} />
                 <DrawerPositioner>
                     <DrawerContent {...overlayDrawerProps}>
-                        <CloseButton
-                            mt={2}
-                            position="absolute"
-                            top={2}
-                            right={2}
-                            color="var(--text-subtle)"
-                            _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
-                            onClick={onClose}
-                        />
-                        <DrawerHeader {...overlayHeaderProps}>Keyboard shortcuts</DrawerHeader>
-                        <DrawerBody>
+                        <DrawerCloseButton />
+                        <DrawerHeader {...overlayHeaderProps}>
+                            <DrawerTitle>Keyboard shortcuts</DrawerTitle>
+                        </DrawerHeader>
+                        <DrawerBody ref={bodyRef} tabIndex={-1} outline="none">
                             <Stack gap={6} mt={4}>
                                 <Text color="var(--text-subtle)" fontSize="sm">
                                     Stay on the keys, every action has a gesture.
                                 </Text>
-                                <Stack gap={4}>
+                                <Grid
+                                    templateColumns={`${KEY_COLUMN} minmax(0, 1fr)`}
+                                    columnGap={4}
+                                    rowGap={3}
+                                    alignItems="center"
+                                >
                                     {KEYBOARD_SHORTCUTS.map((shortcut) => (
-                                        <Flex
-                                            key={shortcut.combo}
-                                            align="center"
-                                            gap={4}
-                                            flexWrap="wrap"
-                                            justify="space-between"
-                                        >
+                                        <Fragment key={shortcut.combo}>
                                             <Box
                                                 px={3}
                                                 py={2}
-                                                minW={12}
                                                 borderRadius="var(--radius-sm)"
                                                 border="1px solid var(--border)"
                                                 bg="var(--surface)"
                                                 boxShadow="var(--elev-1)"
                                                 fontFamily="var(--font-mono), ui-monospace, Menlo, Consolas, monospace"
                                                 fontWeight={600}
-                                                fontSize="md"
+                                                fontSize="sm"
                                                 textAlign="center"
                                                 color="var(--text)"
                                                 letterSpacing="0.02em"
+                                                whiteSpace="nowrap"
                                             >
                                                 {shortcut.combo}
                                             </Box>
-                                            <Text flex="1" color="var(--text-subtle)" fontSize="sm" minW="200px">
+                                            <Text color="var(--text-subtle)" fontSize="sm">
                                                 {shortcut.detail}
                                             </Text>
-                                        </Flex>
+                                        </Fragment>
                                     ))}
-                                </Stack>
+                                </Grid>
                             </Stack>
                         </DrawerBody>
                     </DrawerContent>

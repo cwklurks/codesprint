@@ -75,8 +75,19 @@ const SURFACE_OPTIONS: Array<{ value: SurfaceStyle; label: string }> = [
     { value: "immersive", label: "Immersive" },
 ];
 
-function Divider() {
-    return <span className="session-control-divider" aria-hidden="true" />;
+/**
+ * Between the filter groups this is a full-width hairline while the bar is
+ * stacked and a vertical rule once it fits on one line (app/globals.css). The
+ * `inline` variant rides with the Start button and only exists in the wide
+ * layout.
+ */
+function Divider({ inline = false }: { inline?: boolean }) {
+    return (
+        <span
+            className={inline ? "session-control-divider session-control-divider-inline" : "session-control-divider"}
+            aria-hidden="true"
+        />
+    );
 }
 
 /**
@@ -223,7 +234,7 @@ export function SessionControlBar({
                     <AnimatePresence>
                         {phase === "idle" && (
                             <m.div {...startButtonMotion} layout style={{ display: "inline-flex" }}>
-                                <Divider />
+                                <Divider inline />
                                 <Button onClick={onStart} {...startButtonStyles} ml={3}>
                                     Start
                                 </Button>

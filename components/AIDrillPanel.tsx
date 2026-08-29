@@ -188,7 +188,9 @@ export function AIDrillPanel({ isOpen, onClose, onAccept, language }: AIDrillPan
                     <DialogContent {...overlayDialogProps}>
                         <DialogCloseButton />
                         <DialogHeader {...overlayHeaderProps}>
-                            <HStack gap={2} align="center" width="100%" pr={8}>
+                            {/* The close button's corner is reserved by
+                                overlayHeaderProps, so no local padding here. */}
+                            <HStack gap={2} align="center" width="100%">
                                 <ZapIcon boxSize={5} color="var(--accent)" />
                                 <DialogTitle fontSize="lg" fontWeight={600}>
                                     AI drill
