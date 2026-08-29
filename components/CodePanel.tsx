@@ -114,7 +114,9 @@ function CodePanel({
     // "visible" so a browser without IntersectionObserver never warns about
     // lines the reader can already see.
     const [tailOnScreen, setTailOnScreen] = useState(true);
-    const showLineCountdown = !tailOnScreen && linesRemaining > 0;
+    // cursorChar > 0 keeps the chip out of the idle screen: before the first
+    // keystroke there is no countdown to report.
+    const showLineCountdown = !tailOnScreen && linesRemaining > 0 && cursorChar > 0;
     const triggerCaretActivity = useCallback(() => {
         const caretNode = caretNodeRef.current;
         if (!caretNode) return;
@@ -644,17 +646,18 @@ function CodePanel({
                     pb={surfaceStyle === "panel" ? 3 : 2}
                     pointerEvents="none"
                 >
-                    <Box position="sticky" bottom={3} display="flex" justifyContent="center">
+                    {/* Right-aligned with an opaque layered fill so it never
+                        clips the code column it floats over. */}
+                    <Box position="sticky" bottom={3} display="flex" justifyContent="flex-end" pr={4}>
                         <Box
                             as="span"
                             fontFamily={MONACO_FONT_FAMILY}
                             fontSize="xs"
                             letterSpacing="0.04em"
                             color="var(--text-subtle)"
-                            bg="var(--surface)"
+                            bg="linear-gradient(var(--surface), var(--surface)), var(--bg)"
                             border="1px solid var(--border)"
                             borderRadius="var(--radius-sm)"
-                            backdropFilter="blur(var(--blur-sm))"
                             px={2.5}
                             py={1}
                         >
