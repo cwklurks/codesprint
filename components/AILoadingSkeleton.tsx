@@ -12,11 +12,25 @@ const SKELETON_ROWS: ReadonlyArray<{ id: string; width: string }> = [
     { id: "row-70", width: "70%" },
 ];
 
+/** The shine sweep reads off the theme surfaces rather than Chakra's own ramp. */
+const SHINE = {
+    "--start-color": "var(--surface)",
+    "--end-color": "var(--surface-active)",
+    "--duration": "2.4s",
+} as const;
+
 export function AILoadingSkeleton() {
     return (
-        <VStack gap={2} align="stretch" width="100%">
+        <VStack gap={2} align="stretch" width="100%" aria-busy="true" aria-label="Generating drill">
             {SKELETON_ROWS.map((row) => (
-                <Skeleton key={row.id} height="1.5em" width={row.width} />
+                <Skeleton
+                    key={row.id}
+                    variant="shine"
+                    css={SHINE}
+                    height="1.5em"
+                    width={row.width}
+                    borderRadius="var(--radius-sm)"
+                />
             ))}
         </VStack>
     );

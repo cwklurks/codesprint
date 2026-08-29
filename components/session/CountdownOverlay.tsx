@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { AnimatePresence, m } from "framer-motion";
 import { getCountdownOverlayMotion, getCountdownNumberMotion } from "@/lib/motion-config";
 
@@ -16,7 +17,7 @@ export interface CountdownOverlayProps {
  * Countdown overlay that displays 3 -> 2 -> 1 -> Go with scale/fade animation
  * Positioned absolutely over the code panel
  */
-export function CountdownOverlay({
+function CountdownOverlayImpl({
     isActive,
     countdownValue,
     prefersReducedMotion,
@@ -59,3 +60,5 @@ export function CountdownOverlay({
         </AnimatePresence>
     );
 }
+
+export const CountdownOverlay = memo(CountdownOverlayImpl);

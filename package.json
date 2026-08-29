@@ -1,6 +1,6 @@
 {
   "name": "codesprint",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "scripts": {
     "dev": "./node_modules/.bin/next dev --turbopack",
@@ -48,5 +48,10 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
+  },
+  "allowScripts": {
+    "@tailwindcss/oxide@4.1.14": true,
+    "sharp@0.34.4": true,
+    "unrs-resolver@1.11.1": true
   }
 }

@@ -31,7 +31,7 @@ export default function GapBufferVisualizer({ content, cursorIndex }: GapBufferV
             bg="var(--terminal-bg)"
             borderRadius="md"
             border="1px solid var(--border)"
-            fontFamily="monospace"
+            fontFamily="var(--font-mono)"
             fontSize="sm"
         >
             <Text fontSize="xs" color="var(--text-subtle)" mb={2} textTransform="uppercase" letterSpacing="wider">

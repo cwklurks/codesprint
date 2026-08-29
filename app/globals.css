@@ -4,39 +4,52 @@
 
 :root {
     --bg: #282828;
-    --bg-base: #282828;
     --bg-muted: #353128;
-    --bg-gradient: linear-gradient(180deg, #282828 0%, #282828 100%);
+    --bg-gradient: #282828;
     --text: #fbf1c7;
     --text-subtle: rgba(251, 241, 199, 0.68);
     --accent: #fbf1c7;
     --caret: #fbf1c7;
-    --ok: #b8bb26;
-    --err: #fb4934;
     --success: #b8bb26;
     --warning: #fabd2f;
     --error: #fb4934;
     --panel: rgba(251, 241, 199, 0.12);
     --panel-glass: rgba(251, 241, 199, 0.18);
     --panel-soft: rgba(251, 241, 199, 0.24);
-    --btn: rgba(251, 241, 199, 0.12);
-    --btn-active: rgba(251, 241, 199, 0.28);
     --border: rgba(251, 241, 199, 0.32);
     --border-strong: rgba(251, 241, 199, 0.5);
     --surface: rgba(251, 241, 199, 0.14);
     --surface-hover: rgba(251, 241, 199, 0.2);
     --surface-active: rgba(251, 241, 199, 0.3);
-    --shadow: 0 24px 48px rgba(20, 20, 20, 0.55);
     --header-bg: rgba(24, 24, 20, 0.84);
     --header-border: rgba(251, 241, 199, 0.28);
     --header-text: #fbf1c7;
-    --header-text-subtle: rgba(251, 241, 199, 0.7);
     --overlay: rgba(118, 104, 76, 0.2);
     --focus-ring: rgba(251, 241, 199, 0.9);
     --terminal-bg: #16130e;
     --caret-width: 2px;
     --caret-height: 38px;
-    --font-mono: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace;
+
+    /* Elevation. Themes rewrite --elev-1/2/3 at runtime (lib/preferences.tsx and
+       app/theme-init-script.ts); these are the pre-hydration defaults. --shadow
+       is the legacy alias for the heaviest tier. */
+    --elev-1: 0 1px 2px rgba(20, 20, 20, 0.33);
+    --elev-2: 0 8px 24px rgba(20, 20, 20, 0.44);
+    --elev-3: 0 24px 48px rgba(20, 20, 20, 0.55);
+    --shadow: var(--elev-3);
+
+    /* Static scales: shared by every theme. */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --blur-sm: 6px;
+    --blur-md: 12px;
+    --blur-lg: 18px;
+
+    /* The one canonical mono stack. --font-jetbrains comes from next/font on
+       <html> (app/layout.tsx); everything else references --font-mono only. */
+    --font-mono: var(--font-jetbrains, ui-monospace), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html,
@@ -46,16 +59,14 @@ body {
 
 body {
     margin: 0;
-    /* Override Chakra's runtime body styles so the gradient stays visible */
-    background-color: var(--bg) !important;
-    background-image: var(--bg-gradient) !important;
-    background-repeat: no-repeat;
+    /* Shorthand, because --bg-gradient carries a flat color on every theme but
+       vaporwave (which supplies a real linear-gradient). */
+    background: var(--bg-gradient) no-repeat fixed;
     background-size: cover;
-    background-attachment: fixed;
-    color: var(--text) !important;
+    color: var(--text);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-family: "IBM Plex Mono", "JetBrains Mono", "Fira Code", "SFMono-Regular", Menlo, Consolas, Monaco, monospace;
+    font-family: var(--font-mono);
     position: relative;
     transition: background 0.45s ease, color 0.3s ease;
     /* Firefox text wrapping fix */
@@ -66,14 +77,6 @@ body {
 /* Firefox flexbox text wrapping fix - flex items need min-width: 0 to allow text truncation */
 * {
     min-width: 0;
-}
-
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    display: none;
 }
 
 #__next,
@@ -232,7 +235,10 @@ main {
 .home-stack {
     display: flex;
     flex-direction: column;
-    gap: clamp(32px, 6vw, 72px);
+    /* Deliberately tight: the hero, the daily card and the control bar all sit
+       above the editor, and the editor has to stay above the fold on a 13"
+       laptop. */
+    gap: clamp(20px, 3vw, 32px);
 }
 
 .app-header,
@@ -262,23 +268,63 @@ nextjs-portal {
 /* Session control bar (extracted from inline styles for perf) */
 .session-control-bar {
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    backdrop-filter: blur(var(--blur-sm));
+    box-shadow: var(--elev-2);
+}
+
+/* Primary line: the filter groups, then the action slot at the far end. */
+.session-control-row {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    backdrop-filter: blur(8px);
-    box-shadow: var(--shadow);
+    column-gap: 10px;
+    row-gap: 12px;
     flex-wrap: wrap;
 }
 
-.analytics-range-select {
-    padding: 6px 12px;
-    font-size: 14px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    cursor: pointer;
-    font-family: inherit;
+/* Hairline between control groups, so the pills read as three sets and not one
+   long undifferentiated run. Narrow, the row wraps: the rule turns full width
+   and puts each group on its own line, which is the only way the sets stay
+   legible once they stack. */
+.session-control-divider {
+    display: block;
+    flex: none;
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+}
+
+/* The rule that rides with the Start button only reads as a separator beside
+   it, which is the one-line layout. */
+.session-control-divider-inline {
+    display: none;
+}
+
+@media (min-width: 48em) {
+    .session-control-divider {
+        width: 1px;
+        height: auto;
+        align-self: stretch;
+        min-height: 20px;
+    }
+
+    .session-control-divider-inline {
+        display: block;
+    }
+}
+
+/* Secondary line: session context (review queue, suggested difficulty), which is
+   information rather than control and should not compete with the pills. */
+.session-control-meta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }

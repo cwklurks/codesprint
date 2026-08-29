@@ -1,10 +1,24 @@
 "use client";
 
 import { Box } from "@chakra-ui/react";
-import Editor, { type OnMount } from "@monaco-editor/react";
+import Editor, { loader, type OnMount } from "@monaco-editor/react";
+// Statically imported on purpose: deferring it saved ~24 kB gzip inside a chunk
+// that is already ~2.7 MB (Monaco itself is deliberately bundled, see
+// loader.config below), and the deferral let "i" start a run before the chunk
+// resolved — vim then attached mid-run in Normal mode and ate the keystrokes.
 import { initVimMode, type VimMode } from "monaco-vim";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
+
+// The editor core WITHOUT the bundled language services (typescript/json/css/html),
+// plus monarch tokenizers for exactly the four languages this app types.
+import * as monacoBundle from "monaco-editor/esm/vs/editor/editor.api";
+import "monaco-editor/esm/vs/editor/editor.all";
+import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
+import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
+import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
+import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
+
 import { estimateEditorHeight, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
 import { minAlphaForContrast } from "@/lib/contrast";
 import {
@@ -30,7 +44,26 @@ type CodePanelProps = {
 
 const LINE_BREAK_REGEX = /\r\n|\r|\n/;
 
-export default function CodePanel({
+// The app's single mono voice (next/font JetBrains Mono, see app/globals.css).
+const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
+
+// Without this, @monaco-editor/react fetches a SECOND copy of Monaco (0.54.0)
+// from jsdelivr at runtime while monaco-vim's npm copy (0.52.2) is already in the
+// bundle: two downloads, two versions, and a third-party runtime dependency.
+loader.config({ monaco: monacoBundle as unknown as typeof Monaco });
+
+// Bundled Monaco needs its own worker factory; the AMD/CDN loader used to supply one.
+if (typeof window !== "undefined") {
+    const globalWithEnv = window as Window & {
+        MonacoEnvironment?: { getWorker?: (moduleId: string, label: string) => Worker };
+    };
+    globalWithEnv.MonacoEnvironment ??= {
+        getWorker: () =>
+            new Worker(new URL("monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url)),
+    };
+}
+
+function CodePanel({
     content,
     cursorChar,
     wrongChars,
@@ -55,6 +88,7 @@ export default function CodePanel({
     const caretUpdatePendingRef = useRef(false);
     const vimModeRef = useRef<VimMode | null>(null);
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
+    const tailMarkerRef = useRef<HTMLDivElement | null>(null);
 
     const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
     // Full content height, uncapped: the editor never scrolls internally, so the
@@ -72,13 +106,17 @@ export default function CodePanel({
         return Math.max(1, before.split(LINE_BREAK_REGEX).length);
     }, [content, cursorChar]);
     const linesRemaining = Math.max(0, totalLines - activeLine);
-    const completedAll = cursorChar >= content.length && content.length > 0;
-    const lineCountdownLabel = completedAll
-        ? "All lines completed"
-        : linesRemaining === 0
-            ? "Final line..."
-            : `${linesRemaining} more ${linesRemaining === 1 ? "line" : "lines"} left...`;
-    const showLineCountdown = totalLines > 1 || completedAll;
+    // Counts what is still to type, which is what the reader is asking. No
+    // ellipsis: with one it read as a truncation warning rather than progress.
+    const lineCountdownLabel = `${linesRemaining} ${linesRemaining === 1 ? "line" : "lines"} left`;
+    // True while the end of the snippet is on screen, in which case there is
+    // nothing below the fold to announce and the chip stands down. Defaults to
+    // "visible" so a browser without IntersectionObserver never warns about
+    // lines the reader can already see.
+    const [tailOnScreen, setTailOnScreen] = useState(true);
+    // cursorChar > 0 keeps the chip out of the idle screen: before the first
+    // keystroke there is no countdown to report.
+    const showLineCountdown = !tailOnScreen && linesRemaining > 0 && cursorChar > 0;
     const triggerCaretActivity = useCallback(() => {
         const caretNode = caretNodeRef.current;
         if (!caretNode) return;
@@ -283,18 +321,12 @@ export default function CodePanel({
             if (vimModeRef.current) {
                 vimModeRef.current.dispose();
                 vimModeRef.current = null;
-                if (statusNodeRef.current && statusNodeRef.current.parentElement) {
-                    statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
-                    statusNodeRef.current = null;
-                }
+            }
+            if (statusNodeRef.current && statusNodeRef.current.parentElement) {
+                statusNodeRef.current.parentElement.removeChild(statusNodeRef.current);
+                statusNodeRef.current = null;
             }
         }
-
-        return () => {
-            // Cleanup on unmount is handled by the separate cleanup effect, 
-            // but we should also handle preference changes here if needed.
-            // Actually, let's leave cleanup to the main cleanup effect or when toggled off.
-        };
     }, [preferences.vimMode, editorReadyToken]);
 
     const handleMount: OnMount = (editor, monaco) => {
@@ -305,6 +337,7 @@ export default function CodePanel({
         editor.updateOptions({
             readOnly: true,
             domReadOnly: true,
+            fontFamily: MONACO_FONT_FAMILY,
             fontSize,
             lineHeight: derivedLineHeight,
             minimap: { enabled: false },
@@ -340,6 +373,21 @@ export default function CodePanel({
         if (!editor) return;
         editor.updateOptions({ fontSize, lineHeight: derivedLineHeight });
     }, [fontSize, derivedLineHeight]);
+
+    // Monaco measures glyph widths once at mount. With a swapped webfont those
+    // measurements are taken against the fallback, so re-measure when the real
+    // face lands or every column position is off by a fraction.
+    useEffect(() => {
+        if (typeof document === "undefined" || !document.fonts) return;
+        let cancelled = false;
+        document.fonts.ready.then(() => {
+            if (cancelled) return;
+            monacoRef.current?.editor.remeasureFonts();
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [editorReadyToken]);
 
     useEffect(() => {
         ensureCaretNode();
@@ -409,6 +457,22 @@ export default function CodePanel({
             prefersReducedMotion ? monaco.editor.ScrollType.Immediate : monaco.editor.ScrollType.Smooth,
         );
     }, [cursorChar, content, editorReadyToken, renderCaretNow, triggerCaretActivity, ensureCaretNode, prefersReducedMotion]);
+
+    // Watch the panel's bottom edge instead of listening to scroll: the observer
+    // only fires when the end of the snippet crosses the viewport boundary, so
+    // this costs nothing during a run and never reads layout on the caret path.
+    useEffect(() => {
+        const marker = tailMarkerRef.current;
+        if (!marker || typeof IntersectionObserver === "undefined") return;
+        const observer = new IntersectionObserver(
+            (entries) => {
+                for (const entry of entries) setTailOnScreen(entry.isIntersecting);
+            },
+            { threshold: 0 },
+        );
+        observer.observe(marker);
+        return () => observer.disconnect();
+    }, []);
 
     // Caret error visual toggle (cheap - no decoration work)
     useEffect(() => {
@@ -560,25 +624,52 @@ export default function CodePanel({
                     readOnly: true,
                     domReadOnly: true,
                     automaticLayout: true,
+                    fontFamily: MONACO_FONT_FAMILY,
                     scrollbar: { vertical: "hidden", horizontal: "hidden" },
                 }}
                 onMount={handleMount}
             />
+            {/* Zero-height marker on the panel's bottom edge; see the observer above. */}
+            <Box ref={tailMarkerRef} position="absolute" left={0} right={0} bottom={0} h="1px" aria-hidden="true" pointerEvents="none" />
             {showLineCountdown ? (
+                // The chip's flow position is the panel's bottom edge (hence the
+                // flex-end overlay, which adds no layout of its own); sticky then
+                // floats it up to the bottom of the viewport for as long as there
+                // is snippet below the fold. It reads as a "more below" marker
+                // rather than a truncation warning stranded under the last line.
                 <Box
                     position="absolute"
-                    bottom={surfaceStyle === "panel" ? 3 : 2}
-                    left="50%"
-                    transform="translateX(-50%)"
-                    textAlign="center"
-                    fontSize="sm"
-                    color="var(--text-subtle)"
+                    inset={0}
+                    display="flex"
+                    flexDirection="column"
+                    justifyContent="flex-end"
+                    pb={surfaceStyle === "panel" ? 3 : 2}
                     pointerEvents="none"
-                    px={3}
                 >
-                    {lineCountdownLabel}
+                    {/* Right-aligned with an opaque layered fill so it never
+                        clips the code column it floats over. */}
+                    <Box position="sticky" bottom={3} display="flex" justifyContent="flex-end" pr={4}>
+                        <Box
+                            as="span"
+                            fontFamily={MONACO_FONT_FAMILY}
+                            fontSize="xs"
+                            letterSpacing="0.04em"
+                            color="var(--text-subtle)"
+                            bg="linear-gradient(var(--surface), var(--surface)), var(--bg)"
+                            border="1px solid var(--border)"
+                            borderRadius="var(--radius-sm)"
+                            px={2.5}
+                            py={1}
+                        >
+                            {lineCountdownLabel}
+                        </Box>
+                    </Box>
                 </Box>
             ) : null}
         </Box>
     );
 }
+
+// Memoized: the session re-renders on the metrics tick and the per-second history
+// tick as well as on keystrokes; without this the editor re-rendered for all three.
+export default memo(CodePanel);

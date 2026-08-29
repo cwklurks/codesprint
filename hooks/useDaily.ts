@@ -35,7 +35,40 @@ export interface UseDailyReturn {
 export function useDaily(): UseDailyReturn {
     const today = useMemo(() => getLocalDateString(), []);
     const dayNumber = useMemo(() => getDailyNumber(today), [today]);
-    const dailySnippet = useMemo(() => getTodaysDaily(today), [today]);
+
+    // The pool is loaded on demand now, so the snippet arrives asynchronously.
+    // Null until it resolves; the daily card renders its unavailable state.
+    const [dailySnippet, setDailySnippet] = useState<Snippet | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        setDailySnippet(null);
+
+        const load = () => {
+            getTodaysDaily(today)
+                .then((snippet) => {
+                    if (!cancelled) setDailySnippet(snippet);
+                })
+                .catch((error) => {
+                    console.warn("Failed to load today's daily snippet:", error);
+                });
+        };
+
+        // The pool pulls in all four corpora (~693 KB of JSON). Nothing on the
+        // first screen needs it, and on the critical path it competes with Monaco
+        // for bandwidth and main-thread time — so wait for idle. The card renders
+        // its loading state meanwhile.
+        const canIdle = "requestIdleCallback" in window;
+        const handle = canIdle
+            ? window.requestIdleCallback(load, { timeout: 3000 })
+            : window.setTimeout(load, 200);
+
+        return () => {
+            cancelled = true;
+            if (canIdle) window.cancelIdleCallback(handle);
+            else window.clearTimeout(handle);
+        };
+    }, [today]);
 
     const [progress, setProgress] = useState<DailyProgress>(() => ({
         streak: {

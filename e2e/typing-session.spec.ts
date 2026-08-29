@@ -1,50 +1,58 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Typing Session", () => {
-    test("completes a full typing session with results", async ({ page }) => {
-        await page.goto("/");
+import {
+    gotoApp,
+    progressRail,
+    readSessionHistory,
+    resultWpm,
+    settledResultWpm,
+    startSession,
+    typeSnippetLines,
+    waitForStableSnippet,
+    watchConsole,
+} from "./helpers";
 
-        // Wait for the app to load - Monaco editor renders inside this container
-        const editor = page.locator(".monaco-editor");
-        await expect(editor).toBeVisible({ timeout: 15000 });
+test.describe("Typing session", () => {
+    test("completes a full typing session and persists the result", async ({ page }) => {
+        const consoleErrors = watchConsole(page);
 
-        // The code panel should show snippet content
-        const codePanel = page.locator("[data-testid='code-panel']").or(
-            page.locator(".view-lines")
-        );
-        await expect(codePanel).toBeVisible({ timeout: 10000 });
+        await gotoApp(page);
+        const lines = await waitForStableSnippet(page);
+        expect(lines.join("\n").length).toBeGreaterThan(50);
 
-        // Click the editor area to focus it
-        await editor.click();
-        await page.waitForTimeout(500);
+        await startSession(page);
+        await expect(progressRail(page)).toHaveAttribute("aria-valuenow", "0");
 
-        // Type a few characters - we don't need to complete the full snippet,
-        // just verify the typing flow works
-        await page.keyboard.type("i", { delay: 50 });
-        await page.keyboard.type("m", { delay: 50 });
-        await page.keyboard.type("p", { delay: 50 });
+        await typeSnippetLines(page, lines);
 
-        // Wait for the session to process keystrokes
-        await page.waitForTimeout(2000);
+        // The run ended on its own: the result screen replaced the session panel.
+        await expect(resultWpm(page)).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText("faster than peers")).toBeVisible();
 
-        // Verify the app didn't crash - editor should still be visible
-        await expect(editor).toBeVisible();
+        const reported = Number(await settledResultWpm(page));
+        expect(Number.isFinite(reported)).toBe(true);
+        expect(reported).toBeGreaterThan(0);
+
+        // The finish is persisted for the sync readers (analytics, leaderboard).
+        await expect.poll(async () => (await readSessionHistory(page)).length).toBe(1);
+        const [record] = await readSessionHistory(page);
+        expect(record.wpm).toBeGreaterThan(0);
+        expect(record.elapsedMs).toBeGreaterThan(0);
+        expect(record.totalKeystrokes).toBeGreaterThan(50);
+        // Every keystroke was the expected one, so the engine should agree.
+        expect(record.accuracy).toBeGreaterThan(0.9);
+        expect(Math.round(record.wpm)).toBe(reported);
+
+        expect(consoleErrors).toEqual([]);
     });
 
-    test("loads without errors", async ({ page }) => {
-        const errors: string[] = [];
-        page.on("pageerror", (error) => errors.push(error.message));
-        page.on("console", (msg) => {
-            if (msg.type() === "error") errors.push(msg.text());
-        });
+    test("loads with a clean console", async ({ page }) => {
+        const consoleErrors = watchConsole(page);
 
-        await page.goto("/");
-        await page.waitForTimeout(3000);
+        await gotoApp(page);
+        await waitForStableSnippet(page);
+        await page.waitForLoadState("networkidle");
 
-        // Filter out known non-critical warnings
-        const criticalErrors = errors.filter(
-            (e) => !e.includes("hydration") && !e.includes("Warning:")
-        );
-        expect(criticalErrors).toEqual([]);
+        expect(consoleErrors).toEqual([]);
     });
 });

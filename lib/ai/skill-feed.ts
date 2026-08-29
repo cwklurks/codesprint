@@ -44,6 +44,10 @@ const LANGUAGE_DEFAULTS: Record<SupportedLanguage, WeakPattern[]> = {
 
 const MIN_SESSIONS_FOR_AGGREGATION = 3;
 
+/** Matches the route's `recentDrillTitles` bound; a longer stored AI title would
+ * otherwise fail validation on every subsequent generation. */
+const MAX_RECENT_TITLE_CHARS = 200;
+
 // Category labels for display
 const CATEGORY_LABELS: Record<string, string> = {
     keyword: "Keywords",
@@ -100,7 +104,11 @@ async function aggregateWeakPatternsAcrossSessions(
     const weights = getWeights(language);
 
     for (const [category, data] of categoryErrors) {
-        const rawRate = data.errors / Math.max(data.total, 1);
+        // A category can log more errors than it has characters (the same index
+        // retyped wrong repeatedly), so clamp before weighting: a rate above 100%
+        // of the category is meaningless, and it used to push the weighted value
+        // past the API's bound.
+        const rawRate = Math.min(1, data.errors / Math.max(data.total, 1));
         const weight = weights[category as keyof typeof weights] ?? 1.0;
         aggregated.push({
             category: category as WeakPattern["category"],
@@ -196,7 +204,7 @@ export async function buildDrillRequest(
         lengthCategory,
         weakPatterns,
         targetTokenCategories: weakPatterns.map((w) => w.category).slice(0, 3),
-        recentDrillTitles: recentDrills.map((d) => d.title),
+        recentDrillTitles: recentDrills.map((d) => d.title.slice(0, MAX_RECENT_TITLE_CHARS)),
         userContext: {
             estimatedWpm: skillModel?.estimatedWpm ?? 40,
             estimatedAccuracy: skillModel?.estimatedAccuracy ?? 0.85,

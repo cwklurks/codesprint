@@ -2,6 +2,7 @@
 
 import { Box } from "@chakra-ui/react";
 import { m } from "framer-motion";
+import type { Transition } from "framer-motion";
 import { SESSION_CSS_VARS, MONO_FONT_STACK } from "@/lib/session-styles";
 
 export interface ProgressIndicatorProps {
@@ -19,10 +20,17 @@ export interface ProgressIndicatorProps {
 
 const TERMINAL_BAR_WIDTH = 24;
 
+function fillTransition(prefersReducedMotion: boolean): Transition {
+    return prefersReducedMotion
+        ? { duration: 0.01 }
+        : { type: "spring", stiffness: 210, damping: 28, mass: 0.45 };
+}
+
 /**
- * Progress indicator component with two variants:
+ * Progress indicator with three variants:
  * - Terminal mode: ASCII progress bar [████████░░░░] 67%
- * - Standard mode: Animated gradient progress bar
+ * - Immersive: a 2px accent rail pinned to the top of the viewport
+ * - Framed: an inline accent bar next to the problem summary
  */
 export function ProgressIndicator({
     progress,
@@ -32,11 +40,45 @@ export function ProgressIndicator({
     prefersReducedMotion,
 }: ProgressIndicatorProps) {
     const { panelGlass, accent, surface } = SESSION_CSS_VARS;
+    const progressPercent = Math.round(progress * 100);
+
+    // Immersive is the surface style that strips the frame away, so the run's only
+    // progress signal is a hairline across the top of the viewport. It is checked
+    // before the chrome gate on purpose: the chrome is down for the whole run,
+    // which is exactly when this rail has to be visible.
+    if (isImmersive && !isTerminalMode) {
+        return (
+            <Box
+                position="fixed"
+                top={0}
+                left={0}
+                right={0}
+                h="2px"
+                zIndex={40}
+                pointerEvents="none"
+                role="progressbar"
+                aria-label="Snippet progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPercent}
+            >
+                <m.div
+                    initial={false}
+                    animate={{ scaleX: progress }}
+                    transition={fillTransition(prefersReducedMotion)}
+                    style={{
+                        height: "100%",
+                        width: "100%",
+                        background: accent,
+                        transformOrigin: "0% 50%",
+                    }}
+                />
+            </Box>
+        );
+    }
 
     // Don't render if chrome is hidden
     if (!showChrome) return null;
-
-    const progressPercent = Math.round(progress * 100);
 
     // Terminal mode: ASCII progress bar
     if (isTerminalMode) {
@@ -47,7 +89,7 @@ export function ProgressIndicator({
         return (
             <Box
                 border="1px solid var(--border)"
-                borderRadius="md"
+                borderRadius="var(--radius-sm)"
                 bg={panelGlass}
                 px={4}
                 py={2}
@@ -61,24 +103,19 @@ export function ProgressIndicator({
         );
     }
 
-    // Immersive mode: no progress bar
-    if (isImmersive) return null;
-
-    // Standard mode: animated gradient progress bar
+    // Framed mode: inline accent bar
     return (
         <Box borderRadius="full" bg={surface} h="6px" overflow="hidden" w="100%" maxW="360px">
             <m.div
                 initial={false}
                 animate={{ scaleX: progress }}
-                transition={
-                    prefersReducedMotion
-                        ? { duration: 0.01 }
-                        : { type: "spring", stiffness: 210, damping: 28, mass: 0.45 }
-                }
+                transition={fillTransition(prefersReducedMotion)}
                 style={{
                     height: "100%",
                     width: "100%",
-                    background: "linear-gradient(90deg, var(--accent) 0%, transparent 100%)",
+                    // A gradient to transparent made the fill read as thinner than it
+                    // is at low progress; a solid accent tracks the real value.
+                    background: accent,
                     borderRadius: "inherit",
                     transformOrigin: "0% 50%",
                 }}

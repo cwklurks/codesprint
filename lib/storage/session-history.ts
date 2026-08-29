@@ -39,8 +39,27 @@ export type SessionFilters = {
 const STORAGE_KEY = "codesprint-session-history";
 const MAX_RECORDS = 500;
 
+/**
+ * Dispatched on `window` right after a record is written, so read-only surfaces
+ * (the hero's personal-best line) can refresh instead of reading storage once on
+ * mount and then going stale for the rest of the page's life. A plain
+ * CustomEvent on purpose: no store, no subscription library, nothing to import.
+ */
+export const SESSION_SAVED_EVENT = "codesprint:session-saved";
+
+export type SessionSavedDetail = { id: string; wpm: number };
+
 function isServer(): boolean {
     return typeof window === "undefined";
+}
+
+function announceSessionSaved(record: SessionRecord): void {
+    if (isServer() || typeof CustomEvent === "undefined") return;
+    window.dispatchEvent(
+        new CustomEvent<SessionSavedDetail>(SESSION_SAVED_EVENT, {
+            detail: { id: record.id, wpm: record.wpm },
+        }),
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -60,13 +79,76 @@ function readLocalStorage(): SessionRecord[] {
     }
 }
 
-function writeLocalStorage(records: SessionRecord[]): void {
+// Keyed per reason: a single shared latch let the first (often harmless) warning
+// silence a later data-loss one for the rest of the page's life.
+const warnedReasons = new Set<string>();
+
+function warnOnce(reason: string, message: string, error?: unknown): void {
+    if (warnedReasons.has(reason)) return;
+    warnedReasons.add(reason);
+    console.warn(message, error ?? "");
+}
+
+function isQuotaError(error: unknown): boolean {
+    return (
+        error instanceof DOMException &&
+        (error.name === "QuotaExceededError" ||
+            error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+            error.code === 22)
+    );
+}
+
+/**
+ * `idbBacked` says whether the records being written are also in IndexedDB. It
+ * only affects what the quota warning is allowed to claim: for a user whose IDB
+ * write failed (or who has no IDB) this mirror is the primary store, and telling
+ * them their full history is safe elsewhere would be false.
+ */
+function writeLocalStorage(records: SessionRecord[], idbBacked: boolean = false): void {
     if (isServer()) return;
     try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-    } catch {
-        // Storage quota exceeded or other error
+        return;
+    } catch (error) {
+        if (!isQuotaError(error)) {
+            warnOnce("mirror-write", "Failed to mirror session history to localStorage:", error);
+            return;
+        }
     }
+
+    // Quota cliff: silently dropping the write loses every sync reader's data
+    // with no signal. Keep the newest half (records are newest-first) and retry
+    // once, warning so the loss is visible instead of invisible.
+    const trimmed = records.slice(0, Math.max(1, Math.floor(records.length / 2)));
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+        warnOnce(
+            "quota-trim",
+            `Session history mirror exceeded the localStorage quota; trimmed to the ${trimmed.length} most recent sessions.` +
+                (idbBacked ? " IndexedDB still holds the full history." : " The older sessions are gone."),
+        );
+    } catch (error) {
+        warnOnce(
+            "quota-trim-failed",
+            "Session history mirror could not be written even after trimming:",
+            error,
+        );
+    }
+}
+
+/**
+ * The localStorage mirror serves SYNCHRONOUS readers only (analytics
+ * aggregations, weak-pattern trends, leaderboard). Those read the scalar
+ * metrics plus `errors` + `snippetContent` for token-category analysis; none of
+ * them read the per-second `history` samples, which are the single largest
+ * field in a record.
+ *
+ * Dropping `history` is therefore safe ONLY for a record IndexedDB has actually
+ * accepted. When the IDB write failed or IDB is unavailable, this mirror is the
+ * primary store and the record is kept whole.
+ */
+function toMirrorRecord(record: SessionRecord, backedByIdb: boolean): SessionRecord {
+    return backedByIdb ? { ...record, history: [] } : record;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,9 +164,11 @@ export async function createSessionAsync(input: CreateSessionInput): Promise<Ses
         date: new Date().toISOString(),
     };
 
+    let backedByIdb = false;
     try {
         if (await isIdbAvailable()) {
             await idbPut(STORES.sessions, record);
+            backedByIdb = true;
         }
     } catch {
         // IDB failed — localStorage write below is the fallback
@@ -92,8 +176,10 @@ export async function createSessionAsync(input: CreateSessionInput): Promise<Ses
 
     // Always mirror to localStorage for sync readers (analytics, leaderboard)
     const existing = readLocalStorage();
-    const updated = [record, ...existing].slice(0, MAX_RECORDS);
-    writeLocalStorage(updated);
+    const updated = [toMirrorRecord(record, backedByIdb), ...existing].slice(0, MAX_RECORDS);
+    writeLocalStorage(updated, backedByIdb);
+
+    announceSessionSaved(record);
 
     return record;
 }
@@ -121,8 +207,10 @@ export async function getSessionsAsync(filters?: SessionFilters): Promise<Sessio
     try {
         if (await isIdbAvailable()) {
             records = await idbGetAll<SessionRecord>(STORES.sessions);
-            // Sort by date descending (newest first)
-            records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            // Sort by date descending (newest first). ISO-8601 strings sort
+            // chronologically as plain strings, so this avoids allocating two
+            // Date objects per comparison across the whole history.
+            records.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
         } else {
             records = readLocalStorage();
         }
@@ -165,7 +253,12 @@ export async function clearSessionsAsync(): Promise<void> {
     } catch {
         // fall through
     }
-    window.localStorage.removeItem(STORAGE_KEY);
+
+    try {
+        window.localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+        warnOnce("clear-failed", "Failed to clear the session history mirror:", error);
+    }
 }
 
 export async function getSessionStatsAsync(filters?: Omit<SessionFilters, "limit" | "offset">): Promise<{
@@ -215,14 +308,18 @@ export function createSession(input: CreateSessionInput): SessionRecord | null {
             date: new Date().toISOString(),
         };
 
+        // The IndexedDB write below is fire-and-forget, so nothing here can
+        // confirm the record is backed: mirror it whole.
         const existing = readLocalStorage();
-        const updated = [record, ...existing].slice(0, MAX_RECORDS);
+        const updated = [toMirrorRecord(record, false), ...existing].slice(0, MAX_RECORDS);
         writeLocalStorage(updated);
 
         // Also write to IndexedDB in background (fire-and-forget)
         isIdbAvailable().then((ok) => {
             if (ok) idbPut(STORES.sessions, record);
         }).catch((err) => { console.warn("Background IDB write failed for session:", record.id, err); });
+
+        announceSessionSaved(record);
 
         return record;
     } catch {

@@ -92,15 +92,9 @@ describe("minAlphaForContrast", () => {
 });
 
 describe("untyped read-ahead contrast across every theme preset", () => {
-    // Botanical's text-over-bg palette tops out at ~2.6:1 even at full opacity,
-    // so 3:1 is physically unreachable for it. Every OTHER preset can and must
-    // clear the WCAG 3:1 non-text/large floor at the derived alpha.
-    const PALETTE_LIMITED = new Set(["botanical"]);
-
-    it("hits >= 3:1 for text-over-bg at the chosen alpha on every reachable theme", () => {
+    it("hits >= 3:1 for text-over-bg at the chosen alpha on every theme", () => {
         const failures: string[] = [];
         for (const [name, theme] of Object.entries(THEME_PRESETS)) {
-            if (PALETTE_LIMITED.has(name)) continue;
             const alpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
             const ratio = contrastRatio(compositeOver(theme.text, theme.bg, alpha), theme.bg);
             if (ratio < 3.0) {
@@ -110,16 +104,10 @@ describe("untyped read-ahead contrast across every theme preset", () => {
         expect(failures).toEqual([]);
     });
 
-    it("never exceeds the muting cap and stays a meaningful improvement on palette-limited themes", () => {
-        const theme = THEME_PRESETS.botanical;
-        const alpha = minAlphaForContrast(theme.text, theme.bg, 3.0);
-        expect(alpha).toBeLessThanOrEqual(0.7);
-        const fixed = contrastRatio(compositeOver(theme.text, theme.bg, alpha), theme.bg);
-        const broken = contrastRatio(compositeOver(theme.text, theme.bg, 0.25), theme.bg);
-        // The theme's text simply can't reach 3:1, but the fix must still lift it
-        // well clear of the near-invisible 0.25 baseline.
-        expect(fixed).toBeGreaterThan(broken);
-        expect(fixed).toBeGreaterThan(1.8);
+    it("never exceeds the muting cap, so read-ahead text always reads as muted", () => {
+        for (const theme of Object.values(THEME_PRESETS)) {
+            expect(minAlphaForContrast(theme.text, theme.bg, 3.0)).toBeLessThanOrEqual(0.7);
+        }
     });
 
     it("regression guard: the old flat 0.25 alpha failed the 3:1 floor on these themes", () => {

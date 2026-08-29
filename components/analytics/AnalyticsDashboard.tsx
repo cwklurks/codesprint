@@ -14,13 +14,20 @@ import {
 } from "@/lib/analytics/aggregations";
 import type { SupportedLanguage } from "@/lib/snippets";
 import WeakPatternDashboard from "@/components/analytics/WeakPatternDashboard";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 
-
-const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
-    { value: "day", label: "Last 24 Hours" },
-    { value: "week", label: "Last Week" },
-    { value: "month", label: "Last Month" },
-    { value: "all", label: "All Time" },
+/**
+ * Four ranges, so this is a segmented control rather than a dropdown -- a raw
+ * `<select>` renders the platform's white system-font chrome, which is the one
+ * thing in the overlay that never followed the theme. Labels are terse because
+ * they sit side by side; the group's accessible name carries the meaning.
+ */
+export const TIME_RANGE_OPTIONS: ReadonlyArray<SegmentedOption<TimeRange>> = [
+    { value: "day", label: "24h" },
+    { value: "week", label: "Week" },
+    { value: "month", label: "Month" },
+    { value: "all", label: "All time" },
 ];
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
@@ -433,59 +440,29 @@ export default function AnalyticsDashboard() {
     const hasData = personalAverages.totalSessions > 0;
 
     return (
-        <Box
-            borderRadius="20px"
-            border="1px solid var(--border)"
-            bg="var(--panel-soft)"
-            boxShadow="var(--shadow)"
-            p={{ base: 4, md: 6 }}
-            w="100%"
-            maxW="900px"
-        >
+        // No card chrome here: the dashboard's only host is the analytics dialog,
+        // which already draws the panel. A bordered box inside it just added a
+        // second frame around the same content.
+        <Box w="100%" maxW="900px">
             <Stack gap={6}>
                 {/* Header */}
-                <Flex justify="space-between" align="center">
-                    <Box>
-                        <Text fontSize="2xl" fontWeight="bold">
-                            Analytics
-                        </Text>
-                        <Text fontSize="sm" color="var(--text-subtle)">
-                            Track your typing performance over time
-                        </Text>
-                    </Box>
-                    <select
-                        aria-label="Time range"
-                        className="analytics-range-select"
+                <Flex justify="space-between" align="center" gap={4} flexWrap="wrap">
+                    <Text fontSize="sm" color="var(--text-subtle)">
+                        Track your typing performance over time
+                    </Text>
+                    <SegmentedControl
+                        label="Time range"
+                        options={TIME_RANGE_OPTIONS}
                         value={timeRange}
-                        onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                    >
-                        {TIME_RANGE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value} style={{ background: "var(--bg)", color: "var(--text)" }}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
+                        onChange={setTimeRange}
+                    />
                 </Flex>
 
                 {!hasData ? (
-                    <Flex
-                        direction="column"
-                        align="center"
-                        justify="center"
-                        py={12}
-                        gap={3}
-                        bg="var(--surface)"
-                        borderRadius="lg"
-                        border="1px solid var(--border)"
-                    >
-                        <Text fontSize="lg" fontWeight="bold">
-                            No Session Data Yet
-                        </Text>
-                        <Text color="var(--text-subtle)" textAlign="center" maxW="300px">
-                            Complete some typing sessions to see your analytics and track your
-                            progress over time.
-                        </Text>
-                    </Flex>
+                    <EmptyState
+                        title="No session data yet"
+                        hint="Complete some typing sessions to see your analytics and track your progress over time."
+                    />
                 ) : (
                     <>
                         {/* Overview Stats */}

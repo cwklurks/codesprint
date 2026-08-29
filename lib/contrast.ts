@@ -82,3 +82,39 @@ export function minAlphaForContrast(fgHex: string, bgHex: string, targetRatio: n
     }
     return MAX_UNTYPED_ALPHA;
 }
+
+/**
+ * The most muted opaque form of `fgHex` over `bgHex` that still clears
+ * `targetRatio`. Starts at the read-ahead muting alpha and keeps stepping toward
+ * the full foreground when that cap alone cannot reach the target (the cap only
+ * governs the read-ahead layer, not UI copy). Returns `fgHex` when even full
+ * opacity falls short, which means the palette itself has to change.
+ */
+export function mutedColorForContrast(fgHex: string, bgHex: string, targetRatio: number): string {
+    for (let alpha = minAlphaForContrast(fgHex, bgHex, targetRatio); alpha < 1; alpha += ALPHA_STEP) {
+        const candidate = compositeOver(fgHex, bgHex, alpha);
+        if (contrastRatio(candidate, bgHex) >= targetRatio) {
+            return candidate;
+        }
+    }
+    return fgHex;
+}
+
+/**
+ * The closest color to `fgHex` that clears `targetRatio` against `bgHex`,
+ * found by mixing toward whichever pole (white or black) gains contrast.
+ * Keeps the hue family while guaranteeing the floor; returns `fgHex`
+ * untouched when it already passes or is not a hex color.
+ */
+export function colorForContrast(fgHex: string, bgHex: string, targetRatio: number): string {
+    if (!fgHex.startsWith("#")) return fgHex;
+    if (contrastRatio(fgHex, bgHex) >= targetRatio) return fgHex;
+    const pole = relativeLuminance(bgHex) < 0.5 ? "#ffffff" : "#000000";
+    for (let t = 0.05; t < 1; t += 0.05) {
+        const candidate = compositeOver(pole, fgHex, t);
+        if (contrastRatio(candidate, bgHex) >= targetRatio) {
+            return candidate;
+        }
+    }
+    return pole;
+}

@@ -1,17 +1,16 @@
-import type { Metadata } from "next";
 import TypingSession from "@/components/TypingSession";
+import { Hero } from "@/components/Hero";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Box } from "@chakra-ui/react";
 
-export const metadata: Metadata = {
-    title: "CodeSprint — typing trainer for code",
-    description:
-        "Practice typing real source code with Monaco. Track WPM, accuracy, and weak patterns across languages, with AI-generated drills targeting your weakest tokens.",
-};
+// Title and description come from the root layout — the home page is the site,
+// so a page-level override would only get the "%s · CodeSprint" template
+// appended to a string that already names the product.
 
 export default function HomePage() {
     return (
-        <Box w="100%">
+        <Box className="home-stack" w="100%">
+            <Hero />
             <ErrorBoundary>
                 <TypingSession />
             </ErrorBoundary>

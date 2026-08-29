@@ -16,6 +16,32 @@ export type HistoryEntry = {
     burst: number;
 };
 
+/**
+ * Immutable, atomic picture of a finished run.
+ *
+ * Published in the SAME state batch as `phase = "finished"`, so every finish
+ * consumer (lifecycle persistence, achievements, the result screen) reads one
+ * consistent sample. Before this existed, the final metrics were published from
+ * an effect one commit AFTER the phase flipped, and the lifecycle save guard
+ * latched on the earlier commit — persisting a metrics sample up to ~200 ms old.
+ *
+ * `elapsedMs` is the exact keystroke-to-keystroke duration, not a value
+ * truncated to the last timer tick.
+ */
+export type FinalSessionSnapshot = {
+    elapsedMs: number;
+    metrics: Metrics;
+    wrongChars: Set<number>;
+    errorLog: ErrorEntry[];
+    history: HistoryEntry[];
+    cursorIndex: number;
+    totalKeystrokes: number;
+    correctKeystrokes: number;
+};
+
+/** How long the caret shows its error state after a wrong keystroke. */
+const CARET_ERROR_MS = 600;
+
 function normalizeWhitespace(ch: string) {
     return ch === "\r" ? "\n" : ch;
 }
@@ -43,17 +69,33 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const [cursorIndex, setCursorIndex] = useState(0);
     // Mutable ref for O(1) updates during keystrokes (no Set cloning)
     const wrongCharsRef = useRef(new Set<number>());
-    // Published snapshot for React consumers (updated on tick + phase change)
+    // Published snapshot for React consumers. It used to be re-cloned 10x/sec by a
+    // timer, which re-ran Monaco's deltaDecorations for nothing; now it is cloned
+    // only when the set actually gains or loses a member.
     const [publishedWrongChars, setPublishedWrongChars] = useState<Set<number>>(new Set());
+    const wrongCharsDirtyRef = useRef(false);
+
+    const markWrong = useCallback((index: number) => {
+        if (wrongCharsRef.current.has(index)) return;
+        wrongCharsRef.current.add(index);
+        wrongCharsDirtyRef.current = true;
+    }, []);
+
+    const clearWrong = useCallback((index: number) => {
+        if (!wrongCharsRef.current.delete(index)) return;
+        wrongCharsDirtyRef.current = true;
+    }, []);
+
     const publishWrongChars = useCallback(() => {
+        if (!wrongCharsDirtyRef.current) return;
+        wrongCharsDirtyRef.current = false;
         setPublishedWrongChars(new Set(wrongCharsRef.current));
     }, []);
 
     const [startTime, setStartTime] = useState<number | null>(null);
     const [now, setNow] = useState<number>(() => Date.now());
-    const [lastErrorAt, setLastErrorAt] = useState<number | null>(null);
+    const [caretErrorActive, setCaretErrorActive] = useState(false);
     const [errorLog, setErrorLog] = useState<ErrorEntry[]>([]);
-    const [totalTypedChars, setTotalTypedChars] = useState(0);
     const [totalKeystrokes, setTotalKeystrokes] = useState(0);
     const [correctKeystrokes, setCorrectKeystrokes] = useState(0);
 
@@ -61,6 +103,13 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
     const startTimeRef = useRef(startTime);
     const cursorIndexRef = useRef(cursorIndex);
     const snippetRef = useRef(snippet);
+    // Counters mirrored SYNCHRONOUSLY alongside their setState calls so metrics can
+    // be computed inside the keystroke handler (React state is one commit behind).
+    const countersRef = useRef({ totalTypedChars: 0, totalKeystrokes: 0, correctKeystrokes: 0 });
+    const errorLogRef = useRef<ErrorEntry[]>([]);
+    const historyRef = useRef<HistoryEntry[]>([]);
+    const lastKeystrokesRef = useRef(0);
+    const caretErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         phaseRef.current = phase;
@@ -81,29 +130,35 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
 
     // History tracking
     const [history, setHistory] = useState<HistoryEntry[]>([]);
+    const [finalSnapshot, setFinalSnapshot] = useState<FinalSessionSnapshot | null>(null);
+    const finalSnapshotRef = useRef<FinalSessionSnapshot | null>(null);
 
-    // Timer tick & History update
     useEffect(() => {
-        if (phase !== "running") return;
+        historyRef.current = history;
+    }, [history]);
 
-        const id = setInterval(() => {
-            const nowTs = Date.now();
-            setNow(nowTs);
-            publishWrongChars();
-        }, 100);
+    const clearCaretErrorTimeout = useCallback(() => {
+        if (caretErrorTimeoutRef.current !== null) {
+            clearTimeout(caretErrorTimeoutRef.current);
+            caretErrorTimeoutRef.current = null;
+        }
+    }, []);
 
-        return () => {
-            clearInterval(id);
-        };
-    }, [phase, publishWrongChars]);
+    // A single timeout replaces the old 100 ms "is the error still fresh?" polling.
+    const flagCaretError = useCallback(() => {
+        clearCaretErrorTimeout();
+        setCaretErrorActive(true);
+        caretErrorTimeoutRef.current = setTimeout(() => {
+            caretErrorTimeoutRef.current = null;
+            setCaretErrorActive(false);
+        }, CARET_ERROR_MS);
+    }, [clearCaretErrorTimeout]);
 
-    // We need refs for history tracking to avoid restarting interval
-    const statsRef = useRef({ cursorIndex: 0, totalKeystrokes: 0, correctKeystrokes: 0, wrongCharsSize: 0, lastKeystrokes: 0 });
-    useEffect(() => {
-        statsRef.current = { ...statsRef.current, cursorIndex, totalKeystrokes, correctKeystrokes, wrongCharsSize: wrongCharsRef.current.size };
-    }, [cursorIndex, totalKeystrokes, correctKeystrokes]);
+    useEffect(() => clearCaretErrorTimeout, [clearCaretErrorTimeout]);
 
-    // Separate effect for history to avoid complex dependencies
+    // Per-second history sampling. This is the only timer left running during a
+    // run — the old 100 ms tick published wrongChars and a clock value that
+    // nothing displayed.
     useEffect(() => {
         if (phase !== "running") return;
 
@@ -112,24 +167,25 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (!start) return;
 
             const nowTs = Date.now();
+            setNow(nowTs);
             const elapsed = nowTs - start;
             if (elapsed < 1000) return;
 
-            const { cursorIndex, totalKeystrokes, wrongCharsSize, lastKeystrokes } = statsRef.current;
+            const cursor = cursorIndexRef.current;
+            const strokes = countersRef.current.totalKeystrokes;
+            const wrongCharsSize = wrongCharsRef.current.size;
 
             const minutes = elapsed / MS_PER_MINUTE;
-            const rawWpm = Math.round((totalKeystrokes / WORD_LENGTH_CHARS) / minutes);
+            const rawWpm = Math.round((strokes / WORD_LENGTH_CHARS) / minutes);
             // Smooth net graph WPM. Final result scoring uses the stricter
             // adjustedWpm metric from computeMetrics.
-            const netWpm = Math.max(0, Math.round(((cursorIndex - wrongCharsSize) / WORD_LENGTH_CHARS) / minutes));
+            const netWpm = Math.max(0, Math.round(((cursor - wrongCharsSize) / WORD_LENGTH_CHARS) / minutes));
 
             // Burst: Instantaneous Raw WPM over the last second
-            // We track lastKeystrokes in the ref
-            const keystrokesDelta = totalKeystrokes - lastKeystrokes;
+            const keystrokesDelta = strokes - lastKeystrokesRef.current;
             const burst = Math.round((keystrokesDelta / WORD_LENGTH_CHARS) * 60);
 
-            // Update lastKeystrokes for next tick
-            statsRef.current.lastKeystrokes = totalKeystrokes;
+            lastKeystrokesRef.current = strokes;
 
             setHistory(prev => {
                 const timePoint = Math.floor(elapsed / 1000);
@@ -153,24 +209,27 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         phaseRef.current = "idle";
         cursorIndexRef.current = 0;
         startTimeRef.current = null;
+        countersRef.current = { totalTypedChars: 0, totalKeystrokes: 0, correctKeystrokes: 0 };
+        errorLogRef.current = [];
+        historyRef.current = [];
+        lastKeystrokesRef.current = 0;
+        finalSnapshotRef.current = null;
+        wrongCharsRef.current = new Set();
+        wrongCharsDirtyRef.current = false;
+        clearCaretErrorTimeout();
         setPhase("idle");
         setCountdown(null);
         setCursorIndex(0);
-        wrongCharsRef.current = new Set();
         setPublishedWrongChars(new Set());
         setStartTime(null);
         setNow(Date.now());
-        setLastErrorAt(null);
+        setCaretErrorActive(false);
         setErrorLog([]);
-        setTotalTypedChars(0);
         setTotalKeystrokes(0);
         setCorrectKeystrokes(0);
         setHistory([]);
-    }, []);
-
-    // ... (rest of existing code)
-
-
+        setFinalSnapshot(null);
+    }, [clearCaretErrorTimeout]);
 
     const start = useCallback(() => {
         if (preferences.countdownEnabled) {
@@ -205,6 +264,111 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         return () => clearInterval(intervalId);
     }, [phase, countdown]);
 
+    // Cache the pattern score calculator per snippet — rebuilding categoryMap on
+    // every tick is wasteful since tokens and weights never change mid-snippet.
+    const patternCalculator = useMemo(() => {
+        const tokens = snippet.tokens ?? tokenize(snippet.content, snippet.language);
+        return createPatternScoreCalculator({
+            tokens,
+            contentLength: snippet.content.length,
+            language: snippet.language,
+        });
+    }, [snippet]);
+
+    const patternCalculatorRef = useRef(patternCalculator);
+    useEffect(() => {
+        patternCalculatorRef.current = patternCalculator;
+    }, [patternCalculator]);
+
+    // Pure metric computation from the synchronous refs, for an explicit elapsed.
+    const buildMetrics = useCallback((elapsed: number): Metrics => {
+        const idx = cursorIndexRef.current;
+        const snippetContent = snippetRef.current.content;
+        const wrongChars = wrongCharsRef.current;
+        const { totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct } = countersRef.current;
+
+        // Calculate getPerfectWordChars
+        let perfectChars = 0;
+        let wordStart = 0;
+        for (let i = 0; i <= idx; i++) {
+            const char = snippetContent[i];
+            const isWordEnd = i === snippetContent.length || char === " " || char === "\n" || char === "\t";
+            if (isWordEnd) {
+                if (i <= idx) {
+                    let isPerfect = true;
+                    for (let j = wordStart; j < i; j++) {
+                        if (wrongChars.has(j)) {
+                            isPerfect = false;
+                            break;
+                        }
+                    }
+                    if (isPerfect && i > wordStart) {
+                        perfectChars += (i - wordStart);
+                        if (i < idx && !wrongChars.has(i)) {
+                            perfectChars += 1;
+                        }
+                    }
+                }
+                wordStart = i + 1;
+            }
+        }
+
+        const metrics = computeMetrics({
+            correctProgress: perfectChars,
+            elapsedMs: elapsed,
+            totalTyped: typed,
+            totalKeystrokes: strokes,
+            correctKeystrokes: correct,
+        });
+
+        // Use the cached calculator — avoids rebuilding categoryMap every tick
+        metrics.patternScore = patternCalculatorRef.current(errorLogRef.current.map((e) => e.index));
+
+        return metrics;
+    }, []);
+
+    const [publishedMetrics, setPublishedMetrics] = useState<Metrics>(() => ({
+        rawWpm: 0,
+        adjustedWpm: 0,
+        accuracy: 1,
+    }));
+
+    const calculateAndPublishMetrics = useCallback(() => {
+        const start = startTimeRef.current;
+        const elapsed = start ? Date.now() - start : 0;
+        setPublishedMetrics(buildMetrics(elapsed));
+    }, [buildMetrics]);
+
+    /**
+     * Build and publish the final snapshot. Everything below lands in ONE React
+     * batch, so the commit that first reports `phase === "finished"` already
+     * carries the final metrics, wrongChars and exact elapsed time.
+     */
+    const finishRun = useCallback((finishedAt: number) => {
+        const start = startTimeRef.current;
+        const elapsed = start ? Math.max(0, finishedAt - start) : 0;
+        const wrongChars = new Set(wrongCharsRef.current);
+        const snapshot: FinalSessionSnapshot = Object.freeze({
+            elapsedMs: elapsed,
+            metrics: buildMetrics(elapsed),
+            wrongChars,
+            errorLog: [...errorLogRef.current],
+            history: [...historyRef.current],
+            cursorIndex: cursorIndexRef.current,
+            totalKeystrokes: countersRef.current.totalKeystrokes,
+            correctKeystrokes: countersRef.current.correctKeystrokes,
+        });
+
+        finalSnapshotRef.current = snapshot;
+        phaseRef.current = "finished";
+        wrongCharsDirtyRef.current = false;
+
+        setFinalSnapshot(snapshot);
+        setPublishedMetrics(snapshot.metrics);
+        setPublishedWrongChars(wrongChars);
+        setPhase("finished");
+    }, [buildMetrics]);
+
     // Auto-advance indentation logic
     const autoAdvanceIndentationIfAllowed = useCallback((index: number): { advanced: number; nextIndex: number } => {
         const content = snippetRef.current.content;
@@ -236,7 +400,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         return { advanced, nextIndex: target };
     }, [preferences.requireTabForIndent]);
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    const processKeyDown = useCallback((e: KeyboardEvent) => {
         const phaseNow = phaseRef.current;
         const allowVimPropagation = preferences.vimMode;
 
@@ -276,6 +440,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             }
 
             // Tab counts as a keystroke? Usually yes.
+            countersRef.current.totalKeystrokes += 1;
             setTotalKeystrokes(prev => prev + 1);
 
             const startIndex = cursorIndexRef.current;
@@ -290,8 +455,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
                 // Apply updates for auto-advance
                 cursorIndexRef.current = advancedIndex;
                 setCursorIndex(advancedIndex);
-                setTotalTypedChars(prev => prev + auto.advanced);
-                for (let i = startIndex; i < advancedIndex; i++) wrongCharsRef.current.delete(i);
+                countersRef.current.totalTypedChars += auto.advanced;
+                for (let i = startIndex; i < advancedIndex; i++) clearWrong(i);
 
                 return;
             }
@@ -309,10 +474,11 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (advanced > 0) {
                 cursorIndexRef.current = startIndex + advanced;
                 setCursorIndex(cursorIndexRef.current);
-                setTotalTypedChars(prev => prev + advanced);
+                countersRef.current.totalTypedChars += advanced;
                 // Manual tab is a correct action
+                countersRef.current.correctKeystrokes += 1;
                 setCorrectKeystrokes(prev => prev + 1);
-                for (let i = 0; i < advanced; i++) wrongCharsRef.current.delete(startIndex + i);
+                for (let i = 0; i < advanced; i++) clearWrong(startIndex + i);
                 return;
             }
 
@@ -321,9 +487,10 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             if (expected === "\t") {
                 cursorIndexRef.current = startIndex + 1;
                 setCursorIndex(cursorIndexRef.current);
-                setTotalTypedChars(prev => prev + 1);
+                countersRef.current.totalTypedChars += 1;
+                countersRef.current.correctKeystrokes += 1;
                 setCorrectKeystrokes(prev => prev + 1);
-                wrongCharsRef.current.delete(startIndex);
+                clearWrong(startIndex);
             }
             return;
         }
@@ -358,10 +525,12 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         }
 
         // Count every actionable key press as a keystroke
+        countersRef.current.totalKeystrokes += 1;
         setTotalKeystrokes(prev => prev + 1);
 
         if (e.key === "Backspace") {
             if (phaseNow === "finished") {
+                phaseRef.current = "running";
                 setPhase("running");
             }
             swallowEvent();
@@ -371,7 +540,7 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
             const targetIndex = currentCursor - 1;
             cursorIndexRef.current = targetIndex;
             setCursorIndex(targetIndex);
-            wrongCharsRef.current.delete(targetIndex);
+            clearWrong(targetIndex);
             return;
         }
 
@@ -382,8 +551,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         if (advanced > 0) {
             cursorIndexRef.current = currentIndex;
             setCursorIndex(currentIndex);
-            setTotalTypedChars(prev => prev + advanced);
-            for (let i = currentIndex - advanced; i < currentIndex; i++) wrongCharsRef.current.delete(i);
+            countersRef.current.totalTypedChars += advanced;
+            for (let i = currentIndex - advanced; i < currentIndex; i++) clearWrong(i);
         }
 
         const expected = snippetRef.current.content[currentIndex];
@@ -399,130 +568,32 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         const newCursor = currentIndex + 1;
         cursorIndexRef.current = newCursor;
         setCursorIndex(newCursor);
-        setTotalTypedChars(prev => prev + 1);
+        countersRef.current.totalTypedChars += 1;
 
         if (ok) {
+            countersRef.current.correctKeystrokes += 1;
             setCorrectKeystrokes(prev => prev + 1);
-            wrongCharsRef.current.delete(currentIndex);
+            clearWrong(currentIndex);
         } else {
-            wrongCharsRef.current.add(currentIndex);
-            setLastErrorAt(timestamp);
-            setNow(timestamp);
-            setErrorLog(prev => {
-                const next = [...prev, { expected, got, index: currentIndex }];
-                if (next.length > 200) next.shift();
-                return next;
-            });
+            markWrong(currentIndex);
+            flagCaretError();
+            const nextErrors = [...errorLogRef.current, { expected, got, index: currentIndex }];
+            if (nextErrors.length > 200) nextErrors.shift();
+            errorLogRef.current = nextErrors;
+            setErrorLog(nextErrors);
         }
 
         if (shouldFinishAtIndex(newCursor, snippetRef.current.content)) {
-            publishWrongChars();
-            setPhase("finished");
+            finishRun(timestamp);
             if (onFinish) onFinish();
         }
+    }, [autoAdvanceIndentationIfAllowed, clearWrong, finishRun, flagCaretError, markWrong, onFinish, preferences.vimMode]);
 
-    }, [autoAdvanceIndentationIfAllowed, onFinish, preferences.vimMode, publishWrongChars]);
-
-    const elapsedMs = startTime ? now - startTime : 0;
-
-    // Memoized initial metrics (only computed once for useState initial value)
-    const [publishedMetrics, setPublishedMetrics] = useState<Metrics>(() => ({
-        rawWpm: 0,
-        adjustedWpm: 0,
-        accuracy: 1,
-    }));
-
-    // Ref to track latest values for metrics calculation without triggering re-renders
-    const metricsInputRef = useRef({
-        cursorIndex: 0,
-        wrongChars: new Set<number>(),
-        snippetContent: snippet.content,
-        snippetRef: snippet,
-        startTime: null as number | null,
-        totalTypedChars: 0,
-        totalKeystrokes: 0,
-        correctKeystrokes: 0,
-        errorLog: [] as ErrorEntry[],
-    });
-
-    // Keep ref in sync (doesn't trigger re-renders)
-    useEffect(() => {
-        metricsInputRef.current = {
-            cursorIndex,
-            wrongChars: wrongCharsRef.current,
-            snippetContent: snippet.content,
-            snippetRef: snippet,
-            startTime,
-            totalTypedChars,
-            totalKeystrokes,
-            correctKeystrokes,
-            errorLog,
-        };
-    }, [cursorIndex, snippet, startTime, totalTypedChars, totalKeystrokes, correctKeystrokes, errorLog]);
-
-    // Cache the pattern score calculator per snippet — rebuilding categoryMap on
-    // every 1.5s tick is wasteful since tokens and weights never change mid-snippet.
-    const patternCalculator = useMemo(() => {
-        const tokens = snippet.tokens ?? tokenize(snippet.content, snippet.language);
-        return createPatternScoreCalculator({
-            tokens,
-            contentLength: snippet.content.length,
-            language: snippet.language,
-        });
-    }, [snippet]);
-
-    const patternCalculatorRef = useRef(patternCalculator);
-    useEffect(() => {
-        patternCalculatorRef.current = patternCalculator;
-    }, [patternCalculator]);
-
-    // Helper to calculate and publish metrics (only when called)
-    const calculateAndPublishMetrics = useCallback(() => {
-        const { cursorIndex: idx, snippetContent, startTime: start, totalTypedChars: typed, totalKeystrokes: strokes, correctKeystrokes: correct, errorLog: errorLogEntries } = metricsInputRef.current;
-        const wrongChars = wrongCharsRef.current;
-
-        // Calculate getPerfectWordChars
-        let perfectChars = 0;
-        let wordStart = 0;
-        for (let i = 0; i <= idx; i++) {
-            const char = snippetContent[i];
-            const isWordEnd = i === snippetContent.length || char === " " || char === "\n" || char === "\t";
-            if (isWordEnd) {
-                if (i <= idx) {
-                    let isPerfect = true;
-                    for (let j = wordStart; j < i; j++) {
-                        if (wrongChars.has(j)) {
-                            isPerfect = false;
-                            break;
-                        }
-                    }
-                    if (isPerfect && i > wordStart) {
-                        perfectChars += (i - wordStart);
-                        if (i < idx && !wrongChars.has(i)) {
-                            perfectChars += 1;
-                        }
-                    }
-                }
-                wordStart = i + 1;
-            }
-        }
-
-        const nowTs = Date.now();
-        const elapsed = start ? nowTs - start : 0;
-        const metrics = computeMetrics({
-            correctProgress: perfectChars,
-            elapsedMs: elapsed,
-            totalTyped: typed,
-            totalKeystrokes: strokes,
-            correctKeystrokes: correct,
-        });
-
-        // Use the cached calculator — avoids rebuilding categoryMap every tick
-        const errorPositions = errorLogEntries.map((e) => e.index);
-        metrics.patternScore = patternCalculatorRef.current(errorPositions);
-
-        setPublishedMetrics(metrics);
-    }, []);
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        processKeyDown(e);
+        // One clone per real change to the wrong-char set, instead of one per tick.
+        publishWrongChars();
+    }, [processKeyDown, publishWrongChars]);
 
     // Interval-based metrics publishing during running phase. ~200ms so the
     // live WPM climbs continuously instead of lurching every 1.5s; computeMetrics
@@ -540,23 +611,33 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         return () => clearInterval(intervalId);
     }, [phase, calculateAndPublishMetrics]);
 
-    // Publish final metrics on phase change to finished/idle
+    // Drop the snapshot as soon as the run is no longer finished (reset, or a
+    // backspace that reopens the run) so a later finish builds a fresh one.
     useEffect(() => {
-        if (phase === "finished" || phase === "idle") {
+        if (phase === "finished") return;
+        if (finalSnapshotRef.current === null) return;
+        finalSnapshotRef.current = null;
+        setFinalSnapshot(null);
+    }, [phase]);
+
+    // Safety net for finishes that did not come from a keystroke (the exposed
+    // setPhase). The keystroke path has already published its snapshot, so this
+    // never recomputes — and therefore never nudges the exact elapsed time.
+    useEffect(() => {
+        if (phase === "finished") {
+            if (!finalSnapshotRef.current) finishRun(Date.now());
+            return;
+        }
+        if (phase === "idle") {
             calculateAndPublishMetrics();
         }
-    }, [phase, calculateAndPublishMetrics]);
+    }, [phase, calculateAndPublishMetrics, finishRun]);
 
-    // Safety net: publish wrongChars on phase transition (covers edge cases
-    // like setPhase("finished") called externally via the exposed setPhase).
-    // The primary synchronous publish happens inside handleKeyDown before setPhase.
-    useEffect(() => {
-        if (phase === "finished" || phase === "idle") {
-            publishWrongChars();
-        }
-    }, [phase, publishWrongChars]);
-
-    const caretErrorActive = lastErrorAt !== null && now >= lastErrorAt && now - lastErrorAt < 600;
+    const elapsedMs = finalSnapshot
+        ? finalSnapshot.elapsedMs
+        : startTime
+            ? Math.max(0, now - startTime)
+            : 0;
 
     return {
         phase,
@@ -570,6 +651,8 @@ export function useTypingEngine({ snippet, onFinish }: UseTypingEngineProps) {
         history,
         totalKeystrokes,
         correctKeystrokes,
+        /** Atomic final sample; null until the current run finishes. */
+        finalSnapshot,
         reset,
         start,
         handleKeyDown,

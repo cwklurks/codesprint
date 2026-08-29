@@ -12,34 +12,67 @@ import { validateDrillResponse } from "@/lib/ai/response-parser";
 import type { DrillRequest, GenerateApiResponse, GenerateApiError } from "@/lib/ai/types";
 import { detectProviderFromKey } from "@/lib/ai/key-storage";
 
+/**
+ * Vercel kills the function at maxDuration; the in-app abort fires first so the
+ * caller gets the friendly TIMEOUT branch instead of a platform 504.
+ */
+export const maxDuration = 30;
+const GENERATION_TIMEOUT_MS = 25_000;
+
+/** A well-formed drill request is ~2 KB; anything past this is not one. */
+const MAX_BODY_BYTES = 32_000;
+
+/**
+ * `errorRate` is a WEIGHTED rate, not a fraction: the raw per-category rate
+ * (clamped to 1 in lib/ai/skill-feed.ts) times that category's token weight,
+ * which tops out at 1.6 (cpp operators, lib/token-weights.ts). The cold-start
+ * language defaults sit at 1.5-1.6 too, so a bound of 1 rejected every first
+ * request. 2 keeps the field bounded with headroom for a future weight bump.
+ */
+const MAX_ERROR_RATE = 2;
+
 const drillRequestSchema = z.object({
     language: z.enum(["javascript", "python", "java", "cpp"]),
     difficulty: z.enum(["easy", "medium", "hard"]),
     lengthCategory: z.enum(["short", "medium", "long"]),
     weakPatterns: z.array(z.object({
         category: z.enum(["keyword", "operator", "delimiter", "identifier", "literal", "string", "comment", "whitespace"]),
-        errorCount: z.number(),
-        totalTokens: z.number(),
-        errorRate: z.number(),
-        label: z.string(),
-    })),
-    targetTokenCategories: z.array(z.string()),
-    recentDrillTitles: z.array(z.string()),
+        errorCount: z.number().int().min(0).max(1_000_000),
+        totalTokens: z.number().int().min(0).max(1_000_000),
+        errorRate: z.number().min(0).max(MAX_ERROR_RATE),
+        label: z.string().max(64),
+    })).max(16),
+    targetTokenCategories: z.array(z.string().max(32)).max(16),
+    recentDrillTitles: z.array(z.string().max(200)).max(20),
     userContext: z.object({
-        estimatedWpm: z.number(),
-        estimatedAccuracy: z.number(),
-        sessionCount: z.number(),
+        estimatedWpm: z.number().min(0).max(500),
+        estimatedAccuracy: z.number().min(0).max(1),
+        sessionCount: z.number().int().min(0).max(1_000_000),
     }),
 });
+
+/**
+ * Browser-only API: a same-host `Origin` is required. Browsers always send
+ * `Origin` on cross-site-capable POSTs, so an absent or opaque ("null") origin
+ * is never a legitimate first-party call.
+ */
+function isSameHostOrigin(origin: string | null, host: string | null): boolean {
+    if (!origin || !host) return false;
+    try {
+        return new URL(origin).host === host;
+    } catch {
+        return false;
+    }
+}
 
 export async function POST(request: Request) {
     // 1. Origin validation (CSRF protection)
     const origin = request.headers.get("origin");
     const host = request.headers.get("host");
-    if (origin && new URL(origin).host !== (host ?? "")) {
-        const error: GenerateApiError = { 
-            error: "Forbidden", 
-            code: "ORIGIN_MISMATCH" 
+    if (!isSameHostOrigin(origin, host)) {
+        const error: GenerateApiError = {
+            error: "Forbidden",
+            code: "ORIGIN_MISMATCH"
         };
         return Response.json(error, { status: 403 });
     }
@@ -62,7 +95,17 @@ export async function POST(request: Request) {
         return Response.json(error, { status: 400 });
     }
 
-    // 3. Parse + validate request body
+    // 3. Reject an oversized body from its declared length, before buffering it.
+    const declaredLength = Number(request.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+        const error: GenerateApiError = {
+            error: "Request body too large",
+            code: "BODY_TOO_LARGE",
+        };
+        return Response.json(error, { status: 413 });
+    }
+
+    // 4. Parse + validate request body
     let body: unknown;
     try {
         body = await request.json();
@@ -85,7 +128,7 @@ export async function POST(request: Request) {
     }
     const drillRequest = parseResult.data;
 
-    // 4. Determine provider from key prefix
+    // 5. Determine provider from key prefix
     const provider = detectProviderFromKey(apiKey);
     if (!provider) {
         const error: GenerateApiError = {
@@ -95,10 +138,10 @@ export async function POST(request: Request) {
         return Response.json(error, { status: 400 });
     }
 
-    // 5. Build prompt
+    // 6. Build prompt
     const { systemPrompt, userPrompt } = buildPrompt(drillRequest);
 
-    // 6. Call AI SDK
+    // 7. Call AI SDK
     try {
         // Create provider with API key
         const model = provider === "claude"
@@ -113,12 +156,12 @@ export async function POST(request: Request) {
             prompt: userPrompt,
             output: Output.object({ schema: drillResponseSchema }),
             maxOutputTokens: 2048,
-            abortSignal: AbortSignal.timeout(30_000),
+            abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
         });
 
         const drillResponse = result.output;
 
-        // 7. Validate generated code
+        // 8. Validate generated code
         const validation = validateDrillResponse(
             drillResponse,
             drillRequest as DrillRequest,
@@ -132,7 +175,7 @@ export async function POST(request: Request) {
             return Response.json(error, { status: 422 });
         }
 
-        // 8. Return response with cost info
+        // 9. Return response with cost info
         const response: GenerateApiResponse = {
             snippet: drillResponse,
             provider,

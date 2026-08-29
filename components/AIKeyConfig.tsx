@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     Box,
     Button,
@@ -8,9 +8,138 @@ import {
     Text,
     Flex,
     Badge,
+    SwitchControl,
+    SwitchHiddenInput,
+    SwitchRoot,
 } from "@chakra-ui/react";
 import { usePreferences } from "@/lib/preferences";
 import { storeApiKey, clearApiKey, hasApiKey, getApiKey, type AIProvider } from "@/lib/ai/key-storage";
+
+const PROVIDERS: ReadonlyArray<{ value: AIProvider; label: string; placeholder: string }> = [
+    { value: "claude", label: "Claude API key", placeholder: "sk-ant-..." },
+    { value: "openai", label: "OpenAI API key", placeholder: "sk-..." },
+    { value: "fireworks", label: "Fireworks API key", placeholder: "fw-..." },
+];
+
+const NO_KEYS: Record<AIProvider, boolean> = { claude: false, openai: false, fireworks: false };
+
+const inputProps = {
+    size: "sm",
+    bg: "var(--surface)",
+    borderColor: "var(--border)",
+    color: "var(--text)",
+    borderRadius: "var(--radius-sm)",
+    _placeholder: { color: "var(--text-subtle)" },
+} as const;
+
+type ProviderKeyRowProps = {
+    provider: AIProvider;
+    label: string;
+    placeholder: string;
+    hasKey: boolean;
+    isActive: boolean;
+    onSave: (provider: AIProvider, key: string) => void;
+    onClear: (provider: AIProvider) => void;
+    onUse: (provider: AIProvider) => void;
+};
+
+/** One provider's key: masked with clear/use once stored, an entry field before that. */
+function ProviderKeyRow({
+    provider,
+    label,
+    placeholder,
+    hasKey,
+    isActive,
+    onSave,
+    onClear,
+    onUse,
+}: ProviderKeyRowProps) {
+    const [draft, setDraft] = useState("");
+
+    const handleSave = () => {
+        const trimmed = draft.trim();
+        if (!trimmed) return;
+        onSave(provider, trimmed);
+        setDraft("");
+    };
+
+    return (
+        <Box mb={4}>
+            <Flex align="center" justify="space-between" mb={2}>
+                <Text fontSize="sm" fontWeight={500} color="var(--text)">
+                    {label}
+                </Text>
+                {hasKey && (
+                    <Badge
+                        size="sm"
+                        bg="transparent"
+                        border="1px solid"
+                        borderColor={isActive ? "var(--success)" : "var(--border)"}
+                        color={isActive ? "var(--success)" : "var(--text-subtle)"}
+                        borderRadius="var(--radius-sm)"
+                    >
+                        {isActive ? "Active" : "Available"}
+                    </Badge>
+                )}
+            </Flex>
+            {hasKey ? (
+                <Flex gap={2}>
+                    <Input
+                        {...inputProps}
+                        aria-label={`${label} (saved)`}
+                        type="password"
+                        value="••••••••••••"
+                        disabled
+                        readOnly
+                    />
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        color="var(--text-subtle)"
+                        _hover={{ bg: "var(--surface-hover)", color: "var(--text)" }}
+                        onClick={() => onClear(provider)}
+                    >
+                        Clear
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={isActive ? "solid" : "outline"}
+                        borderColor="var(--border)"
+                        borderRadius="var(--radius-sm)"
+                        bg={isActive ? "var(--accent)" : "transparent"}
+                        color={isActive ? "var(--bg)" : "var(--text)"}
+                        _hover={isActive ? { opacity: 0.9 } : { bg: "var(--surface-hover)" }}
+                        onClick={() => onUse(provider)}
+                    >
+                        Use
+                    </Button>
+                </Flex>
+            ) : (
+                <Flex gap={2}>
+                    <Input
+                        {...inputProps}
+                        aria-label={label}
+                        type="password"
+                        placeholder={placeholder}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                    />
+                    <Button
+                        size="sm"
+                        borderRadius="var(--radius-sm)"
+                        bg="var(--accent)"
+                        color="var(--bg)"
+                        _hover={{ opacity: 0.9 }}
+                        onClick={handleSave}
+                        disabled={!draft.trim()}
+                    >
+                        Save
+                    </Button>
+                </Flex>
+            )}
+        </Box>
+    );
+}
 
 export function AIKeyConfig() {
     const {
@@ -20,45 +149,40 @@ export function AIKeyConfig() {
         setAIMaxDrillsPerDay,
     } = usePreferences();
 
-    const [claudeKey, setClaudeKey] = useState("");
-    const [openaiKey, setOpenaiKey] = useState("");
-    const [fireworksKey, setFireworksKey] = useState("");
+    // Keys live in localStorage, outside React. Snapshot their presence into
+    // state so saving or clearing one actually repaints the row.
+    const [presentKeys, setPresentKeys] = useState<Record<AIProvider, boolean>>(NO_KEYS);
     const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
     const [testError, setTestError] = useState<string | null>(null);
 
-    const hasClaudeKey = hasApiKey("claude");
-    const hasOpenaiKey = hasApiKey("openai");
-    const hasFireworksKey = hasApiKey("fireworks");
+    const refreshKeys = useCallback(() => {
+        setPresentKeys({
+            claude: hasApiKey("claude"),
+            openai: hasApiKey("openai"),
+            fireworks: hasApiKey("fireworks"),
+        });
+    }, []);
+
+    useEffect(() => {
+        refreshKeys();
+    }, [refreshKeys]);
+
     const activeProvider = preferences.aiProvider;
+    const hasAnyKey = presentKeys.claude || presentKeys.openai || presentKeys.fireworks;
 
-    const handleSaveClaude = useCallback(() => {
-        if (claudeKey.trim()) {
-            storeApiKey("claude", claudeKey.trim());
-            setClaudeKey("");
-            setTestStatus("idle");
-        }
-    }, [claudeKey]);
-
-    const handleSaveOpenai = useCallback(() => {
-        if (openaiKey.trim()) {
-            storeApiKey("openai", openaiKey.trim());
-            setOpenaiKey("");
-            setTestStatus("idle");
-        }
-    }, [openaiKey]);
-
-    const handleSaveFireworks = useCallback(() => {
-        if (fireworksKey.trim()) {
-            storeApiKey("fireworks", fireworksKey.trim());
-            setFireworksKey("");
-            setTestStatus("idle");
-        }
-    }, [fireworksKey]);
+    const handleSave = useCallback((provider: AIProvider, key: string) => {
+        storeApiKey(provider, key);
+        refreshKeys();
+        setTestStatus("idle");
+        setTestError(null);
+    }, [refreshKeys]);
 
     const handleClear = useCallback((provider: AIProvider) => {
         clearApiKey(provider);
+        refreshKeys();
         setTestStatus("idle");
-    }, []);
+        setTestError(null);
+    }, [refreshKeys]);
 
     const handleTest = useCallback(async () => {
         setTestStatus("testing");
@@ -108,25 +232,16 @@ export function AIKeyConfig() {
 
     return (
         <Box>
-            <Flex align="center" justify="space-between" mb={3}>
-                <Text fontSize="sm" fontWeight={600}>
-                    AI Drills
-                </Text>
-                <Badge colorPalette={preferences.aiDrillsEnabled ? "green" : "gray"}>
-                    {preferences.aiDrillsEnabled ? "Enabled" : "Disabled"}
-                </Badge>
-            </Flex>
-
             <Box
                 mb={4}
                 p={3}
-                borderRadius="md"
-                bg="var(--panel-soft)"
+                borderRadius="var(--radius-md)"
+                bg="var(--surface)"
                 border="1px solid var(--border)"
             >
                 <Flex gap={3}>
-                    <Box color="var(--accent)" mt={0.5}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Box color="var(--accent)" mt={0.5} flexShrink={0}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M12 16v-4"/>
                             <path d="M12 8h.01"/>
@@ -134,7 +249,7 @@ export function AIKeyConfig() {
                     </Box>
                     <Box>
                         <Text fontSize="sm" fontWeight={600} color="var(--text)">
-                            Bring Your Own Key
+                            Bring your own key
                         </Text>
                         <Text fontSize="sm" color="var(--text-subtle)" mt={1}>
                             Your API key is stored locally in your browser. It is sent to our server
@@ -144,223 +259,97 @@ export function AIKeyConfig() {
                 </Flex>
             </Box>
 
-            {/* Claude */}
-            <Box mb={4}>
-                <Flex align="center" justify="space-between" mb={2}>
-                    <Text fontSize="sm" fontWeight={500}>Claude API Key</Text>
-                    <Flex gap={2}>
-                        {hasClaudeKey && (
-                            <Badge size="sm" colorPalette="green">
-                                {activeProvider === "claude" ? "Active" : "Available"}
-                            </Badge>
-                        )}
-                    </Flex>
-                </Flex>
-                {hasClaudeKey ? (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            value="••••••••••••"
-                            disabled
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleClear("claude")}
-                        >
-                            Clear
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant={activeProvider === "claude" ? "solid" : "outline"}
-                            onClick={() => setAIProvider("claude")}
-                        >
-                            Use
-                        </Button>
-                    </Flex>
-                ) : (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            placeholder="sk-ant-..."
-                            value={claudeKey}
-                            onChange={(e) => setClaudeKey(e.target.value)}
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            onClick={handleSaveClaude}
-                            disabled={!claudeKey.trim()}
-                        >
-                            Save
-                        </Button>
-                    </Flex>
-                )}
-            </Box>
-
-            {/* OpenAI */}
-            <Box mb={4}>
-                <Flex align="center" justify="space-between" mb={2}>
-                    <Text fontSize="sm" fontWeight={500}>OpenAI API Key</Text>
-                    <Flex gap={2}>
-                        {hasOpenaiKey && (
-                            <Badge size="sm" colorPalette="green">
-                                {activeProvider === "openai" ? "Active" : "Available"}
-                            </Badge>
-                        )}
-                    </Flex>
-                </Flex>
-                {hasOpenaiKey ? (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            value="••••••••••••"
-                            disabled
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleClear("openai")}
-                        >
-                            Clear
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant={activeProvider === "openai" ? "solid" : "outline"}
-                            onClick={() => setAIProvider("openai")}
-                        >
-                            Use
-                        </Button>
-                    </Flex>
-                ) : (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            placeholder="sk-..."
-                            value={openaiKey}
-                            onChange={(e) => setOpenaiKey(e.target.value)}
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            onClick={handleSaveOpenai}
-                            disabled={!openaiKey.trim()}
-                        >
-                            Save
-                        </Button>
-                    </Flex>
-                )}
-            </Box>
-
-            {/* Fireworks */}
-            <Box mb={4}>
-                <Flex align="center" justify="space-between" mb={2}>
-                    <Text fontSize="sm" fontWeight={500}>Fireworks API Key</Text>
-                    <Flex gap={2}>
-                        {hasFireworksKey && (
-                            <Badge size="sm" colorPalette="green">
-                                {activeProvider === "fireworks" ? "Active" : "Available"}
-                            </Badge>
-                        )}
-                    </Flex>
-                </Flex>
-                {hasFireworksKey ? (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            value="••••••••••••"
-                            disabled
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleClear("fireworks")}
-                        >
-                            Clear
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant={activeProvider === "fireworks" ? "solid" : "outline"}
-                            onClick={() => setAIProvider("fireworks")}
-                        >
-                            Use
-                        </Button>
-                    </Flex>
-                ) : (
-                    <Flex gap={2}>
-                        <Input
-                            type="password"
-                            placeholder="fw-..."
-                            value={fireworksKey}
-                            onChange={(e) => setFireworksKey(e.target.value)}
-                            size="sm"
-                        />
-                        <Button
-                            size="sm"
-                            onClick={handleSaveFireworks}
-                            disabled={!fireworksKey.trim()}
-                        >
-                            Save
-                        </Button>
-                    </Flex>
-                )}
-            </Box>
+            {PROVIDERS.map((provider) => (
+                <ProviderKeyRow
+                    key={provider.value}
+                    provider={provider.value}
+                    label={provider.label}
+                    placeholder={provider.placeholder}
+                    hasKey={presentKeys[provider.value]}
+                    isActive={activeProvider === provider.value}
+                    onSave={handleSave}
+                    onClear={handleClear}
+                    onUse={setAIProvider}
+                />
+            ))}
 
             {/* Test Connection */}
             <Flex gap={2} mb={4} align="center">
                 <Button
                     size="sm"
                     variant="outline"
+                    borderColor="var(--border)"
+                    borderRadius="var(--radius-sm)"
+                    color="var(--text)"
+                    _hover={{ bg: "var(--surface-hover)" }}
                     onClick={handleTest}
                     loading={testStatus === "testing"}
-                    disabled={!hasClaudeKey && !hasOpenaiKey && !hasFireworksKey}
+                    disabled={!hasAnyKey}
                 >
-                    Test Connection
+                    Test connection
                 </Button>
                 {testStatus === "success" && (
-                    <Badge colorPalette="green" size="sm">Connected</Badge>
+                    <Badge
+                        size="sm"
+                        bg="transparent"
+                        border="1px solid var(--success)"
+                        color="var(--success)"
+                        borderRadius="var(--radius-sm)"
+                    >
+                        Connected
+                    </Badge>
                 )}
                 {testStatus === "error" && (
-                    <Badge colorPalette="red" size="sm">Failed</Badge>
+                    <Badge
+                        size="sm"
+                        bg="transparent"
+                        border="1px solid var(--error)"
+                        color="var(--error)"
+                        borderRadius="var(--radius-sm)"
+                    >
+                        Failed
+                    </Badge>
                 )}
             </Flex>
             {testStatus === "error" && testError && (
-                <Text fontSize="xs" color="red.500" mb={4}>
+                <Text fontSize="xs" color="var(--error)" mb={4} aria-live="polite">
                     {testError}
                 </Text>
             )}
 
             {/* Daily Limit */}
-            <Flex align="center" justify="space-between" mb={4}>
-                <Text fontSize="sm">Daily Limit</Text>
+            <Flex align="center" justify="space-between" mb={4} gap={4}>
+                <Text fontSize="sm" color="var(--text)">Daily limit</Text>
                 <Flex gap={2} align="center">
                     <Input
+                        {...inputProps}
+                        aria-label="Daily drill limit"
                         type="number"
                         value={preferences.aiMaxDrillsPerDay}
                         onChange={(e) => setAIMaxDrillsPerDay(parseInt(e.target.value, 10) || 20)}
-                        size="sm"
                         width="80px"
                         min={1}
                         max={1000}
                     />
-                    <Text fontSize="sm" color="gray.500">drills/day</Text>
+                    <Text fontSize="sm" color="var(--text-subtle)">drills/day</Text>
                 </Flex>
             </Flex>
 
-            {/* Enable/Disable */}
-            <Flex align="center" justify="space-between">
-                <Text fontSize="sm">Enable AI Drills</Text>
-                <Button
-                    size="sm"
-                    variant={preferences.aiDrillsEnabled ? "solid" : "outline"}
-                    onClick={() => setAIDrillsEnabled(!preferences.aiDrillsEnabled)}
-                    disabled={!hasClaudeKey && !hasOpenaiKey && !hasFireworksKey}
+            {/* Enable/Disable. A switch, like every other boolean in preferences --
+                this used to be the one setting that spoke in On/Off pills. */}
+            <Flex align="center" justify="space-between" gap={4}>
+                <Text fontSize="sm" color="var(--text)">Enable AI drills</Text>
+                <SwitchRoot
+                    checked={preferences.aiDrillsEnabled}
+                    disabled={!hasAnyKey}
+                    onCheckedChange={({ checked }) => setAIDrillsEnabled(checked)}
+                    display="inline-flex"
+                    alignItems="center"
+                    flexShrink={0}
                 >
-                    {preferences.aiDrillsEnabled ? "On" : "Off"}
-                </Button>
+                    <SwitchControl />
+                    <SwitchHiddenInput aria-label="Enable AI drills" />
+                </SwitchRoot>
             </Flex>
         </Box>
     );

@@ -40,6 +40,19 @@ type ThemeColors = {
     border: string;
 };
 
+type Elevation = { offsetY: number; blur: number; color: string } | null;
+
+type CardMetrics = {
+    /** Resolved font stack for canvas `ctx.font`, mono when the webfont loaded. */
+    font: string;
+    /** Corner radius for the card itself, from --radius-xl. */
+    radius: number;
+    /** Corner radius for the inner graph panel, from --radius-md. */
+    innerRadius: number;
+    /** The theme's --elev-2, translated to canvas shadow terms (null if absent). */
+    elevation: Elevation;
+};
+
 // ---------------------------------------------------------------------------
 // Theme color extraction
 // ---------------------------------------------------------------------------
@@ -68,13 +81,73 @@ function getThemeColors(): ThemeColors {
 }
 
 // ---------------------------------------------------------------------------
-// Canvas rendering
+// Typography and geometry
 // ---------------------------------------------------------------------------
 
 const CARD_WIDTH = 1200;
 const CARD_HEIGHT = 800;
 const PADDING = 48;
-const FONT = "system-ui, -apple-system, sans-serif";
+const FALLBACK_FONT = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+/** Weights the card actually draws with; all must be ready before the first fillText. */
+const CARD_FONT_WEIGHTS = [400, 700];
+
+function cssNumber(styles: CSSStyleDeclaration, name: string, fallback: number): number {
+    const parsed = Number.parseFloat(styles.getPropertyValue(name));
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Themes emit elevation as `0 <offsetY>px <blur>px <color>` (lib/preferences-core.ts).
+ * Canvas has no box-shadow, so translate that one shape and skip the shadow
+ * entirely if a theme ever writes something else.
+ */
+function parseElevation(styles: CSSStyleDeclaration, name: string): Elevation {
+    const match = styles.getPropertyValue(name).trim().match(/^0\s+(-?[\d.]+)px\s+([\d.]+)px\s+(.+)$/);
+    if (!match) return null;
+    return { offsetY: Number.parseFloat(match[1]), blur: Number.parseFloat(match[2]), color: match[3] };
+}
+
+/**
+ * Canvas does not wait for webfonts, so an unprepared `ctx.font` silently falls
+ * back to a system face and the card stops looking like the app. Resolve the
+ * app's own --font-mono stack (next/font rewrites the family name, so it has to
+ * be read from the document rather than hardcoded), preload every weight we
+ * draw, and only claim the stack once document.fonts confirms it.
+ */
+async function resolveCardMetrics(): Promise<CardMetrics> {
+    if (typeof document === "undefined") {
+        return { font: FALLBACK_FONT, radius: 20, innerRadius: 12, elevation: null };
+    }
+
+    const styles = getComputedStyle(document.documentElement);
+    const geometry = {
+        radius: cssNumber(styles, "--radius-xl", 20),
+        innerRadius: cssNumber(styles, "--radius-md", 12),
+        elevation: parseElevation(styles, "--elev-2"),
+    };
+    const stack = styles.getPropertyValue("--font-mono").trim();
+    const primary = stack.split(",")[0]?.trim();
+
+    if (!stack || !primary || !document.fonts) {
+        return { font: stack || FALLBACK_FONT, ...geometry };
+    }
+
+    try {
+        await Promise.all(
+            CARD_FONT_WEIGHTS.map((weight) => document.fonts.load(`${weight} 16px ${primary}`)),
+        );
+        const ready = CARD_FONT_WEIGHTS.every((weight) =>
+            document.fonts.check(`${weight} 16px ${primary}`),
+        );
+        return { font: ready ? stack : FALLBACK_FONT, ...geometry };
+    } catch {
+        return { font: FALLBACK_FONT, ...geometry };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Canvas rendering
+// ---------------------------------------------------------------------------
 
 export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasElement> {
     const canvas = document.createElement("canvas");
@@ -86,16 +159,17 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     const ctx = canvas.getContext("2d")!;
     ctx.scale(dpr, dpr);
     const colors = getThemeColors();
+    const { font, radius, innerRadius, elevation } = await resolveCardMetrics();
 
     // Background
     ctx.fillStyle = colors.bg;
-    roundRect(ctx, 0, 0, CARD_WIDTH, CARD_HEIGHT, 24);
+    roundRect(ctx, 0, 0, CARD_WIDTH, CARD_HEIGHT, radius);
     ctx.fill();
 
     // Border
     ctx.strokeStyle = colors.border;
     ctx.lineWidth = 1.5;
-    roundRect(ctx, 0.75, 0.75, CARD_WIDTH - 1.5, CARD_HEIGHT - 1.5, 24);
+    roundRect(ctx, 0.75, 0.75, CARD_WIDTH - 1.5, CARD_HEIGHT - 1.5, radius);
     ctx.stroke();
 
     // --- Hero section ---
@@ -105,19 +179,19 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     const percentile = computePercentile(data.wpm);
     ctx.textAlign = "left";
     ctx.fillStyle = colors.accent;
-    ctx.font = `bold 48px ${FONT}`;
+    ctx.font = `bold 48px ${font}`;
     ctx.fillText(`Top ${100 - percentile}%`, PADDING, heroY);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `14px ${FONT}`;
+    ctx.font = `14px ${font}`;
     ctx.fillText("of coders", PADDING, heroY + 24);
 
     // Center: WPM large
     ctx.textAlign = "center";
     ctx.fillStyle = colors.accent;
-    ctx.font = `bold 120px ${FONT}`;
+    ctx.font = `bold 120px ${font}`;
     ctx.fillText(`${Math.round(data.wpm)}`, CARD_WIDTH / 2, heroY + 10);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `bold 18px ${FONT}`;
+    ctx.font = `bold 18px ${font}`;
     ctx.fillText("WPM", CARD_WIDTH / 2, heroY + 40);
 
     // New-best marker beneath the WPM hero
@@ -126,7 +200,7 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
             ? `★ NEW BEST  +${bestDelta(data.wpm, data.bestWpm)}`
             : "★ NEW BEST";
         ctx.textAlign = "center";
-        ctx.font = `bold 18px ${FONT}`;
+        ctx.font = `bold 18px ${font}`;
         const textW = ctx.measureText(markerText).width;
         const padX = 16;
         const badgeW = textW + padX * 2;
@@ -147,23 +221,21 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     const syntaxLabel = data.patternScore !== undefined ? "Syntax Score" : "Accuracy";
     ctx.textAlign = "right";
     ctx.fillStyle = colors.text;
-    ctx.font = `bold 48px ${FONT}`;
+    ctx.font = `bold 48px ${font}`;
     ctx.fillText(syntaxVal, CARD_WIDTH - PADDING, heroY);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `14px ${FONT}`;
+    ctx.font = `14px ${font}`;
     ctx.fillText(syntaxLabel, CARD_WIDTH - PADDING, heroY + 24);
 
     // --- Meta pills ---
     const pillY = heroY + 80;
-    const pillLabels = [
+    const pillStr = [
         data.snippetTitle,
         data.language.toUpperCase(),
         capitalize(data.difficulty),
-    ];
+    ].join("  ·  ");
+    ctx.font = `13px ${font}`;
     ctx.textAlign = "center";
-    const pillX = CARD_WIDTH / 2 - ((pillLabels.join(" · ").length * 6.5) / 2);
-    ctx.font = `13px ${FONT}`;
-    const pillStr = pillLabels.join("  ·  ");
     ctx.fillStyle = colors.textSubtle;
     ctx.fillText(pillStr, CARD_WIDTH / 2, pillY);
 
@@ -183,7 +255,7 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     const graphH = 340;
 
     if (data.history.length > 1) {
-        drawRichGraph(ctx, colors, graphX, graphY, graphW, graphH, data.history);
+        drawRichGraph(ctx, colors, { font, radius: innerRadius, elevation }, graphX, graphY, graphW, graphH, data.history);
     }
 
     // --- Bottom stats row ---
@@ -193,39 +265,39 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
     // Raw WPM
     ctx.textAlign = "center";
     ctx.fillStyle = colors.text;
-    ctx.font = `bold 32px ${FONT}`;
+    ctx.font = `bold 32px ${font}`;
     ctx.fillText(`${Math.round(data.rawWpm)}`, PADDING + statSpacing * 0.5, statsY);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `12px ${FONT}`;
+    ctx.font = `12px ${font}`;
     ctx.fillText("RAW", PADDING + statSpacing * 0.5, statsY + 20);
 
     // Accuracy
     ctx.fillStyle = colors.text;
-    ctx.font = `bold 32px ${FONT}`;
+    ctx.font = `bold 32px ${font}`;
     ctx.fillText(`${Math.round(data.accuracy * 100)}%`, PADDING + statSpacing * 1.5, statsY);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `12px ${FONT}`;
+    ctx.font = `12px ${font}`;
     ctx.fillText("ACCURACY", PADDING + statSpacing * 1.5, statsY + 20);
 
     // Time
     ctx.fillStyle = colors.text;
-    ctx.font = `bold 32px ${FONT}`;
+    ctx.font = `bold 32px ${font}`;
     ctx.fillText(formatDuration(data.timeMs), PADDING + statSpacing * 2.5, statsY);
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `12px ${FONT}`;
+    ctx.font = `12px ${font}`;
     ctx.fillText("TIME", PADDING + statSpacing * 2.5, statsY + 20);
 
     // --- Footer ---
+    const footerY = CARD_HEIGHT - PADDING + 8;
     ctx.textAlign = "left";
     ctx.fillStyle = colors.accent;
-    ctx.font = `bold 16px ${FONT}`;
-    ctx.fillText("CodeSprint", PADDING, CARD_HEIGHT - PADDING + 8);
+    ctx.font = `bold 16px ${font}`;
+    ctx.fillText("CodeSprint", PADDING, footerY);
+    // Right-aligned, otherwise the URL runs off the edge of the card.
+    ctx.textAlign = "right";
     ctx.fillStyle = colors.textSubtle;
-    ctx.font = `14px ${FONT}`;
-    ctx.fillText("codesprint.dev", CARD_WIDTH - PADDING, CARD_HEIGHT - PADDING + 8);
-
-    // suppress unused variable warning
-    void pillX;
+    ctx.font = `14px ${font}`;
+    ctx.fillText("codesprint.dev", CARD_WIDTH - PADDING, footerY);
 
     return canvas;
 }
@@ -233,6 +305,7 @@ export async function renderShareCard(data: ShareCardData): Promise<HTMLCanvasEl
 function drawRichGraph(
     ctx: CanvasRenderingContext2D,
     colors: ThemeColors,
+    style: { font: string; radius: number; elevation: Elevation },
     x: number,
     y: number,
     width: number,
@@ -240,6 +313,7 @@ function drawRichGraph(
     history: { time: number; wpm: number }[],
 ) {
     if (history.length < 2) return;
+    const { font, radius, elevation } = style;
 
     const wpmValues = history.map((h) => h.wpm);
     const minWpm = Math.max(0, Math.min(...wpmValues) - 10);
@@ -252,10 +326,17 @@ function drawRichGraph(
     const plotW = width - innerPad * 2;
     const plotH = height - 32;
 
-    // Background area
+    // Background area, lifted with the theme's own card elevation.
+    ctx.save();
+    if (elevation) {
+        ctx.shadowColor = elevation.color;
+        ctx.shadowBlur = elevation.blur;
+        ctx.shadowOffsetY = elevation.offsetY;
+    }
     ctx.fillStyle = colors.surface;
-    roundRect(ctx, x, y, width, height, 12);
+    roundRect(ctx, x, y, width, height, radius);
     ctx.fill();
+    ctx.restore();
 
     // Grid lines (horizontal, 5 lines)
     const gridCount = 5;
@@ -277,7 +358,7 @@ function drawRichGraph(
         ctx.arc(plotX - 10, gy, 3, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = colors.textSubtle;
-        ctx.font = `11px ${FONT}`;
+        ctx.font = `11px ${font}`;
         ctx.textAlign = "right";
         ctx.fillText(`${wpmLabel}`, plotX - 16, gy + 4);
         ctx.setLineDash([4, 6]);
@@ -327,7 +408,7 @@ function drawRichGraph(
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = colors.accent;
-    ctx.font = `bold 11px ${FONT}`;
+    ctx.font = `bold 11px ${font}`;
     ctx.textAlign = "right";
     ctx.fillText(`Peak ${Math.round(peakWpm)} WPM`, plotX + plotW - 4, peakY - 6);
 

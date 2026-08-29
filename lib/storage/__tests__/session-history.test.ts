@@ -1,6 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+// Controllable IndexedDB: the mirror's shape depends on whether the IDB write
+// actually landed, so the tests need to drive both outcomes.
+const idb = vi.hoisted(() => ({ available: true, putFails: false }));
+
+vi.mock("../idb-store", () => ({
+    STORES: {
+        sessions: "sessions",
+        mastery: "mastery",
+        achievements: "achievements",
+        customSnippets: "custom-snippets",
+        meta: "meta",
+        skillModels: "skill-models",
+    },
+    isIdbAvailable: vi.fn(async () => idb.available),
+    idbPut: vi.fn(async () => {
+        if (idb.putFails) throw new Error("IDB write failed");
+    }),
+    idbGet: vi.fn(async () => undefined),
+    idbGetAll: vi.fn(async () => []),
+    idbDelete: vi.fn(async () => {}),
+    idbClear: vi.fn(async () => {}),
+}));
+
 import {
     createSession,
+    createSessionAsync,
     getSession,
     getSessions,
     updateSession,
@@ -9,6 +34,7 @@ import {
     getSessionStats,
     getRecentSessions,
     getSessionsBySnippet,
+    SESSION_SAVED_EVENT,
     type SessionRecord,
     type CreateSessionInput,
 } from "../session-history";
@@ -33,7 +59,14 @@ const mockLocalStorage = (() => {
     };
 })();
 
-vi.stubGlobal("window", { localStorage: mockLocalStorage });
+const dispatchEvent = vi.fn((event: Event) => Boolean(event));
+
+vi.stubGlobal("window", {
+    localStorage: mockLocalStorage,
+    dispatchEvent,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+});
 
 let uuidCounter = 0;
 vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `test-uuid-${++uuidCounter}`) });
@@ -63,6 +96,8 @@ describe("session-history", () => {
     beforeEach(() => {
         mockLocalStorage.clear();
         uuidCounter = 0;
+        idb.available = true;
+        idb.putFails = false;
         vi.clearAllMocks();
     });
 
@@ -95,6 +130,151 @@ describe("session-history", () => {
             const sessions = getSessions();
             expect(sessions[0].snippetId).toBe("second");
             expect(sessions[1].snippetId).toBe("first");
+        });
+    });
+
+    describe("session-saved announcement", () => {
+        // Read-only surfaces (the hero's personal-best line) mount once and would
+        // otherwise stay stale for the rest of the page's life.
+        it("announces a synchronous write on window", () => {
+            const record = createSession(createMockInput({ wpm: 88 }));
+
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+            const event = dispatchEvent.mock.calls[0][0] as unknown as CustomEvent;
+            expect(event.type).toBe(SESSION_SAVED_EVENT);
+            expect(event.detail).toEqual({ id: record!.id, wpm: 88 });
+        });
+
+        it("announces an async write once the record has been persisted", async () => {
+            await createSessionAsync(createMockInput({ wpm: 42 }));
+
+            expect(dispatchEvent).toHaveBeenCalledTimes(1);
+            const event = dispatchEvent.mock.calls[0][0] as unknown as CustomEvent;
+            expect(event.type).toBe(SESSION_SAVED_EVENT);
+            expect((event.detail as { wpm: number }).wpm).toBe(42);
+        });
+
+        it("stays quiet when nothing was written", () => {
+            updateSession("missing-id", { wpm: 10 });
+            expect(dispatchEvent).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("localStorage mirror", () => {
+        function storedRecords() {
+            return JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+        }
+
+        it("drops the per-second history samples once IndexedDB has the record", async () => {
+            await createSessionAsync(createMockInput());
+
+            expect(storedRecords()[0].history).toEqual([]);
+        });
+
+        it("keeps the full record when IndexedDB is unavailable (the mirror IS the store)", async () => {
+            idb.available = false;
+            const input = createMockInput();
+
+            await createSessionAsync(input);
+
+            expect(storedRecords()[0].history).toEqual(input.history);
+        });
+
+        it("keeps the full record when the IndexedDB write fails", async () => {
+            idb.putFails = true;
+            const input = createMockInput();
+
+            await createSessionAsync(input);
+
+            expect(storedRecords()[0].history).toEqual(input.history);
+        });
+
+        it("keeps the full record on the sync path, where the IDB write is unconfirmed", () => {
+            const input = createMockInput();
+
+            createSession(input);
+
+            expect(storedRecords()[0].history).toEqual(input.history);
+        });
+
+        it("keeps errors and snippetContent, which weak-pattern analysis reads synchronously", () => {
+            createSession(
+                createMockInput({
+                    errors: [{ expected: "a", got: "b", index: 3 }],
+                    snippetContent: "const a = 1;",
+                    snippetContentLength: 12,
+                }),
+            );
+
+            const stored = JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+            expect(stored[0].errors).toEqual([{ expected: "a", got: "b", index: 3 }]);
+            expect(stored[0].snippetContent).toBe("const a = 1;");
+        });
+
+        it("trims the oldest half and retries once when the quota is exceeded", () => {
+            for (let i = 0; i < 8; i++) createSession(createMockInput({ wpm: i }));
+
+            const quotaError = new DOMException("quota", "QuotaExceededError");
+            let thrown = false;
+            mockLocalStorage.setItem.mockImplementationOnce(() => {
+                thrown = true;
+                throw quotaError;
+            });
+
+            expect(() => createSession(createMockInput({ wpm: 99 }))).not.toThrow();
+            expect(thrown).toBe(true);
+
+            // The retry kept the newest half rather than losing the write entirely.
+            const stored = JSON.parse(mockLocalStorage.getItem("codesprint-session-history")!);
+            expect(stored).toHaveLength(4);
+            expect(stored[0].wpm).toBe(99);
+        });
+
+    });
+
+    // The warn-once latch is module state, so each of these needs a fresh module.
+    describe("mirror warnings", () => {
+        async function freshModule() {
+            vi.resetModules();
+            return import("../session-history");
+        }
+
+        it("does not claim IndexedDB has the full history when it does not", async () => {
+            idb.available = false;
+            const { createSessionAsync: create } = await freshModule();
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+            mockLocalStorage.setItem.mockImplementationOnce(() => {
+                throw new DOMException("quota", "QuotaExceededError");
+            });
+
+            await create(createMockInput());
+
+            const message = warn.mock.calls.map((call) => String(call[0])).join("\n");
+            expect(message).toContain("exceeded the localStorage quota");
+            expect(message).not.toContain("IndexedDB still holds the full history");
+            warn.mockRestore();
+        });
+
+        it("still warns about a quota trim after an unrelated mirror warning", async () => {
+            const { createSessionAsync: create } = await freshModule();
+            const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+            // A non-quota failure warns first...
+            mockLocalStorage.setItem.mockImplementationOnce(() => {
+                throw new Error("localStorage is disabled");
+            });
+            await create(createMockInput());
+
+            // ...and must not silence the later data-loss warning.
+            mockLocalStorage.setItem.mockImplementationOnce(() => {
+                throw new DOMException("quota", "QuotaExceededError");
+            });
+            await create(createMockInput());
+
+            const message = warn.mock.calls.map((call) => String(call[0])).join("\n");
+            expect(message).toContain("Failed to mirror session history");
+            expect(message).toContain("exceeded the localStorage quota");
+            warn.mockRestore();
         });
     });
 

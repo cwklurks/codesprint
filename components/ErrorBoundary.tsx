@@ -51,13 +51,19 @@ export class ErrorBoundary extends Component<Props, State> {
                     p={8}
                 >
                     <VStack gap={4} align="center">
-                        <Text fontSize="xl" fontWeight="semibold" color="red.500">
+                        <Text fontSize="xl" fontWeight="semibold" color="var(--error)">
                             Something went wrong
                         </Text>
-                        <Text color="fg.muted" textAlign="center" fontSize="sm">
+                        <Text color="var(--text-subtle)" textAlign="center" fontSize="sm">
                             An error occurred in this component. Please try reloading.
                         </Text>
-                        <Button onClick={this.handleReset} colorPalette="red">
+                        <Button
+                            onClick={this.handleReset}
+                            bg="var(--error)"
+                            color="var(--bg)"
+                            borderRadius="var(--radius-sm)"
+                            _hover={{ opacity: 0.9 }}
+                        >
                             Reload Page
                         </Button>
                     </VStack>

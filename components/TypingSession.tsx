@@ -7,18 +7,16 @@ import dynamic from "next/dynamic";
 
 import GapBufferVisualizer from "@/components/GapBufferVisualizer";
 import LiveStats from "@/components/LiveStats";
-import LeaderboardModal from "@/components/LeaderboardModal";
-import AIDrillPanel from "@/components/AIDrillPanel";
 
+import { useOverlayState } from "@/components/AppShell";
 import { SessionControlBar } from "@/components/session/SessionControlBar";
 import { SessionTopBar } from "@/components/session/SessionTopBar";
 import { CountdownOverlay } from "@/components/session/CountdownOverlay";
-import { ResultScreen } from "@/components/session/ResultScreen";
 import { DailyChallengeCard } from "@/components/daily/DailyChallengeCard";
 
 import { usePrefersReducedMotion } from "@/lib/motion";
 import { usePreferences } from "@/lib/preferences";
-import { getPanelMotion } from "@/lib/motion-config";
+import { getPanelMotion, getSessionSwapMotion } from "@/lib/motion-config";
 import { getLayoutGap } from "@/lib/session-styles";
 import { estimateEditorHeight } from "@/lib/code-panel";
 
@@ -43,11 +41,41 @@ const CodePanel = dynamic(() => import("@/components/CodePanel"), {
     loading: () => <Box h="100%" minH="inherit" bg="var(--panel)" borderRadius="md" />,
 });
 
+// Named export — the loader has to unwrap it explicitly.
+const ResultScreen = dynamic(
+    () => import("@/components/session/ResultScreen").then((m) => m.ResultScreen),
+    { ssr: false, loading: () => null },
+);
+
+// Both are opened by user action only, and both used to be mounted with
+// isOpen={false}, re-rendering on every keystroke of a run.
+const LeaderboardModal = dynamic(() => import("@/components/LeaderboardModal"), { ssr: false });
+const AIDrillPanel = dynamic(() => import("@/components/AIDrillPanel"), { ssr: false });
+
 export default function TypingSession() {
     const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
     const [isDrillPanelOpen, setIsDrillPanelOpen] = useState(false);
     const [difficultyTransition, setDifficultyTransition] = useState<DifficultyTransition | undefined>(undefined);
     const panelContainerRef = useRef<HTMLDivElement | null>(null);
+    const { isOverlayOpen, setOverlayOpen } = useOverlayState();
+
+    const openLeaderboard = useCallback(() => setIsLeaderboardOpen(true), []);
+    const closeLeaderboard = useCallback(() => setIsLeaderboardOpen(false), []);
+    const openDrillPanel = useCallback(() => setIsDrillPanelOpen(true), []);
+    const closeDrillPanel = useCallback(() => setIsDrillPanelOpen(false), []);
+
+    // Publish this component's overlays into the shared gate so the engine's
+    // capture-phase key handler stands down while one of them owns the keyboard.
+    // The cleanups matter: without them an unmount (or a dynamic chunk that never
+    // loads) would leave the gate latched and the keyboard dead.
+    useEffect(() => {
+        setOverlayOpen("leaderboard", isLeaderboardOpen);
+        return () => setOverlayOpen("leaderboard", false);
+    }, [isLeaderboardOpen, setOverlayOpen]);
+    useEffect(() => {
+        setOverlayOpen("ai-drill", isDrillPanelOpen);
+        return () => setOverlayOpen("ai-drill", false);
+    }, [isDrillPanelOpen, setOverlayOpen]);
 
     // Store engine reset function in a ref to break circular dependency
     const engineResetRef = useRef<() => void>(() => {});
@@ -109,22 +137,34 @@ export default function TypingSession() {
     // Update ref with actual reset function
     engineResetRef.current = engine.reset;
 
+    // Every finish consumer below reads the engine's atomic final snapshot when a
+    // run has ended, so persistence, achievements and the result screen can never
+    // disagree about the sample (or round the elapsed time down to a timer tick).
+    const finalSnapshot = engine.finalSnapshot;
+    const resultMetrics = finalSnapshot ? finalSnapshot.metrics : engine.metrics;
+    const resultElapsedMs = finalSnapshot ? finalSnapshot.elapsedMs : engine.elapsedMs;
+    const resultErrorCount = finalSnapshot ? finalSnapshot.wrongChars.size : engine.wrongChars.size;
+    const resultErrorLog = finalSnapshot ? finalSnapshot.errorLog : engine.errorLog;
+    const resultHistory = finalSnapshot ? finalSnapshot.history : engine.history;
+    const resultTotalKeystrokes = finalSnapshot ? finalSnapshot.totalKeystrokes : engine.totalKeystrokes;
+    const resultCorrectKeystrokes = finalSnapshot ? finalSnapshot.correctKeystrokes : engine.correctKeystrokes;
+
     // Achievements, XP, Streaks
     const achievements = useAchievements({
         phase: engine.phase,
         session: {
             snippetId: controls.snippet.id,
-            wpm: engine.metrics.adjustedWpm,
-            accuracy: engine.metrics.accuracy,
-            elapsedMs: engine.elapsedMs,
+            wpm: resultMetrics.adjustedWpm,
+            accuracy: resultMetrics.accuracy,
+            elapsedMs: resultElapsedMs,
             language: controls.language,
             difficulty: controls.snippet.difficulty,
             lengthCategory: controls.snippet.lengthCategory,
-            errorCount: engine.wrongChars.size,
-            totalKeystrokes: engine.totalKeystrokes,
-            correctKeystrokes: engine.correctKeystrokes,
-            patternScore: engine.metrics.patternScore,
-            history: engine.history,
+            errorCount: resultErrorCount,
+            totalKeystrokes: resultTotalKeystrokes,
+            correctKeystrokes: resultCorrectKeystrokes,
+            patternScore: resultMetrics.patternScore,
+            history: resultHistory,
         },
         preferences: {
             vimMode: preferences.vimMode,
@@ -192,22 +232,31 @@ export default function TypingSession() {
     const lifecycle = useSessionLifecycle({
         phase: engine.phase,
         snippetId: controls.snippet.id,
-        metrics: engine.metrics,
+        metrics: resultMetrics,
         language: controls.language,
-        elapsedMs: engine.elapsedMs,
-        totalKeystrokes: engine.totalKeystrokes,
-        correctKeystrokes: engine.correctKeystrokes,
-        errorCount: engine.wrongChars.size,
-        history: engine.history,
+        elapsedMs: resultElapsedMs,
+        totalKeystrokes: resultTotalKeystrokes,
+        correctKeystrokes: resultCorrectKeystrokes,
+        errorCount: resultErrorCount,
+        history: resultHistory,
         lengthCategory: controls.snippet.lengthCategory,
         difficulty: controls.snippet.difficulty,
         isAIDrill: controls.snippet.problemId.startsWith("ai-drill-"),
         // NEW - pass error data for AI drill weak pattern aggregation
-        errors: engine.errorLog,
+        errors: resultErrorLog,
         snippetContent: controls.snippet.content,
         onResetEngine: engine.reset,
         onSessionFinished: handleSessionFinished,
     });
+
+    const lifecycleClearAutoAdvance = lifecycle.clearAutoAdvance;
+    const controlsHandleNextProblem = controls.handleNextProblem;
+
+    const goToNextProblem = useCallback(() => {
+        isDailyRunRef.current = false;
+        lifecycleClearAutoAdvance();
+        controlsHandleNextProblem();
+    }, [lifecycleClearAutoAdvance, controlsHandleNextProblem]);
 
     // Keyboard Shortcuts
     useKeyboardShortcuts({
@@ -216,19 +265,16 @@ export default function TypingSession() {
         problemCount: controls.problemOptions.length,
         engineHandleKeyDown: engine.handleKeyDown,
         onReset: engine.reset,
-        onNextProblem: () => {
-            isDailyRunRef.current = false;
-            lifecycle.clearAutoAdvance();
-            controls.handleNextProblem();
-        },
+        onNextProblem: goToNextProblem,
         onStartEngine: engine.start,
         enableEditorFocus: focus.enableEditorFocus,
         focusEditor: focus.focusEditor,
         setVimMode,
         setShowLiveStatsDuringRun,
         showLiveStatsDuringRun: preferences.showLiveStatsDuringRun,
-        clearAutoAdvance: lifecycle.clearAutoAdvance,
-        onOpenAIDrill: () => setIsDrillPanelOpen(true),
+        clearAutoAdvance: lifecycleClearAutoAdvance,
+        onOpenAIDrill: openDrillPanel,
+        isOverlayOpen,
     });
 
     // Auto Scroll
@@ -253,14 +299,22 @@ export default function TypingSession() {
 
     const layoutGap = getLayoutGap(isTerminalMode, isImmersive);
     const panelMotion = getPanelMotion(prefersReducedMotion);
+    const sessionSwapMotion = getSessionSwapMotion(prefersReducedMotion);
+
+    // Depend on the individual stable callbacks, not on the `focus` / `engine`
+    // objects — those are new literals every render, which would break the memo
+    // on every child that receives one of these handlers.
+    const enableEditorFocus = focus.enableEditorFocus;
+    const focusEditor = focus.focusEditor;
+    const engineStart = engine.start;
 
     // Handlers
     const handleStart = useCallback(() => {
         isDailyRunRef.current = false;
-        focus.enableEditorFocus();
-        engine.start();
-        focus.focusEditor();
-    }, [focus, engine]);
+        enableEditorFocus();
+        engineStart();
+        focusEditor();
+    }, [enableEditorFocus, engineStart, focusEditor]);
 
     // Start (or re-practice) today's Daily Challenge. setSnippet updates state
     // asynchronously, so defer engine.start() until the daily snippet is active.
@@ -269,13 +323,13 @@ export default function TypingSession() {
         isDailyRunRef.current = true;
         controls.setSnippet(daily.dailySnippet);
         if (controls.snippet.id === daily.dailySnippet.id) {
-            focus.enableEditorFocus();
-            engine.start();
-            focus.focusEditor();
+            enableEditorFocus();
+            engineStart();
+            focusEditor();
         } else {
             pendingDailyStartRef.current = true;
         }
-    }, [daily.dailySnippet, controls, focus, engine]);
+    }, [daily.dailySnippet, controls, enableEditorFocus, engineStart, focusEditor]);
 
     // Fire the deferred daily start once the daily snippet has become active.
     useEffect(() => {
@@ -283,23 +337,28 @@ export default function TypingSession() {
         if (!daily.dailySnippet) return;
         if (controls.snippet.id !== daily.dailySnippet.id) return;
         pendingDailyStartRef.current = false;
-        focus.enableEditorFocus();
-        engine.start();
-        focus.focusEditor();
-    }, [controls.snippet.id, daily.dailySnippet, focus, engine]);
+        enableEditorFocus();
+        engineStart();
+        focusEditor();
+    }, [controls.snippet.id, daily.dailySnippet, enableEditorFocus, engineStart, focusEditor]);
 
     const handleNextProblem = useCallback(() => {
-        isDailyRunRef.current = false;
-        focus.enableEditorFocus();
-        lifecycle.clearAutoAdvance();
-        controls.handleNextProblem();
-    }, [focus, lifecycle, controls]);
+        enableEditorFocus();
+        goToNextProblem();
+    }, [enableEditorFocus, goToNextProblem]);
 
     useEffect(() => {
         if (engine.phase !== "finished") {
             setDifficultyTransition(undefined);
             setFinishedDaily(false);
         }
+    }, [engine.phase]);
+
+    // Warm the result chunk while the user types so the finish transition never
+    // waits on a network round trip.
+    useEffect(() => {
+        if (engine.phase !== "running") return;
+        void import("@/components/session/ResultScreen");
     }, [engine.phase]);
 
     const handleDrillAccept = useCallback(async (snippet: Snippet) => {
@@ -313,13 +372,12 @@ export default function TypingSession() {
                 {engine.phase !== "finished" ? (
                     <m.div
                         key="session"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
-                        transition={{ duration: 0.3, ease: "easeOut" }}
+                        {...sessionSwapMotion}
                         style={{ width: "100%" }}
                     >
-                        <Box display="flex" flexDirection="column" gap={8}>
+                        {/* Tighter between the stacked blocks on phones: every
+                            pixel here is a pixel of editor above the fold. */}
+                        <Box display="flex" flexDirection="column" gap={{ base: 5, md: 8 }}>
                             {/* Control Bar (hidden during focus) */}
                             {!focusActive && (
                                 <SessionControlBar
@@ -336,7 +394,7 @@ export default function TypingSession() {
                                     prefersReducedMotion={prefersReducedMotion}
                                     dueCount={sr.dueCount}
                                     suggestedDifficulty={adaptive.suggestedDifficulty}
-                                    onOpenAIDrill={() => setIsDrillPanelOpen(true)}
+                                    onOpenAIDrill={openDrillPanel}
                                 />
                             )}
 
@@ -376,12 +434,15 @@ export default function TypingSession() {
                                                 currentProblem={controls.currentProblem}
                                                 problemCount={controls.problemOptions.length}
                                                 onNextProblem={handleNextProblem}
-                                                onLeaderboardOpen={() => setIsLeaderboardOpen(true)}
+                                                onLeaderboardOpen={openLeaderboard}
                                             />
 
                                             {/* Live Stats (during running) */}
                                             {showRunningStats && (
-                                                <Box alignSelf="center" width="100%" maxW="md">
+                                                // Left-aligned with the code panel below it: centred, the
+                                                // card floated over left-aligned code with nothing to
+                                                // line up against.
+                                                <Box alignSelf="flex-start" width="100%" maxW="md">
                                                     <LiveStats wpm={engine.metrics.adjustedWpm} accuracy={engine.metrics.accuracy} />
                                                 </Box>
                                             )}
@@ -425,23 +486,26 @@ export default function TypingSession() {
                 ) : (
                     /* Result Screen */
                     <ResultScreen
-                        wpm={engine.metrics.adjustedWpm}
-                        rawWpm={engine.metrics.rawWpm}
-                        accuracy={engine.metrics.accuracy}
-                        timeMs={engine.elapsedMs}
-                        errors={engine.wrongChars.size}
+                        wpm={resultMetrics.adjustedWpm}
+                        rawWpm={resultMetrics.rawWpm}
+                        accuracy={resultMetrics.accuracy}
+                        timeMs={resultElapsedMs}
+                        errors={resultErrorCount}
+                        totalKeystrokes={resultTotalKeystrokes}
+                        correctKeystrokes={resultCorrectKeystrokes}
+                        theme={preferences.theme}
                         snippetTitle={controls.snippet.title}
                         snippetId={controls.snippet.id}
                         language={controls.language}
                         difficulty={controls.snippet.difficulty}
                         lengthCategory={controls.snippet.lengthCategory}
-                        errorLog={engine.errorLog}
-                        history={engine.history}
+                        errorLog={resultErrorLog}
+                        history={resultHistory}
                         autoAdvanceDeadline={lifecycle.autoAdvanceDeadline}
                         canAdvance={controls.problemOptions.length > 1}
                         onNext={handleNextProblem}
                         prefersReducedMotion={prefersReducedMotion}
-                        patternScore={engine.metrics.patternScore}
+                        patternScore={resultMetrics.patternScore}
                         tokens={controls.snippet.tokens}
                         contentLength={controls.snippet.content.length}
                         xpGained={achievements.xpGained}
@@ -463,17 +527,21 @@ export default function TypingSession() {
                 )}
             </AnimatePresence>
 
-            <LeaderboardModal
-                isOpen={isLeaderboardOpen}
-                onOpenChange={(e) => setIsLeaderboardOpen(e.open)}
-            />
+            {isLeaderboardOpen && (
+                <LeaderboardModal
+                    isOpen
+                    onOpenChange={(e) => { if (!e.open) closeLeaderboard(); }}
+                />
+            )}
 
-            <AIDrillPanel
-                isOpen={isDrillPanelOpen}
-                onClose={() => setIsDrillPanelOpen(false)}
-                onAccept={handleDrillAccept}
-                language={controls.language}
-            />
+            {isDrillPanelOpen && (
+                <AIDrillPanel
+                    isOpen
+                    onClose={closeDrillPanel}
+                    onAccept={handleDrillAccept}
+                    language={controls.language}
+                />
+            )}
         </Box>
     );
 }

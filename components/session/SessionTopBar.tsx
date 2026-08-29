@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Button, Flex, Text } from "@chakra-ui/react";
 import {
     TooltipContent,
@@ -25,7 +26,7 @@ export interface SessionTopBarProps extends ProgressIndicatorProps {
 /**
  * Top bar containing progress indicator, problem summary, and action buttons
  */
-export function SessionTopBar({
+function SessionTopBarImpl({
     progress,
     isTerminalMode,
     isImmersive,
@@ -42,7 +43,7 @@ export function SessionTopBar({
     const problemSummary =
         problemCount > 0 ? (
             <Flex direction="column" gap={1} minW={0}>
-                <Text fontSize="sm" fontWeight={600} color="var(--text)" whiteSpace="nowrap">
+                <Text fontSize="sm" fontWeight={600} color="var(--text)" whiteSpace="nowrap" fontVariantNumeric="tabular-nums">
                     {problemCount} {problemCount === 1 ? "problem" : "problems"}
                 </Text>
                 <Text
@@ -85,7 +86,6 @@ export function SessionTopBar({
             </TooltipRoot>
         ) : null;
 
-    // Check if we have content to show
     const progressIndicator = (
         <ProgressIndicator
             progress={progress}
@@ -96,10 +96,15 @@ export function SessionTopBar({
         />
     );
 
-    const hasMeta = Boolean(showChrome && (progressIndicator || problemSummary));
-    const hasActions = Boolean(nextProblemButton);
+    // Chrome is hidden for the whole run, so both halves have to stand down —
+    // otherwise Leaderboard and Next problem stay lit while the editor is meant
+    // to be the only thing on screen.
+    const hasMeta = showChrome;
+    const hasActions = showChrome && Boolean(nextProblemButton);
 
-    if (!hasMeta && !hasActions) return null;
+    // The immersive run indicator is pinned to the viewport, not to this row, so
+    // it keeps rendering after the chrome has gone.
+    if (!hasMeta && !hasActions) return progressIndicator;
 
     return (
         <Flex
@@ -131,3 +136,5 @@ export function SessionTopBar({
         </Flex>
     );
 }
+
+export const SessionTopBar = memo(SessionTopBarImpl);

@@ -3,7 +3,6 @@
 import {
     DialogBackdrop,
     DialogBody,
-    DialogCloseTrigger,
     DialogContent,
     DialogHeader,
     DialogPositioner,
@@ -12,6 +11,12 @@ import {
     Portal,
 } from "@chakra-ui/react";
 import AnalyticsDashboard from "@/components/analytics/AnalyticsDashboard";
+import { DialogCloseButton } from "@/components/ui/DialogCloseButton";
+import {
+    overlayBackdropProps,
+    overlayDialogProps,
+    overlayHeaderProps,
+} from "@/components/ui/overlay";
 
 type AnalyticsModalProps = {
     isOpen: boolean;
@@ -28,15 +33,11 @@ export default function AnalyticsModal({ isOpen, onOpenChange }: AnalyticsModalP
             scrollBehavior="inside"
         >
             <Portal>
-                <DialogBackdrop backdropFilter="blur(6px)" />
+                <DialogBackdrop {...overlayBackdropProps} />
                 <DialogPositioner>
-                    <DialogContent
-                        bg="var(--panel-soft)"
-                        backdropFilter="blur(12px)"
-                        border="1px solid var(--border)"
-                    >
-                        <DialogCloseTrigger />
-                        <DialogHeader borderBottom="1px solid var(--border)">
+                    <DialogContent {...overlayDialogProps}>
+                        <DialogCloseButton />
+                        <DialogHeader {...overlayHeaderProps}>
                             <DialogTitle fontSize="xl" fontWeight="bold" color="var(--accent)">Analytics</DialogTitle>
                         </DialogHeader>
                         <DialogBody py={4}>

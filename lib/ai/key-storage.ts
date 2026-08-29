@@ -8,19 +8,36 @@ const KEY_PREFIX = "codesprint-ai-key-";
 export type AIProvider = "claude" | "openai" | "fireworks";
 
 /**
+ * localStorage throws outright in Safari private browsing and whenever site
+ * data is blocked. AI drills are optional, so every access degrades to "no key
+ * configured" rather than taking the render down with it.
+ */
+function readKey(provider: AIProvider): string | null {
+    if (typeof window === "undefined") return null;
+    try {
+        return localStorage.getItem(`${KEY_PREFIX}${provider}`);
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Store an API key for a provider
  */
 export function storeApiKey(provider: AIProvider, key: string): void {
     if (typeof window === "undefined") return;
-    localStorage.setItem(`${KEY_PREFIX}${provider}`, key);
+    try {
+        localStorage.setItem(`${KEY_PREFIX}${provider}`, key);
+    } catch {
+        // Storage unavailable: the key stays in memory for this page only.
+    }
 }
 
 /**
  * Get the stored API key for a provider
  */
 export function getApiKey(provider: AIProvider): string | null {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem(`${KEY_PREFIX}${provider}`);
+    return readKey(provider);
 }
 
 /**
@@ -28,15 +45,18 @@ export function getApiKey(provider: AIProvider): string | null {
  */
 export function clearApiKey(provider: AIProvider): void {
     if (typeof window === "undefined") return;
-    localStorage.removeItem(`${KEY_PREFIX}${provider}`);
+    try {
+        localStorage.removeItem(`${KEY_PREFIX}${provider}`);
+    } catch {
+        // Nothing was persisted, so there is nothing to clear.
+    }
 }
 
 /**
  * Check if an API key exists for a provider
  */
 export function hasApiKey(provider: AIProvider): boolean {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(`${KEY_PREFIX}${provider}`) !== null;
+    return readKey(provider) !== null;
 }
 
 /**

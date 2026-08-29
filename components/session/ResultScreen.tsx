@@ -2,14 +2,16 @@
 
 import { Flex, Stack, Text } from "@chakra-ui/react";
 import { m } from "framer-motion";
-import ResultCard from "@/components/ResultCard";
-import { DailyShareBlock } from "@/components/daily/DailyShareBlock";
+import ResultCard, { RESULT_POP_SPRING } from "@/components/ResultCard";
+import { DailyShareBlock, StreakFlame } from "@/components/daily/DailyShareBlock";
+import { MOTION_EASE } from "@/lib/motion";
 import { getResultCardMotion } from "@/lib/motion-config";
 import type { SupportedLanguage, SnippetLength } from "@/lib/snippets";
 import type { ErrorEntry, HistoryEntry } from "@/hooks/useTypingEngine";
 import type { Token } from "@/lib/tokenizer";
 import type { AchievementDefinition } from "@/lib/achievements";
 import type { Difficulty } from "@/lib/snippets";
+import type { ThemePreset } from "@/lib/preferences-core";
 
 export interface ResultScreenProps {
     /** Adjusted WPM score */
@@ -22,6 +24,12 @@ export interface ResultScreenProps {
     timeMs: number;
     /** Number of errors */
     errors: number;
+    /** Every key the run counted (the raw-WPM numerator) */
+    totalKeystrokes: number;
+    /** Of those, the ones that matched the snippet (the accuracy numerator) */
+    correctKeystrokes: number;
+    /** Active theme, so the card's primary action can carry its accent fill */
+    theme?: ThemePreset;
     /** Snippet title */
     snippetTitle: string;
     /** Snippet ID */
@@ -70,6 +78,23 @@ export interface ResultScreenProps {
     };
 }
 
+const MotionFlex = m.create(Flex);
+const MotionText = m.create(Text);
+
+/**
+ * Everything under the card joins the same reveal cascade the card runs
+ * internally, so the whole screen resolves as one sequence rather than as a
+ * card followed by a second wave of unrelated fades.
+ */
+function reveal(prefersReducedMotion: boolean, delay: number) {
+    if (prefersReducedMotion) return {};
+    return {
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.32, ease: MOTION_EASE.out, delay },
+    };
+}
+
 /**
  * Result screen shown when typing session is finished
  * Contains the centered result card and optional achievement metadata
@@ -80,6 +105,9 @@ export function ResultScreen({
     accuracy,
     timeMs,
     errors,
+    totalKeystrokes,
+    correctKeystrokes,
+    theme,
     snippetTitle,
     snippetId,
     language,
@@ -122,6 +150,9 @@ export function ResultScreen({
                     accuracy={accuracy}
                     timeMs={timeMs}
                     errors={errors}
+                    totalKeystrokes={totalKeystrokes}
+                    correctKeystrokes={correctKeystrokes}
+                    theme={theme}
                     onNext={canAdvance ? onNext : undefined}
                     autoAdvanceDeadline={autoAdvanceDeadline}
                     snippetTitle={snippetTitle}
@@ -140,10 +171,15 @@ export function ResultScreen({
                 />
 
                 {daily && (
-                    <Flex direction="column" align="center" gap={3}>
+                    <MotionFlex {...reveal(prefersReducedMotion, 0.4)} direction="column" align="center" gap={3}>
                         <Flex align="center" gap={1.5}>
-                            <Text fontSize="lg" lineHeight={1}>🔥</Text>
-                            <Text fontSize="lg" fontWeight={700} color="var(--accent)">
+                            <StreakFlame />
+                            <Text
+                                fontSize="lg"
+                                fontWeight={700}
+                                color="var(--accent)"
+                                fontVariantNumeric="tabular-nums"
+                            >
                                 {daily.streak}
                             </Text>
                             <Text fontSize="sm" color="var(--text-subtle)">
@@ -159,20 +195,35 @@ export function ResultScreen({
                             streak={daily.streak}
                             language={language}
                         />
-                    </Flex>
+                    </MotionFlex>
                 )}
 
                 {(xpGained !== undefined && xpGained > 0) && (
-                    <Text fontSize="md" fontWeight={600} color="var(--accent)">
+                    <MotionText
+                        {...reveal(prefersReducedMotion, 0.44)}
+                        fontSize="md"
+                        fontWeight={600}
+                        color="var(--accent)"
+                        fontVariantNumeric="tabular-nums"
+                    >
                         +{xpGained} XP
-                    </Text>
+                    </MotionText>
                 )}
 
                 {newlyUnlocked && newlyUnlocked.length > 0 && (
                     <Flex gap={2} flexWrap="wrap" justify="center">
-                        {newlyUnlocked.map((a) => (
-                            <Flex
+                        {newlyUnlocked.map((a, i) => (
+                            <MotionFlex
                                 key={a.id}
+                                {...(prefersReducedMotion
+                                    ? {}
+                                    : {
+                                          initial: { opacity: 0, scale: 0.8 },
+                                          animate: { opacity: 1, scale: 1 },
+                                          // Same pop as the NEW BEST badge; capped so a
+                                          // big unlock batch never drags the sequence out.
+                                          transition: { ...RESULT_POP_SPRING, delay: 0.46 + Math.min(i, 3) * 0.05 },
+                                      })}
                                 align="center"
                                 gap={1.5}
                                 px={3}
@@ -183,15 +234,15 @@ export function ResultScreen({
                             >
                                 <Text fontSize="sm" lineHeight={1}>{a.icon}</Text>
                                 <Text fontSize="xs" fontWeight={600} color="var(--text)">{a.name}</Text>
-                            </Flex>
+                            </MotionFlex>
                         ))}
                     </Flex>
                 )}
 
                 {difficultyTransition && difficultyTransition.reason !== "unchanged" && (
-                    <Text fontSize="sm" color="var(--text-subtle)">
+                    <MotionText {...reveal(prefersReducedMotion, 0.52)} fontSize="sm" color="var(--text-subtle)">
                         Difficulty adjusted to <Text as="span" fontWeight={600} color="var(--accent)">{difficultyTransition.newDifficulty}</Text>
-                    </Text>
+                    </MotionText>
                 )}
             </Stack>
         </m.div>
