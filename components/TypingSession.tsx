@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Stack } from "@chakra-ui/react";
 import { AnimatePresence, m } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -41,7 +41,6 @@ const CodePanel = dynamic(() => import("@/components/CodePanel"), {
     loading: () => <Box h="100%" minH="inherit" bg="var(--panel)" borderRadius="md" />,
 });
 
-// Named export — the loader has to unwrap it explicitly.
 const ResultScreen = dynamic(
     () => import("@/components/session/ResultScreen").then((m) => m.ResultScreen),
     { ssr: false, loading: () => null },
@@ -242,7 +241,6 @@ export default function TypingSession() {
         lengthCategory: controls.snippet.lengthCategory,
         difficulty: controls.snippet.difficulty,
         isAIDrill: controls.snippet.problemId.startsWith("ai-drill-"),
-        // NEW - pass error data for AI drill weak pattern aggregation
         errors: resultErrorLog,
         snippetContent: controls.snippet.content,
         onResetEngine: engine.reset,
@@ -294,6 +292,10 @@ export default function TypingSession() {
     const controlsDisabled = engine.phase === "running" || engine.phase === "countdown";
     const showRunningStats = engine.phase === "running" && preferences.showLiveStatsDuringRun;
 
+    const reservedEditorHeight = useMemo(
+        () => estimateEditorHeight(controls.snippet.content, editorFontSize),
+        [controls.snippet.content, editorFontSize],
+    );
     const total = controls.snippet.content.length;
     const progress = total === 0 ? 0 : Math.min(1, engine.cursorIndex / total);
 
@@ -449,12 +451,12 @@ export default function TypingSession() {
 
                                             {/* Code Panel — reserve the editor's real height so the
                                                 dynamic-import loading placeholder does not cause a mount-time jump. */}
-                                            <Box w="100%" minH={`${estimateEditorHeight(controls.snippet.content, editorFontSize)}px`}>
+                                            <Box w="100%" minH={`${reservedEditorHeight}px`}>
                                                 <CodePanel
                                                     content={controls.snippet.content}
                                                     cursorChar={engine.cursorIndex}
                                                     wrongChars={engine.wrongChars}
-                                                    language={controls.language === "javascript" ? "javascript" : controls.language}
+                                                    language={controls.language}
                                                     caretErrorActive={engine.caretErrorActive}
                                                     onReady={focus.handleEditorReady}
                                                     fontSize={editorFontSize}

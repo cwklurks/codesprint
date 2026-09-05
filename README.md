@@ -32,7 +32,7 @@ Practice 900+ real code snippets across Python, JavaScript, Java, and C++<br>wit
 
 Most typing tests measure how fast you can type English. That doesn't translate when you're writing code full of brackets, operators, and indentation.
 
-CodeSprint exists because syntax fluency matters — in interviews and in daily work. It lets you drill patterns like "Depth First Search in Python" or "Ring Buffer in C++" until your fingers know the shape of the code.
+Practice algorithms like "Depth First Search in Python" or "Ring Buffer in C++", with scoring that accounts for code syntax.
 
 > [!NOTE]
 > Core typing practice runs client-side with no account required. Session data stays in browser storage. If AI drills are enabled, your browser sends prompt context and your BYOK API key to this app's `/api/generate` route to proxy the provider request; keys are not stored server-side.
@@ -86,7 +86,7 @@ Tracks your proficiency per language and recommends what to practice next. Adjus
 
 <br>
 
-- 18+ color themes
+- 17 color themes
 - Vim mode support
 - Configurable font size, caret width, and syntax highlighting level
 - Panel mode or immersive/terminal mode for distraction-free practice
@@ -116,11 +116,13 @@ Optional BYOK drill generation targets your recent weak syntax patterns. Accepte
 
 ### The Editor
 
-CodeSprint runs a heavily customized Monaco Editor instance. It uses `deltaDecorations` to paint correct/incorrect keystrokes directly onto the editor model without breaking syntax highlighting, and overlays a custom caret that animates smoother than the native DOM cursor.
+CodeSprint uses Monaco for syntax highlighting and Vim support. It loads only the editor contributions needed for practice, rather than the full IDE feature set. Completed text is decorated as contiguous ranges split at mistakes, so a correct keystroke doesn't rescan all the text you've already typed. A custom caret follows Monaco's character positions.
 
 ### The Typing Engine
 
-React's render cycle is too slow for a 100+ WPM feedback loop. The typing engine (`hooks/useTypingEngine.ts`) isolates keystroke logic from the React render tree, only triggering re-renders for specific UI updates like the WPM gauge. Metrics are recalculated on a throttled interval rather than every keystroke.
+The typing engine (`hooks/useTypingEngine.ts`) updates refs synchronously so consecutive keystrokes see the current cursor and counters. React renders the cursor and progress on keystrokes; WPM updates every 200 ms, and graph history is sampled once per second. The last keystroke publishes an atomic snapshot used by both the result screen and storage.
+
+See [performance measurements](docs/performance.md) for before/after payload sizes and the range-building benchmark.
 
 ### Storage
 
