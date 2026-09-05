@@ -2,10 +2,7 @@
 
 import { Box } from "@chakra-ui/react";
 import Editor, { loader, type OnMount } from "@monaco-editor/react";
-// Statically imported on purpose: deferring it saved ~24 kB gzip inside a chunk
-// that is already ~2.7 MB (Monaco itself is deliberately bundled, see
-// loader.config below), and the deferral let "i" start a run before the chunk
-// resolved — vim then attached mid-run in Normal mode and ate the keystrokes.
+// Keep Vim ready before input starts; attaching it mid-run consumes keystrokes.
 import { initVimMode, type VimMode } from "monaco-vim";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
@@ -13,13 +10,24 @@ import type * as Monaco from "monaco-editor";
 // The editor core WITHOUT the bundled language services (typescript/json/css/html),
 // plus monarch tokenizers for exactly the four languages this app types.
 import * as monacoBundle from "monaco-editor/esm/vs/editor/editor.api";
-import "monaco-editor/esm/vs/editor/editor.all";
+// Read-only practice needs tokenization and navigation, not completion, inline AI,
+// rename, code lenses, color pickers, or the rest of editor.all. Keep the commands
+// monaco-vim uses for navigation, search, line insertion, and formatting.
+import "monaco-editor/esm/vs/editor/browser/coreCommands";
+import "monaco-editor/esm/vs/editor/contrib/tokenization/browser/tokenization";
+import "monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatching";
+import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard";
+import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu";
+import "monaco-editor/esm/vs/editor/contrib/find/browser/findController";
+import "monaco-editor/esm/vs/editor/contrib/wordOperations/browser/wordOperations";
+import "monaco-editor/esm/vs/editor/contrib/linesOperations/browser/linesOperations";
+import "monaco-editor/esm/vs/editor/contrib/format/browser/formatActions";
 import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution";
 import "monaco-editor/esm/vs/basic-languages/python/python.contribution";
 import "monaco-editor/esm/vs/basic-languages/java/java.contribution";
 import "monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution";
 
-import { estimateEditorHeight, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
+import { estimateEditorHeight, getCompletedRanges, getPreviewIndex, hexToRgb, toMonacoColor, withMonacoAlpha } from "@/lib/code-panel";
 import { minAlphaForContrast } from "@/lib/contrast";
 import {
     CARET_BLINK_TIMEOUT_MS,
@@ -46,6 +54,14 @@ const LINE_BREAK_REGEX = /\r\n|\r|\n/;
 
 // The app's single mono voice (next/font JetBrains Mono, see app/globals.css).
 const MONACO_FONT_FAMILY = "var(--font-mono), ui-monospace, Menlo, Consolas, monospace";
+
+const EDITOR_OPTIONS: Monaco.editor.IStandaloneEditorConstructionOptions = {
+    readOnly: true,
+    domReadOnly: true,
+    automaticLayout: true,
+    fontFamily: MONACO_FONT_FAMILY,
+    scrollbar: { vertical: "hidden", horizontal: "hidden" },
+};
 
 // Without this, @monaco-editor/react fetches a SECOND copy of Monaco (0.54.0)
 // from jsdelivr at runtime while monaco-vim's npm copy (0.52.2) is already in the
@@ -90,7 +106,8 @@ function CodePanel({
     const statusNodeRef = useRef<HTMLDivElement | null>(null);
     const tailMarkerRef = useRef<HTMLDivElement | null>(null);
 
-    const derivedLineHeight = useMemo(() => Math.round(fontSize * LINE_HEIGHT_MULTIPLIER), [fontSize]);
+    const sortedWrongChars = useMemo(() => [...wrongChars].sort((a, b) => a - b), [wrongChars]);
+    const derivedLineHeight = Math.round(fontSize * LINE_HEIGHT_MULTIPLIER);
     // Full content height, uncapped: the editor never scrolls internally, so the
     // page is the single smooth scroll authority that follows the caret.
     const estimatedHeight = useMemo(() => estimateEditorHeight(content, fontSize), [content, fontSize]);
@@ -300,13 +317,6 @@ function CodePanel({
                 // Find the editor container to append the status bar
                 const editorDom = editor.getDomNode();
                 if (editorDom && editorDom.parentElement) {
-                    // We need to be careful. monaco-vim expects to be able to append to the container.
-                    // Sometimes the parentElement is the scrollable element.
-                    // Let's try to find the wrapper we created.
-                    // editorDom.parentElement is usually the .monaco-editor div.
-                    // We want to append to the CodePanel container if possible, or just absolute position it relative to the editor.
-
-                    // Actually, let's append to the editor's container so it stays with it.
                     editorDom.parentElement.appendChild(statusNode);
                     statusNodeRef.current = statusNode;
                 }
@@ -492,46 +502,17 @@ function CodePanel({
 
         const caretIndex = Math.max(0, Math.min(cursorChar, content.length));
 
-        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = [];
-        let rangeStart = -1;
-        for (let index = 0; index <= caretIndex; index += 1) {
-            const isCompleted = index < caretIndex && !wrongChars.has(index);
-            if (isCompleted) {
-                if (rangeStart === -1) {
-                    rangeStart = index;
-                }
-                continue;
-            }
-            if (rangeStart !== -1) {
-                const startPos = model.getPositionAt(rangeStart);
-                const endPos = model.getPositionAt(index);
-                completedDecorations.push({
-                    range: new monaco.Range(
-                        startPos.lineNumber,
-                        startPos.column,
-                        endPos.lineNumber,
-                        endPos.column,
-                    ),
+        const completedDecorations: Monaco.editor.IModelDeltaDecoration[] = getCompletedRanges(caretIndex, sortedWrongChars)
+            .map(([start, end]) => {
+                const startPos = model.getPositionAt(start);
+                const endPos = model.getPositionAt(end);
+                return {
+                    range: new monaco.Range(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
                     options: { inlineClassName: "cs-complete" },
-                });
-                rangeStart = -1;
-            }
-        }
-        if (rangeStart !== -1) {
-            const startPos = model.getPositionAt(rangeStart);
-            const endPos = model.getPositionAt(caretIndex);
-            completedDecorations.push({
-                range: new monaco.Range(
-                    startPos.lineNumber,
-                    startPos.column,
-                    endPos.lineNumber,
-                    endPos.column,
-                ),
-                options: { inlineClassName: "cs-complete" },
+                };
             });
-        }
 
-        const errorDecorations: Monaco.editor.IModelDeltaDecoration[] = Array.from(wrongChars).map((abs) => {
+        const errorDecorations: Monaco.editor.IModelDeltaDecoration[] = sortedWrongChars.map((abs) => {
             const pos = model.getPositionAt(abs);
             return {
                 range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column + 1),
@@ -543,7 +524,7 @@ function CodePanel({
             ...completedDecorations,
             ...errorDecorations,
         ]);
-    }, [cursorChar, wrongChars, content, editorReadyToken, ensureCaretNode]);
+    }, [cursorChar, sortedWrongChars, content, editorReadyToken, ensureCaretNode]);
 
     useEffect(() => {
         const editorRefCapture = editorRef;
@@ -620,13 +601,7 @@ function CodePanel({
                 // theme is handled by useEffect, but we provide a safe default
                 theme="vs-dark"
                 height={estimatedHeight}
-                options={{
-                    readOnly: true,
-                    domReadOnly: true,
-                    automaticLayout: true,
-                    fontFamily: MONACO_FONT_FAMILY,
-                    scrollbar: { vertical: "hidden", horizontal: "hidden" },
-                }}
+                options={EDITOR_OPTIONS}
                 onMount={handleMount}
             />
             {/* Zero-height marker on the panel's bottom edge; see the observer above. */}

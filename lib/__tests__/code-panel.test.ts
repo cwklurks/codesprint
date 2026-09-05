@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     estimateEditorHeight,
+    getCompletedRanges,
     getPreviewIndex,
     hexToRgb,
     normalizeHexColor,
@@ -63,6 +64,37 @@ describe("estimateEditorHeight", () => {
         const content = Array.from({ length: 40 }, () => "x").join("\n");
         // round(20 * 1.55) = 31; (40 + 4) * 31 = 1364
         expect(estimateEditorHeight(content, 20)).toBe(1364);
+    });
+});
+
+describe("getCompletedRanges", () => {
+    it("represents a perfect prefix with one range regardless of length", () => {
+        expect(getCompletedRanges(100_000, [])).toEqual([[0, 100_000]]);
+        expect(getCompletedRanges(0, [])).toEqual([]);
+    });
+
+    it("splits around errors, including adjacent errors and errors at the edges", () => {
+        expect(getCompletedRanges(10, [0, 3, 4, 9])).toEqual([[1, 3], [5, 9]]);
+        expect(getCompletedRanges(3, [0, 1, 2])).toEqual([]);
+    });
+
+    it("ignores errors at or past the cursor after backspacing", () => {
+        expect(getCompletedRanges(3, [1, 3, 8])).toEqual([[0, 1], [2, 3]]);
+        expect(getCompletedRanges(0, [0, 1])).toEqual([]);
+    });
+
+    it("matches character-by-character highlighting for every small error set and cursor", () => {
+        for (let mask = 0; mask < 256; mask++) {
+            const errors = Array.from({ length: 8 }, (_, i) => i).filter((i) => mask & (1 << i));
+            for (let cursor = 0; cursor <= 8; cursor++) {
+                const completed = getCompletedRanges(cursor, errors).flatMap(([start, end]) =>
+                    Array.from({ length: end - start }, (_, i) => start + i),
+                );
+                expect(completed).toEqual(
+                    Array.from({ length: cursor }, (_, i) => i).filter((i) => !errors.includes(i)),
+                );
+            }
+        }
     });
 });
 

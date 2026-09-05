@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+
+- Load selected Monaco contributions instead of `editor.all`. The idle page loads 980 KB less uncompressed JavaScript, or 260 KB less with local gzip, an 18.2% gzip reduction. Clipboard, context menus, syntax highlighting, and Vim support remain. See [measurement details](docs/performance.md).
+- Build completed-text ranges from error boundaries instead of rescanning the typed prefix after each keystroke.
+- Keep editor options stable and cache the session's editor-height calculation.
+
+### Maintenance
+
+- Remove redundant branches and implementation commentary. Correct the README's theme count and its claim that keystrokes don't trigger React renders.
+- Add repeatable payload and range-building measurements, exhaustive range tests, and production browser coverage for all four languages and Vim attachment.
+
 ## [0.3.0] - 2026-08-28
 
 The portfolio mega-polish: a full design, performance, accessibility, and

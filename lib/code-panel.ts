@@ -94,6 +94,19 @@ export function estimateEditorHeight(content: string, fontSize: number): number 
     return Math.max(MIN_EDITOR_HEIGHT, lines * lineHeight);
 }
 
+/** Half-open completed ranges, split only at errors. Errors must be sorted ascending. */
+export function getCompletedRanges(caretIndex: number, sortedWrongChars: readonly number[]): [number, number][] {
+    const ranges: [number, number][] = [];
+    let start = 0;
+    for (const error of sortedWrongChars) {
+        if (error >= caretIndex) break;
+        if (error > start) ranges.push([start, error]);
+        start = error + 1;
+    }
+    if (start < caretIndex) ranges.push([start, caretIndex]);
+    return ranges;
+}
+
 export function getPreviewIndex(content: string, caretIndex: number, previewChars = 12): number {
     let index = Math.max(0, Math.min(caretIndex, content.length));
     let remaining = Math.max(0, previewChars);
