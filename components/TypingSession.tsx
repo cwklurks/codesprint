@@ -31,6 +31,8 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { useSpacedRepetition } from "@/hooks/useSpacedRepetition";
 import { useAdaptiveDifficulty } from "@/hooks/useAdaptiveDifficulty";
 import { useDaily } from "@/hooks/useDaily";
+import { getDailyNumber } from "@/lib/daily";
+import { getLocalDateString } from "@/lib/streaks";
 import type { SupportedLanguage, Difficulty, SnippetLength, Snippet } from "@/lib/snippets";
 import type { DifficultyTransition } from "@/lib/adaptive";
 
@@ -82,10 +84,10 @@ export default function TypingSession() {
     const srRecommendationRef = useRef<(availableIds: string[], currentId: string) => string | null>(() => null);
     // Tracks whether the in-flight run is the Daily Challenge so the finish
     // handler can record it. A ref so it survives start -> finish without re-render.
-    const isDailyRunRef = useRef(false);
+    const dailyRunDateRef = useRef<string | null>(null);
     // Set when a daily start is requested but the snippet has not propagated yet;
     // an effect fires engine.start() once the daily snippet is active.
-    const pendingDailyStartRef = useRef(false);
+    const pendingDailyStartRef = useRef<string | null>(null);
 
     // Preferences
     const {
@@ -182,7 +184,7 @@ export default function TypingSession() {
     // Daily CodeSprint (date-seeded snippet, streak, share)
     const daily = useDaily();
     // Whether the just-finished run was the daily; surfaces the share block on the result.
-    const [finishedDaily, setFinishedDaily] = useState(false);
+    const [finishedDaily, setFinishedDaily] = useState<string | null>(null);
 
     // Extract stable method refs to avoid callback identity churn
     const srUpdateMastery = sr.updateMastery;
@@ -200,15 +202,15 @@ export default function TypingSession() {
         lengthCategory: SnippetLength;
     }) => {
         // Daily run: record it (idempotent per day) and flag the result screen.
-        if (isDailyRunRef.current) {
+        if (dailyRunDateRef.current) {
             dailyRecord({
                 wpm: sessionData.wpm,
                 accuracy: sessionData.accuracy,
                 patternScore: sessionData.patternScore,
-            });
-            setFinishedDaily(true);
+            }, dailyRunDateRef.current);
+            setFinishedDaily(dailyRunDateRef.current);
         } else {
-            setFinishedDaily(false);
+            setFinishedDaily(null);
         }
         srUpdateMastery({
             snippetId: sessionData.snippetId,
@@ -251,7 +253,8 @@ export default function TypingSession() {
     const controlsHandleNextProblem = controls.handleNextProblem;
 
     const goToNextProblem = useCallback(() => {
-        isDailyRunRef.current = false;
+        dailyRunDateRef.current = null;
+        pendingDailyStartRef.current = null;
         lifecycleClearAutoAdvance();
         controlsHandleNextProblem();
     }, [lifecycleClearAutoAdvance, controlsHandleNextProblem]);
@@ -312,7 +315,8 @@ export default function TypingSession() {
 
     // Handlers
     const handleStart = useCallback(() => {
-        isDailyRunRef.current = false;
+        dailyRunDateRef.current = null;
+        pendingDailyStartRef.current = null;
         enableEditorFocus();
         engineStart();
         focusEditor();
@@ -321,28 +325,27 @@ export default function TypingSession() {
     // Start (or re-practice) today's Daily Challenge. setSnippet updates state
     // asynchronously, so defer engine.start() until the daily snippet is active.
     const handleStartDaily = useCallback(() => {
-        if (!daily.dailySnippet) return;
-        isDailyRunRef.current = true;
+        if (!daily.dailySnippet || daily.today !== getLocalDateString()) return;
+        dailyRunDateRef.current = daily.today;
         controls.setSnippet(daily.dailySnippet);
         if (controls.snippet.id === daily.dailySnippet.id) {
             enableEditorFocus();
             engineStart();
             focusEditor();
         } else {
-            pendingDailyStartRef.current = true;
+            pendingDailyStartRef.current = daily.dailySnippet.id;
         }
-    }, [daily.dailySnippet, controls, enableEditorFocus, engineStart, focusEditor]);
+    }, [daily.today, daily.dailySnippet, controls, enableEditorFocus, engineStart, focusEditor]);
 
     // Fire the deferred daily start once the daily snippet has become active.
     useEffect(() => {
         if (!pendingDailyStartRef.current) return;
-        if (!daily.dailySnippet) return;
-        if (controls.snippet.id !== daily.dailySnippet.id) return;
-        pendingDailyStartRef.current = false;
+        if (controls.snippet.id !== pendingDailyStartRef.current) return;
+        pendingDailyStartRef.current = null;
         enableEditorFocus();
         engineStart();
         focusEditor();
-    }, [controls.snippet.id, daily.dailySnippet, enableEditorFocus, engineStart, focusEditor]);
+    }, [controls.snippet.id, enableEditorFocus, engineStart, focusEditor]);
 
     const handleNextProblem = useCallback(() => {
         enableEditorFocus();
@@ -352,7 +355,7 @@ export default function TypingSession() {
     useEffect(() => {
         if (engine.phase !== "finished") {
             setDifficultyTransition(undefined);
-            setFinishedDaily(false);
+            setFinishedDaily(null);
         }
     }, [engine.phase]);
 
@@ -519,8 +522,8 @@ export default function TypingSession() {
                         daily={
                             finishedDaily
                                 ? {
-                                      dateStr: daily.today,
-                                      dayNumber: daily.dayNumber,
+                                      dateStr: finishedDaily,
+                                      dayNumber: getDailyNumber(finishedDaily),
                                       streak: daily.streak,
                                   }
                                 : undefined

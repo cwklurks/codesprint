@@ -12,7 +12,7 @@ import {
 import type { Snippet } from "@/lib/snippets";
 
 export interface UseDailyReturn {
-    /** Today's local date as "YYYY-MM-DD". */
+    /** Today's local date as "YYYY-MM-DD", or empty until mounted. */
     today: string;
     /** Sequential daily number (epoch-based). */
     dayNumber: number;
@@ -25,7 +25,7 @@ export interface UseDailyReturn {
     /** Current daily streak length. */
     streak: number;
     /** Record a finished daily run (idempotent per day) and refresh state. */
-    record: (result: DailyResult) => void;
+    record: (result: DailyResult, challengeDate?: string) => void;
 }
 
 /**
@@ -33,21 +33,49 @@ export interface UseDailyReturn {
  * localStorage is read after mount to avoid SSR/hydration mismatch.
  */
 export function useDaily(): UseDailyReturn {
-    const today = useMemo(() => getLocalDateString(), []);
-    const dayNumber = useMemo(() => getDailyNumber(today), [today]);
+    // A date-independent initial render also matches statically generated HTML.
+    const [today, setToday] = useState("");
+    const dayNumber = useMemo(() => today ? getDailyNumber(today) : 0, [today]);
+
+    useEffect(() => {
+        let timer: ReturnType<typeof setTimeout>;
+        const refresh = () => {
+            const now = new Date();
+            setToday(getLocalDateString(now));
+            setProgress(getDailyProgress());
+            clearTimeout(timer);
+            const midnight = new Date(now);
+            midnight.setHours(24, 0, 0, 0);
+            timer = setTimeout(refresh, midnight.getTime() - now.getTime());
+        };
+        const onVisible = () => {
+            if (document.visibilityState === "visible") refresh();
+        };
+        refresh();
+        window.addEventListener("focus", refresh);
+        window.addEventListener("pageshow", refresh);
+        document.addEventListener("visibilitychange", onVisible);
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener("focus", refresh);
+            window.removeEventListener("pageshow", refresh);
+            document.removeEventListener("visibilitychange", onVisible);
+        };
+    }, []);
 
     // The pool is loaded on demand now, so the snippet arrives asynchronously.
     // Null until it resolves; the daily card renders its unavailable state.
-    const [dailySnippet, setDailySnippet] = useState<Snippet | null>(null);
+    const [loadedDaily, setLoadedDaily] = useState<{ date: string; snippet: Snippet | null } | null>(null);
+    const dailySnippet = loadedDaily?.date === today ? loadedDaily.snippet : null;
 
     useEffect(() => {
+        if (!today) return;
         let cancelled = false;
-        setDailySnippet(null);
 
         const load = () => {
             getTodaysDaily(today)
                 .then((snippet) => {
-                    if (!cancelled) setDailySnippet(snippet);
+                    if (!cancelled) setLoadedDaily({ date: today, snippet });
                 })
                 .catch((error) => {
                     console.warn("Failed to load today's daily snippet:", error);
@@ -81,15 +109,12 @@ export function useDaily(): UseDailyReturn {
         completedDates: [],
     }));
 
-    useEffect(() => {
-        setProgress(getDailyProgress());
-    }, [today]);
-
     const record = useCallback(
-        (result: DailyResult) => {
-            setProgress(recordDailyResult(today, result));
+        (result: DailyResult, challengeDate = getLocalDateString()) => {
+            setToday(getLocalDateString());
+            setProgress(recordDailyResult(challengeDate, result));
         },
-        [today]
+        []
     );
 
     const completed = progress.completedDates.includes(today);

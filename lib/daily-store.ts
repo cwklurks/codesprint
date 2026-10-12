@@ -69,7 +69,7 @@ export function recordDailyResult(
     const alreadyCompleted = prev.completedDates.includes(dateStr);
 
     // Idempotent per day: same date never re-runs the streak or re-adds the date.
-    const streak = alreadyCompleted
+    const streak = alreadyCompleted || dateStr < prev.streak.lastActiveDate
         ? prev.streak
         : updateStreak(
               prev.streak.lastActiveDate ? prev.streak : undefined,
@@ -87,7 +87,7 @@ export function recordDailyResult(
 
     const next: DailyProgress = {
         streak,
-        lastCompletedDate: dateStr,
+        lastCompletedDate: prev.lastCompletedDate > dateStr ? prev.lastCompletedDate : dateStr,
         completedDates,
         best,
     };
