@@ -54,7 +54,7 @@ export function DailyChallengeCard({
             >
                 <Box>
                     <Text fontSize="lg" fontWeight={700} color="var(--text)">
-                        Daily Challenge #{dayNumber}
+                        Daily Challenge{dayNumber > 0 ? ` #${dayNumber}` : ""}
                     </Text>
                     <Text fontSize="sm" color="var(--text-subtle)" mt={1}>
                         {completed

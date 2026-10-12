@@ -120,3 +120,13 @@ describe("daily-store", () => {
         });
     });
 });
+
+it("does not move streak progress backward when an overnight run finishes after a newer completion", () => {
+    localStorage.clear();
+    recordDailyResult("2026-10-13", { wpm: 90, accuracy: 0.95 });
+    const progress = recordDailyResult("2026-10-12", { wpm: 80, accuracy: 0.9 });
+    expect(progress.lastCompletedDate).toBe("2026-10-13");
+    expect(progress.streak.lastActiveDate).toBe("2026-10-13");
+    expect(progress.streak.currentStreak).toBe(1);
+    expect(progress.completedDates).toContain("2026-10-12");
+});
