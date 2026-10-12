@@ -19,6 +19,7 @@ import { usePreferences } from "@/lib/preferences";
 import { getPanelMotion, getSessionSwapMotion } from "@/lib/motion-config";
 import { getLayoutGap } from "@/lib/session-styles";
 import { estimateEditorHeight } from "@/lib/code-panel";
+import { getDailyResult } from "@/lib/daily-store";
 
 import { useTypingEngine } from "@/hooks/useTypingEngine";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
@@ -409,7 +410,7 @@ export default function TypingSession() {
                                     completed={daily.completed}
                                     language={daily.dailySnippet?.language ?? controls.language}
                                     available={daily.dailySnippet !== null}
-                                    todaysResult={daily.completed ? daily.progress.best : undefined}
+                                    todaysResult={getDailyResult(daily.progress, daily.today)}
                                     onStart={handleStartDaily}
                                     disabled={controlsDisabled}
                                 />
