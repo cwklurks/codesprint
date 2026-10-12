@@ -156,17 +156,17 @@ function parseImportData(content: string): ParsedImportData {
     try {
         const json = JSON.parse(content);
 
+        // Plain array format (sessions only, legacy)
+        if (Array.isArray(json)) {
+            return { sessions: json, customSnippets: [] };
+        }
+
         // ExportData format with custom snippets (v2+)
         if (json && typeof json === "object") {
             return {
                 sessions: Array.isArray(json.sessions) ? json.sessions : [],
                 customSnippets: Array.isArray(json.customSnippets) ? json.customSnippets : [],
             };
-        }
-
-        // Plain array format (sessions only, legacy)
-        if (Array.isArray(json)) {
-            return { sessions: json, customSnippets: [] };
         }
 
         return { sessions: [], customSnippets: [] };
