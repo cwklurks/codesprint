@@ -11,6 +11,8 @@ export type DailyProgress = {
     lastCompletedDate: string;
     completedDates: string[];
     best?: DailyBest;
+    /** Best run for each completed date, independent of the all-time best. */
+    resultsByDate?: Record<string, DailyBest>;
 };
 
 export type DailyResult = {
@@ -34,6 +36,23 @@ function emptyProgress(): DailyProgress {
     };
 }
 
+function isDailyBest(value: unknown): value is DailyBest {
+    if (!value || typeof value !== "object") return false;
+    const result = value as DailyBest;
+    const date = typeof result.dateStr === "string" ? new Date(`${result.dateStr}T00:00:00Z`) : new Date(NaN);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === result.dateStr
+        && typeof result.wpm === "number" && Number.isFinite(result.wpm) && result.wpm >= 0
+        && typeof result.accuracy === "number" && Number.isFinite(result.accuracy) && result.accuracy >= 0;
+}
+
+/** Returns only a result attributed to this completed date, including legacy best data. */
+export function getDailyResult(progress: DailyProgress, dateStr: string): DailyBest | undefined {
+    if (!progress.completedDates.includes(dateStr)) return undefined;
+    const result = progress.resultsByDate?.[dateStr];
+    if (isDailyBest(result) && result.dateStr === dateStr) return result;
+    return isDailyBest(progress.best) && progress.best.dateStr === dateStr ? progress.best : undefined;
+}
+
 export function getDailyProgress(): DailyProgress {
     if (typeof window === "undefined") return emptyProgress();
 
@@ -42,14 +61,29 @@ export function getDailyProgress(): DailyProgress {
         if (!stored) return emptyProgress();
         const parsed = JSON.parse(stored) as Partial<DailyProgress>;
         const fallback = emptyProgress();
+        const completedDates = Array.isArray(parsed.completedDates)
+            ? parsed.completedDates.filter((date): date is string => typeof date === "string")
+            : fallback.completedDates;
+        const resultsByDate: Record<string, DailyBest> = {};
+        if (parsed.resultsByDate && typeof parsed.resultsByDate === "object") {
+            for (const [date, result] of Object.entries(parsed.resultsByDate)) {
+                if (isDailyBest(result) && result.dateStr === date && completedDates.includes(date)) {
+                    resultsByDate[date] = result;
+                }
+            }
+        }
+        // Old storage retained only the all-time best. Recover its known date,
+        // but never fabricate results for other completed days.
+        if (isDailyBest(parsed.best) && completedDates.includes(parsed.best.dateStr) && !resultsByDate[parsed.best.dateStr]) {
+            resultsByDate[parsed.best.dateStr] = parsed.best;
+        }
         return {
             streak: parsed.streak ?? fallback.streak,
             lastCompletedDate:
                 parsed.lastCompletedDate ?? fallback.lastCompletedDate,
-            completedDates: Array.isArray(parsed.completedDates)
-                ? parsed.completedDates
-                : fallback.completedDates,
+            completedDates,
             best: parsed.best,
+            resultsByDate,
         };
     } catch (err) {
         console.warn("Failed to load daily progress", err);
@@ -85,11 +119,17 @@ export function recordDailyResult(
             ? prev.best
             : { wpm: result.wpm, accuracy: result.accuracy, dateStr };
 
+    const previousDaily = getDailyResult(prev, dateStr);
+    const dailyBest = previousDaily && previousDaily.wpm >= result.wpm
+        ? previousDaily
+        : { wpm: result.wpm, accuracy: result.accuracy, dateStr };
+
     const next: DailyProgress = {
         streak,
         lastCompletedDate: prev.lastCompletedDate > dateStr ? prev.lastCompletedDate : dateStr,
         completedDates,
         best,
+        resultsByDate: { ...prev.resultsByDate, [dateStr]: dailyBest },
     };
 
     if (typeof window !== "undefined") {
