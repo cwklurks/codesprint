@@ -178,7 +178,8 @@ export const _calcCache: (((ep: number[]) => number) | null)[] = [];
 export const _wpCache: ([unknown[], unknown[]] | null)[] = [];
 
 export function tokenize(content: string, language: SupportedLanguage): Token[] {
-    return _tokenizeCache[content] || _tokenizeImpl(content, language);
+    const cacheKey = `${language}:${content}`;
+    return _tokenizeCache[cacheKey] || (_tokenizeCache[cacheKey] = _tokenizeImpl(content, language));
 }
 
 function _tokenizeImpl(content: string, language: SupportedLanguage): Token[] {
@@ -289,7 +290,6 @@ function _tokenizeImpl(content: string, language: SupportedLanguage): Token[] {
         }
     }
 
-    _tokenizeCache[content] = tokens;
     return tokens;
 }
 
