@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Box, Flex, Text } from "@chakra-ui/react";
 
 /** Languages shipped in `data/snippets-*.json`. */
-const LANGUAGE_COUNT = 4;
+const LANGUAGE_COUNT = 6;
 /** Rounded size of that corpus (896 snippets at the time of writing). */
 const SNIPPET_COUNT_LABEL = "~900 snippets";
 

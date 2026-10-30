@@ -15,7 +15,7 @@ import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isSkeletal } from "../lib/snippet-filter";
 
-type SupportedLanguage = "javascript" | "python" | "java" | "cpp";
+type SupportedLanguage = "javascript" | "python" | "java" | "cpp" | "rust" | "go";
 type SnippetLength = "short" | "medium" | "long";
 type Difficulty = "easy" | "medium" | "hard";
 
@@ -67,7 +67,7 @@ const DATA_DIR = "data";
 const INPUT_FILE = join(DATA_DIR, "leetcode-snippets.json");
 const ALGORITHMS_FILE = join(DATA_DIR, "algorithms-snippets.json");
 const OUTPUT_FILE = join(DATA_DIR, "snippets-processed.json");
-const LANGUAGES: SupportedLanguage[] = ["javascript", "python", "java", "cpp"];
+const LANGUAGES: SupportedLanguage[] = ["javascript", "python", "java", "cpp", "rust", "go"];
 
 const LENGTH_THRESHOLDS = {
     short: 10,
@@ -136,7 +136,14 @@ function computeProblemId(language: SupportedLanguage, slug: string): string {
 }
 
 function isSupportedLanguage(value: unknown): value is SupportedLanguage {
-    return value === "javascript" || value === "python" || value === "java" || value === "cpp";
+    return (
+        value === "javascript" ||
+        value === "python" ||
+        value === "java" ||
+        value === "cpp" ||
+        value === "rust" ||
+        value === "go"
+    );
 }
 
 function isDifficulty(value: unknown): value is Difficulty {
@@ -180,6 +187,17 @@ const KEYWORD_SETS: Record<SupportedLanguage, Set<string>> = {
         "sizeof","static","static_cast","struct","switch","template","this","throw","true",
         "try","typedef","typename","union","unsigned","using","virtual","void","volatile",
         "while","std","string","vector","map","set","size_t",
+    ]),
+    rust: new Set([
+        "as","async","await","break","const","continue","crate","dyn","else","enum","extern",
+        "false","fn","for","if","impl","in","let","loop","match","mod","move","mut","pub","ref",
+        "return","self","Self","static","struct","super","trait","true","type","unsafe","use",
+        "where","while",
+    ]),
+    go: new Set([
+        "break","case","chan","const","continue","default","defer","else","fallthrough","for",
+        "func","go","goto","if","import","interface","map","package","range","return","select",
+        "struct","switch","type","var",
     ]),
 };
 
@@ -341,6 +359,8 @@ async function main() {
         python: [],
         java: [],
         cpp: [],
+        rust: [],
+        go: [],
     };
     
     for (const snippet of normalized) {

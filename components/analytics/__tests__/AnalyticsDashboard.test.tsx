@@ -8,6 +8,8 @@ const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
     python: "Python",
     java: "Java",
     cpp: "C++",
+    rust: "Rust",
+    go: "Go",
 };
 
 function formatDuration(ms: number): string {

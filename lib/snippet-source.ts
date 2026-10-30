@@ -9,13 +9,15 @@
 
 import { isSkeletal } from "./snippet-filter";
 
-export type SourceLanguage = "javascript" | "python" | "java" | "cpp";
+export type SourceLanguage = "javascript" | "python" | "java" | "cpp" | "rust" | "go";
 
 export const SOURCE_EXTENSIONS: Record<SourceLanguage, string[]> = {
     javascript: [".js"],
     python: [".py"],
     java: [".java"],
     cpp: [".cpp", ".cc", ".cxx"],
+    rust: [".rs"],
+    go: [".go"],
 };
 
 // A good typing snippet is a self-contained chunk: long enough to be worth a run,
@@ -78,7 +80,20 @@ export function hasMainOrTest(content: string, language: SourceLanguage): boolea
             );
         case "cpp":
             return /\bint\s+main\s*\(/.test(content) || /\bTEST\s*\(/.test(content);
+        case "rust":
+            return (
+                /#\[cfg\(test\)\]/.test(content) ||
+                /#\[test\]/.test(content) ||
+                /\bmod\s+tests\b/.test(content)
+            );
+        case "go":
+            return (
+                /\bfunc\s+main\s*\(/.test(content) ||
+                /\bfunc\s+Test[A-Z]/.test(content) ||
+                /\btesting\.T\b/.test(content)
+            );
     }
+    return false;
 }
 
 /**

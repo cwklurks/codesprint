@@ -32,6 +32,14 @@ const STDLIB_ALLOWLISTS: Record<SupportedLanguage, string[]> = {
         "climits", "iterator", "stdexcept", "type_traits",
     ],
     javascript: [],  // No imports allowed (everything is global)
+    rust: [
+        "std", "core", "alloc",
+    ],
+    go: [
+        "fmt", "sort", "strings", "strconv", "math", "slices", "maps", "errors", "io", "os",
+        "bytes", "bufio", "time", "unicode", "unicode/utf8", "path", "path/filepath", "sync",
+        "context", "cmp", "iter",
+    ],
 };
 
 // ---------------------------------------------------------------------------

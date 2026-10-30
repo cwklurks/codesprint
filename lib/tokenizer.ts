@@ -84,11 +84,26 @@ const CPP_KEYWORDS = new Set([
     "std", "string", "vector", "map", "set", "size_t", "uint8_t", "int32_t",
 ]);
 
+const RUST_KEYWORDS = new Set([
+    "as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum",
+    "extern", "false", "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+    "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true",
+    "type", "unsafe", "use", "where", "while",
+]);
+
+const GO_KEYWORDS = new Set([
+    "break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for",
+    "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return",
+    "select", "struct", "switch", "type", "var",
+]);
+
 const KEYWORD_SETS: Record<SupportedLanguage, Set<string>> = {
     javascript: JS_KEYWORDS,
     python: PYTHON_KEYWORDS,
     java: JAVA_KEYWORDS,
     cpp: CPP_KEYWORDS,
+    rust: RUST_KEYWORDS,
+    go: GO_KEYWORDS,
 };
 
 // ---------------------------------------------------------------------------

@@ -233,11 +233,11 @@ export const ACHIEVEMENTS: readonly AchievementDefinition[] = [
   {
     id: "polyglot",
     name: "Polyglot",
-    description: "Complete sessions in all 4 languages",
+    description: "Complete sessions in all 6 languages",
     category: "exploration",
     rarity: "epic",
     icon: "🗺️",
-    predicate: (ctx) => ctx.allSessionLanguages.size >= 4,
+    predicate: (ctx) => ctx.allSessionLanguages.size >= 6,
   },
   {
     id: "python-pro",

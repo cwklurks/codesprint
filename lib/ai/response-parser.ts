@@ -143,6 +143,25 @@ function validateImports(content: string, language: SupportedLanguage): Validati
             if (trimmed.match(/^import\s/) || trimmed.match(/require\(/)) {
                 violations.push(trimmed);
             }
+        } else if (language === "rust") {
+            if (trimmed.startsWith("use ")) {
+                const pkg = trimmed.slice(4).split("::")[0].trim();
+                if (!allowlistSet.has(pkg)) {
+                    violations.push(pkg);
+                }
+            }
+            if (trimmed.startsWith("extern crate")) {
+                violations.push(trimmed);
+            }
+        } else if (language === "go") {
+            const single = trimmed.match(/^import\s+"([^"]+)"/);
+            if (single && !allowlistSet.has(single[1])) {
+                violations.push(single[1]);
+            }
+            const block = trimmed.match(/^import\s+\(\s*"([^"]+)"/);
+            if (block && !allowlistSet.has(block[1])) {
+                violations.push(block[1]);
+            }
         }
     }
 

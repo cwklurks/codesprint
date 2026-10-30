@@ -46,7 +46,7 @@ const LANGUAGE_OVERRIDES: Partial<Record<SupportedLanguage, Partial<TokenWeights
 // ---------------------------------------------------------------------------
 
 const CACHED_WEIGHTS: Record<string, TokenWeights> = {};
-for (const lang of ["javascript", "python", "java", "cpp"] as SupportedLanguage[]) {
+for (const lang of ["javascript", "python", "java", "cpp", "rust", "go"] as SupportedLanguage[]) {
     const overrides = LANGUAGE_OVERRIDES[lang];
     CACHED_WEIGHTS[lang] = overrides ? { ...DEFAULT_WEIGHTS, ...overrides } : DEFAULT_WEIGHTS;
 }

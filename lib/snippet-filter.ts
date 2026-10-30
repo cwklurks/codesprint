@@ -12,7 +12,7 @@
  * as empty stubs).
  */
 
-export type SkeletalLanguage = "javascript" | "python" | "java" | "cpp";
+export type SkeletalLanguage = "javascript" | "python" | "java" | "cpp" | "rust" | "go";
 
 // Control-flow keywords whose presence on a line means real logic is happening.
 const CONTROL_KEYWORDS = /\b(if|else|for|while|switch|do|try|catch|finally|synchronized)\b/;
@@ -106,7 +106,13 @@ export function isSkeletal(content: string, language: string): boolean {
         .filter((l) => l.length > 0);
 
     if (language === "python") return isSkeletalPython(lines);
-    if (language === "javascript" || language === "java" || language === "cpp") {
+    if (
+        language === "javascript" ||
+        language === "java" ||
+        language === "cpp" ||
+        language === "rust" ||
+        language === "go"
+    ) {
         return isSkeletalBraced(lines);
     }
     // Unknown language: keep it rather than silently dropping content.

@@ -61,6 +61,8 @@ const LANGUAGE_OPTIONS: Array<{ value: SupportedLanguage; label: string }> = [
     { value: "python", label: "Python" },
     { value: "java", label: "Java" },
     { value: "cpp", label: "C++" },
+    { value: "rust", label: "Rust" },
+    { value: "go", label: "Go" },
 ];
 
 const LENGTH_OPTIONS: Array<{ value: LengthFilter; label: string; helper: string }> = [

@@ -40,6 +40,16 @@ const LANGUAGE_DEFAULTS: Record<SupportedLanguage, WeakPattern[]> = {
         { category: "keyword", errorCount: 0, totalTokens: 0, errorRate: 1.5, label: "Keywords" },
         { category: "delimiter", errorCount: 0, totalTokens: 0, errorRate: 1.3, label: "Delimiters" },
     ],
+    rust: [
+        { category: "keyword", errorCount: 0, totalTokens: 0, errorRate: 1.5, label: "Keywords" },
+        { category: "operator", errorCount: 0, totalTokens: 0, errorRate: 1.5, label: "Operators" },
+        { category: "delimiter", errorCount: 0, totalTokens: 0, errorRate: 1.3, label: "Delimiters" },
+    ],
+    go: [
+        { category: "keyword", errorCount: 0, totalTokens: 0, errorRate: 1.5, label: "Keywords" },
+        { category: "operator", errorCount: 0, totalTokens: 0, errorRate: 1.5, label: "Operators" },
+        { category: "delimiter", errorCount: 0, totalTokens: 0, errorRate: 1.2, label: "Delimiters" },
+    ],
 };
 
 const MIN_SESSIONS_FOR_AGGREGATION = 3;

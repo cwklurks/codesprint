@@ -5,7 +5,8 @@
 import type { Token } from "./tokenizer";
 import { isSkeletal } from "./snippet-filter";
 
-export type SupportedLanguage = "javascript" | "python" | "java" | "cpp";
+export const SUPPORTED_LANGUAGES = ["javascript", "python", "java", "cpp", "rust", "go"] as const;
+export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 export type SnippetLength = "short" | "medium" | "long";
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -914,7 +915,7 @@ function computeProblemId(language: SupportedLanguage, slug: string): string {
 }
 
 function isSupportedLanguage(value: unknown): value is SupportedLanguage {
-    return value === "javascript" || value === "python" || value === "java" || value === "cpp";
+    return typeof value === "string" && (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
 }
 
 function isDifficulty(value: unknown): value is Difficulty {

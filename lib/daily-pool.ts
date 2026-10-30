@@ -16,6 +16,8 @@ async function buildPool(): Promise<readonly Snippet[]> {
         import("@/data/snippets-python.json"),
         import("@/data/snippets-java.json"),
         import("@/data/snippets-cpp.json"),
+        import("@/data/snippets-rust.json"),
+        import("@/data/snippets-go.json"),
     ])) as unknown as { default: Snippet[] }[];
 
     const seen = new Set<string>();

@@ -133,16 +133,16 @@ describe("achievements", () => {
     });
 
     // Exploration
-    it("Polyglot requires 4 languages", () => {
+    it("Polyglot requires all supported languages", () => {
       const ctx = makeContext({
-        allSessionLanguages: new Set(["javascript", "python", "java", "cpp"]),
+        allSessionLanguages: new Set(["javascript", "python", "java", "cpp", "rust", "go"]),
       });
       expect(checkAchievements(ctx, new Set()).some((a) => a.id === "polyglot")).toBe(true);
 
-      const three = makeContext({
-        allSessionLanguages: new Set(["javascript", "python", "java"]),
+      const five = makeContext({
+        allSessionLanguages: new Set(["javascript", "python", "java", "cpp", "rust"]),
       });
-      expect(checkAchievements(three, new Set()).some((a) => a.id === "polyglot")).toBe(false);
+      expect(checkAchievements(five, new Set()).some((a) => a.id === "polyglot")).toBe(false);
     });
 
     // Milestone

@@ -8,6 +8,7 @@ import {
     getSnippetVarietyScore,
     getSnippetVarianceTag,
     CURATED_SNIPPETS_LIST,
+    SUPPORTED_LANGUAGES,
     type Snippet,
 } from "../snippets";
 
@@ -22,7 +23,7 @@ describe("CURATED_SNIPPETS_LIST", () => {
             expect(snippet.problemId).toBeTruthy();
             expect(snippet.title).toBeTruthy();
             expect(snippet.content.length).toBeGreaterThan(0);
-            expect(["javascript", "python", "java", "cpp"]).toContain(snippet.language);
+            expect(SUPPORTED_LANGUAGES).toContain(snippet.language);
             expect(["short", "medium", "long"]).toContain(snippet.lengthCategory);
             expect(["easy", "medium", "hard"]).toContain(snippet.difficulty);
             expect(snippet.lines).toBeGreaterThan(0);

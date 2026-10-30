@@ -27,6 +27,8 @@ describe("getDailyPool", () => {
         expect(languages.has("python")).toBe(true);
         expect(languages.has("java")).toBe(true);
         expect(languages.has("cpp")).toBe(true);
+        expect(languages.has("rust")).toBe(true);
+        expect(languages.has("go")).toBe(true);
     });
 
     it("excludes AI drills (no problemId starts with ai-drill-)", () => {
@@ -77,12 +79,12 @@ describe("getTodaysDaily", () => {
     // Pinned against the selection the synchronous implementation produced, so a
     // change to pool construction can never silently move everyone's daily.
     it("picks the same snippets it always has for known dates", async () => {
-        expect((await getTodaysDaily("2025-06-15"))!.id).toBe("python:article-views-i");
+        expect((await getTodaysDaily("2025-06-15"))!.id).toBe("algo-python-electronics-wheatstone-bridge-py");
         expect((await getTodaysDaily("2026-01-01"))!.id).toBe(
-            "algo-java-src-main-java-com-thealgorithms-maths-collatzconjecture-java",
+            "algo-python-project-euler-problem-188-sol1-py",
         );
         expect((await getTodaysDaily("2026-08-28"))!.id).toBe(
-            "algo-python-data-structures-arrays-equilibrium-index-in-array-py",
+            "algo-python-maths-karatsuba-py",
         );
     });
 

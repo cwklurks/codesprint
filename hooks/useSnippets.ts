@@ -1,16 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { CURATED_SNIPPETS_LIST, type Snippet, type SupportedLanguage } from "@/lib/snippets";
+import { CURATED_SNIPPETS_LIST, SUPPORTED_LANGUAGES, type Snippet, type SupportedLanguage } from "@/lib/snippets";
 import { toSnippet, isAcceptedAIDrill } from "@/lib/ai/snippet-bridge";
 import type { CustomSnippetRecord } from "@/lib/storage/idb-store";
 
-type LanguageLoadState = {
-    javascript: boolean;
-    python: boolean;
-    java: boolean;
-    cpp: boolean;
-};
+type LanguageLoadState = Record<SupportedLanguage, boolean>;
 
-const LANGUAGES: SupportedLanguage[] = ["javascript", "python", "java", "cpp"];
+const LANGUAGES: SupportedLanguage[] = [...SUPPORTED_LANGUAGES];
 
 // Dynamic imports for each language file
 // Type assertion needed because JSON imports infer `language` as string, not SupportedLanguage
@@ -19,23 +14,22 @@ const languageImports: Record<SupportedLanguage, () => Promise<{ default: Snippe
     python: () => import("@/data/snippets-python.json") as Promise<{ default: Snippet[] }>,
     java: () => import("@/data/snippets-java.json") as Promise<{ default: Snippet[] }>,
     cpp: () => import("@/data/snippets-cpp.json") as Promise<{ default: Snippet[] }>,
+    rust: () => import("@/data/snippets-rust.json") as Promise<{ default: Snippet[] }>,
+    go: () => import("@/data/snippets-go.json") as Promise<{ default: Snippet[] }>,
 };
 
 export function useSnippets(currentLanguage: SupportedLanguage = "python") {
     const [snippets, setSnippets] = useState<Snippet[]>(CURATED_SNIPPETS_LIST);
     const [isLoading, setIsLoading] = useState(true);
-    const loadedLanguages = useRef<LanguageLoadState>({
-        javascript: false,
-        python: false,
-        java: false,
-        cpp: false,
-    });
-    const snippetsByLanguage = useRef<Record<SupportedLanguage, Snippet[]>>({
-        javascript: [],
-        python: [],
-        java: [],
-        cpp: [],
-    });
+    const loadedLanguages = useRef<LanguageLoadState>(
+        Object.fromEntries(SUPPORTED_LANGUAGES.map((lang) => [lang, false])) as LanguageLoadState,
+    );
+    const snippetsByLanguage = useRef<Record<SupportedLanguage, Snippet[]>>(
+        Object.fromEntries(SUPPORTED_LANGUAGES.map((lang) => [lang, []])) as unknown as Record<
+            SupportedLanguage,
+            Snippet[]
+        >,
+    );
     const aiDrillsRef = useRef<Snippet[]>([]);
 
     // Load AI drills from IndexedDB

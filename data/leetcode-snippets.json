@@ -138562,5 +138562,181 @@
     "problemId": "cpp:peeking-iterator",
     "frontendId": 284,
     "sourceSlug": "peeking-iterator"
-  }
+  },
+{
+  "id": "rust:binary-search",
+  "lang": "rust",
+  "difficulty": "easy",
+  "title": "Binary Search",
+  "content": "pub fn binary_search(nums: &[i32], target: i32) -> i32 {\n    let mut lo = 0usize;\n    let mut hi = nums.len();\n    while lo < hi {\n        let mid = lo + (hi - lo) / 2;\n        if nums[mid] == target {\n            return mid as i32;\n        }\n        if nums[mid] < target {\n            lo = mid + 1;\n        } else {\n            hi = mid;\n        }\n    }\n    -1\n}\n",
+  "lines": 16,
+  "lengthCategory": "medium",
+  "problemId": "rust:binary-search",
+  "sourceSlug": "binary-search"
+},
+{
+  "id": "rust:depth-first-search",
+  "lang": "rust",
+  "difficulty": "medium",
+  "title": "Depth First Search",
+  "content": "pub fn dfs(graph: &[Vec<usize>], start: usize, mut visit: impl FnMut(usize)) {\n    let mut stack = vec![start];\n    let mut seen = vec![false; graph.len()];\n    while let Some(node) = stack.pop() {\n        if seen[node] {\n            continue;\n        }\n        seen[node] = true;\n        visit(node);\n        for &next in graph[node].iter().rev() {\n            if !seen[next] {\n                stack.push(next);\n            }\n        }\n    }\n}\n",
+  "lines": 18,
+  "lengthCategory": "medium",
+  "problemId": "rust:depth-first-search",
+  "sourceSlug": "depth-first-search"
+},
+{
+  "id": "rust:breadth-first-search",
+  "lang": "rust",
+  "difficulty": "medium",
+  "title": "Breadth First Search",
+  "content": "use std::collections::VecDeque;\n\npub fn bfs(graph: &[Vec<usize>], start: usize, mut visit: impl FnMut(usize)) {\n    let mut queue = VecDeque::from([start]);\n    let mut seen = vec![false; graph.len()];\n    seen[start] = true;\n    while let Some(node) = queue.pop_front() {\n        visit(node);\n        for &next in &graph[node] {\n            if !seen[next] {\n                seen[next] = true;\n                queue.push_back(next);\n            }\n        }\n    }\n}\n",
+  "lines": 18,
+  "lengthCategory": "medium",
+  "problemId": "rust:breadth-first-search",
+  "sourceSlug": "breadth-first-search"
+},
+{
+  "id": "rust:two-sum-sorted",
+  "lang": "rust",
+  "difficulty": "easy",
+  "title": "Two Sum Sorted",
+  "content": "pub fn two_sum_sorted(nums: &[i32], target: i32) -> (usize, usize) {\n    let mut left = 0usize;\n    let mut right = nums.len().saturating_sub(1);\n    while left < right {\n        let sum = nums[left] + nums[right];\n        if sum == target {\n            return (left, right);\n        }\n        if sum < target {\n            left += 1;\n        } else {\n            right -= 1;\n        }\n    }\n    (0, 0)\n}\n",
+  "lines": 17,
+  "lengthCategory": "medium",
+  "problemId": "rust:two-sum-sorted",
+  "sourceSlug": "two-sum-sorted"
+},
+{
+  "id": "rust:valid-parentheses",
+  "lang": "rust",
+  "difficulty": "easy",
+  "title": "Valid Parentheses",
+  "content": "pub fn is_valid_parentheses(input: &str) -> bool {\n    let mut stack: Vec<char> = Vec::new();\n    for ch in input.chars() {\n        match ch {\n            '(' | '[' | '{' => stack.push(ch),\n            ')' => {\n                if stack.pop() != Some('(') {\n                    return false;\n                }\n            }\n            ']' => {\n                if stack.pop() != Some('[') {\n                    return false;\n                }\n            }\n            '}' => {\n                if stack.pop() != Some('{') {\n                    return false;\n                }\n            }\n            _ => {}\n        }\n    }\n    stack.is_empty()\n}\n",
+  "lines": 27,
+  "lengthCategory": "medium",
+  "problemId": "rust:valid-parentheses",
+  "sourceSlug": "valid-parentheses"
+},
+{
+  "id": "rust:climbing-stairs",
+  "lang": "rust",
+  "difficulty": "easy",
+  "title": "Climbing Stairs",
+  "content": "pub fn climb_stairs(n: usize) -> u64 {\n    if n <= 2 {\n        return n as u64;\n    }\n    let mut prev = 1u64;\n    let mut curr = 2u64;\n    for _ in 3..=n {\n        let next = prev + curr;\n        prev = curr;\n        curr = next;\n    }\n    curr\n}\n",
+  "lines": 14,
+  "lengthCategory": "medium",
+  "problemId": "rust:climbing-stairs",
+  "sourceSlug": "climbing-stairs"
+},
+{
+  "id": "rust:merge-sorted-arrays",
+  "lang": "rust",
+  "difficulty": "easy",
+  "title": "Merge Sorted Arrays",
+  "content": "pub fn merge_sorted(a: &[i32], b: &[i32]) -> Vec<i32> {\n    let mut out = Vec::with_capacity(a.len() + b.len());\n    let (mut i, mut j) = (0usize, 0usize);\n    while i < a.len() && j < b.len() {\n        if a[i] <= b[j] {\n            out.push(a[i]);\n            i += 1;\n        } else {\n            out.push(b[j]);\n            j += 1;\n        }\n    }\n    out.extend_from_slice(&a[i..]);\n    out.extend_from_slice(&b[j..]);\n    out\n}\n",
+  "lines": 17,
+  "lengthCategory": "medium",
+  "problemId": "rust:merge-sorted-arrays",
+  "sourceSlug": "merge-sorted-arrays"
+},
+{
+  "id": "rust:quickselect",
+  "lang": "rust",
+  "difficulty": "medium",
+  "title": "Quickselect",
+  "content": "pub fn quickselect(nums: &mut [i32], k: usize) -> i32 {\n    let (mut left, mut right) = (0usize, nums.len() - 1);\n    loop {\n        let pivot = nums[right];\n        let mut store = left;\n        for i in left..right {\n            if nums[i] < pivot {\n                nums.swap(i, store);\n                store += 1;\n            }\n        }\n        nums.swap(store, right);\n        if store == k {\n            return nums[store];\n        }\n        if k < store {\n            right = store - 1;\n        } else {\n            left = store + 1;\n        }\n    }\n}\n",
+  "lines": 23,
+  "lengthCategory": "medium",
+  "problemId": "rust:quickselect",
+  "sourceSlug": "quickselect"
+},
+{
+  "id": "go:binary-search",
+  "lang": "go",
+  "difficulty": "easy",
+  "title": "Binary Search",
+  "content": "func binarySearch(nums []int, target int) int {\n\tlo, hi := 0, len(nums)\n\tfor lo < hi {\n\t\tmid := lo + (hi-lo)/2\n\t\tif nums[mid] == target {\n\t\t\treturn mid\n\t\t}\n\t\tif nums[mid] < target {\n\t\t\tlo = mid + 1\n\t\t} else {\n\t\t\thi = mid\n\t\t}\n\t}\n\treturn -1\n}\n",
+  "lines": 16,
+  "lengthCategory": "medium",
+  "problemId": "go:binary-search",
+  "sourceSlug": "binary-search"
+},
+{
+  "id": "go:depth-first-search",
+  "lang": "go",
+  "difficulty": "medium",
+  "title": "Depth First Search",
+  "content": "func dfs(graph [][]int, start int, visit func(int)) {\n\tstack := []int{start}\n\tseen := make([]bool, len(graph))\n\tfor len(stack) > 0 {\n\t\tnode := stack[len(stack)-1]\n\t\tstack = stack[:len(stack)-1]\n\t\tif seen[node] {\n\t\t\tcontinue\n\t\t}\n\t\tseen[node] = true\n\t\tvisit(node)\n\t\tfor i := len(graph[node]) - 1; i >= 0; i-- {\n\t\t\tnext := graph[node][i]\n\t\t\tif !seen[next] {\n\t\t\t\tstack = append(stack, next)\n\t\t\t}\n\t\t}\n\t}\n}\n",
+  "lines": 20,
+  "lengthCategory": "medium",
+  "problemId": "go:depth-first-search",
+  "sourceSlug": "depth-first-search"
+},
+{
+  "id": "go:breadth-first-search",
+  "lang": "go",
+  "difficulty": "medium",
+  "title": "Breadth First Search",
+  "content": "func bfs(graph [][]int, start int, visit func(int)) {\n\tqueue := []int{start}\n\tseen := make([]bool, len(graph))\n\tseen[start] = true\n\tfor len(queue) > 0 {\n\t\tnode := queue[0]\n\t\tqueue = queue[1:]\n\t\tvisit(node)\n\t\tfor _, next := range graph[node] {\n\t\t\tif !seen[next] {\n\t\t\t\tseen[next] = true\n\t\t\t\tqueue = append(queue, next)\n\t\t\t}\n\t\t}\n\t}\n}\n",
+  "lines": 18,
+  "lengthCategory": "medium",
+  "problemId": "go:breadth-first-search",
+  "sourceSlug": "breadth-first-search"
+},
+{
+  "id": "go:two-sum-sorted",
+  "lang": "go",
+  "difficulty": "easy",
+  "title": "Two Sum Sorted",
+  "content": "func twoSumSorted(nums []int, target int) (int, int) {\n\tleft, right := 0, len(nums)-1\n\tfor left < right {\n\t\tsum := nums[left] + nums[right]\n\t\tif sum == target {\n\t\t\treturn left, right\n\t\t}\n\t\tif sum < target {\n\t\t\tleft++\n\t\t} else {\n\t\t\tright--\n\t\t}\n\t}\n\treturn 0, 0\n}\n",
+  "lines": 16,
+  "lengthCategory": "medium",
+  "problemId": "go:two-sum-sorted",
+  "sourceSlug": "two-sum-sorted"
+},
+{
+  "id": "go:valid-parentheses",
+  "lang": "go",
+  "difficulty": "easy",
+  "title": "Valid Parentheses",
+  "content": "func isValidParentheses(input string) bool {\n\tstack := make([]rune, 0)\n\tpairs := map[rune]rune{')': '(', ']': '[', '}': '{'}\n\tfor _, ch := range input {\n\t\tswitch ch {\n\t\tcase '(', '[', '{':\n\t\t\tstack = append(stack, ch)\n\t\tcase ')', ']', '}':\n\t\t\tif len(stack) == 0 || stack[len(stack)-1] != pairs[ch] {\n\t\t\t\treturn false\n\t\t\t}\n\t\t\tstack = stack[:len(stack)-1]\n\t\t}\n\t}\n\treturn len(stack) == 0\n}\n",
+  "lines": 18,
+  "lengthCategory": "medium",
+  "problemId": "go:valid-parentheses",
+  "sourceSlug": "valid-parentheses"
+},
+{
+  "id": "go:climbing-stairs",
+  "lang": "go",
+  "difficulty": "easy",
+  "title": "Climbing Stairs",
+  "content": "func climbStairs(n int) int {\n\tif n <= 2 {\n\t\treturn n\n\t}\n\tprev, curr := 1, 2\n\tfor i := 3; i <= n; i++ {\n\t\tnext := prev + curr\n\t\tprev = curr\n\t\tcurr = next\n\t}\n\treturn curr\n}\n",
+  "lines": 12,
+  "lengthCategory": "medium",
+  "problemId": "go:climbing-stairs",
+  "sourceSlug": "climbing-stairs"
+},
+{
+  "id": "go:merge-sorted-arrays",
+  "lang": "go",
+  "difficulty": "easy",
+  "title": "Merge Sorted Arrays",
+  "content": "func mergeSorted(a, b []int) []int {\n\tout := make([]int, 0, len(a)+len(b))\n\ti, j := 0, 0\n\tfor i < len(a) && j < len(b) {\n\t\tif a[i] <= b[j] {\n\t\t\tout = append(out, a[i])\n\t\t\ti++\n\t\t} else {\n\t\t\tout = append(out, b[j])\n\t\t\tj++\n\t\t}\n\t}\n\tout = append(out, a[i:]...)\n\tout = append(out, b[j:]...)\n\treturn out\n}\n",
+  "lines": 17,
+  "lengthCategory": "medium",
+  "problemId": "go:merge-sorted-arrays",
+  "sourceSlug": "merge-sorted-arrays"
+},
+{
+  "id": "go:quickselect",
+  "lang": "go",
+  "difficulty": "medium",
+  "title": "Quickselect",
+  "content": "func quickselect(nums []int, k int) int {\n\tleft, right := 0, len(nums)-1\n\tfor {\n\t\tpivot := nums[right]\n\t\tstore := left\n\t\tfor i := left; i < right; i++ {\n\t\t\tif nums[i] < pivot {\n\t\t\t\tnums[i], nums[store] = nums[store], nums[i]\n\t\t\t\tstore++\n\t\t\t}\n\t\t}\n\t\tnums[store], nums[right] = nums[right], nums[store]\n\t\tif store == k {\n\t\t\treturn nums[store]\n\t\t}\n\t\tif k < store {\n\t\t\tright = store - 1\n\t\t} else {\n\t\t\tleft = store + 1\n\t\t}\n\t}\n}\n",
+  "lines": 22,
+  "lengthCategory": "medium",
+  "problemId": "go:quickselect",
+  "sourceSlug": "quickselect"
+}
 ]

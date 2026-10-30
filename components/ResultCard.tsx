@@ -14,6 +14,7 @@ import { computePercentile } from "@/lib/percentile";
 import { bestDelta } from "@/lib/personal-best";
 import { MOTION_EASE, usePrefersReducedMotion } from "@/lib/motion";
 import { getResultPrimaryButtonStyles } from "@/lib/session-styles";
+import type { SupportedLanguage } from "@/lib/snippets";
 import { DEFAULT_PREFERENCES, type ThemePreset } from "@/lib/preferences-core";
 
 const MotionBox = m.create(Box);
@@ -56,7 +57,7 @@ type ResultCardProps = {
     errors: number;
     snippetTitle: string;
     snippetId: string;
-    language: "javascript" | "python" | "java" | "cpp";
+    language: SupportedLanguage;
     difficulty: string;
     lengthCategory: string;
     errorLog: ErrorEntry[];

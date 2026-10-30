@@ -32,7 +32,7 @@ const MAX_BODY_BYTES = 32_000;
 const MAX_ERROR_RATE = 2;
 
 const drillRequestSchema = z.object({
-    language: z.enum(["javascript", "python", "java", "cpp"]),
+    language: z.enum(["javascript", "python", "java", "cpp", "rust", "go"]),
     difficulty: z.enum(["easy", "medium", "hard"]),
     lengthCategory: z.enum(["short", "medium", "long"]),
     weakPatterns: z.array(z.object({
